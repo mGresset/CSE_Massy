@@ -1,81 +1,124 @@
-# CSE Studio V3 — Thales LAS Massy
+# CSE Studio V4 — CSE Thales LAS Massy
 
-Application Web de création de diapositives CSE, **prête à déployer sur GitHub Pages**, sans serveur ni installation. Un bénévole remplit le formulaire, sélectionne un modèle et obtient un PowerPoint 16:9 modifiable, importable dans Canva.
+Application Web pour **préparer et exporter les diapositives d'activités** du CSE. Compatible avec [GitHub Pages](https://docs.github.com/fr/pages). V4 ajoute un **espace collaboratif facultatif** basé sur Supabase, avec authentification des bénévoles et approbation par rôle.
 
-## Nouveautés de la V3
+**Adresse habituelle du site :** https://mgresset.github.io/CSE_Massy/  
+**Dépôt :** https://github.com/mGresset/CSE_Massy  
+**Portail bénéficiaires :** https://cethaleslasmassy.portailce.com/
 
-- **6 dispositions au choix** : Classique, Immersif, En cartes, Tarifs en avant, **Programme** (nouveau), **Essentiel** (nouveau).
-- **Bandeau haute définition officiel** : `assets/bandeau-cse.jpg` (1920 × 282 pixels). Le bandeau reste fixe sur les six modèles.
-- **Circuit de vérification avant diffusion** : titre, dates, prix extérieur, cohérence inscriptions et participants, validité du lien ; avertissements pour image/description manquantes.
-- **Statut éditorial distinct du statut d’inscription** : Brouillon / À relire / Validée. La modification du contenu d’une fiche validée la remet en « À relire ».
-- **Bibliothèque locale filtrable par statut**.
-- **Export PowerPoint groupé** des fiches *validées* (25 slides maximum par lot), en plus de l’export unitaire.
-- **Sauvegarde / import de bibliothèque entière au format JSON** : partage manuel entre bénévoles, sans base de données. L’import complète la bibliothèque existante ; les fiches peuvent être dupliquées, et les images encodées augmentent le volume.
-- **Prompt de création d’image copiable** pour servir dans un outil IA extérieur. **Ne génère pas d’image automatiquement** et ne demande aucune clé d’API.
+## 1. Nouveautés V4
 
-### Fonctionnalités conservées de la V2
+- **Espace partagé facultatif** : les fiches deviennent accessibles aux bénévoles autorisés depuis plusieurs navigateurs. Le site reste hébergé sur GitHub Pages ; la base de données et l'authentification nécessitent un projet Supabase distinct.
+- **Connexion par lien envoyé à l'adresse e-mail** des bénévoles déjà créés par l'administrateur.
+- **Trois rôles réels en base de données** :
+  - `editor` (Rédacteur) : créer, modifier et soumettre à relecture ; ne peut pas approuver.
+  - `reviewer` (Relecteur) : consulter et approuver / renvoyer les fiches ; ne modifie pas les descriptions ni les tarifs.
+  - `admin` (Administrateur) : créer, modifier, approuver et supprimer.
+- **Concurrence contrôlée** : chaque fiche a un numéro de version. Un enregistrement ne peut pas écraser silencieusement une version modifiée par une autre personne.
+- **Approbation nominative enregistrée dans la base** (`approved_by`, `approved_at`), avec déclassement automatique d'une fiche approuvée lorsqu'elle est modifiée.
+- **Export d'un lot PowerPoint des activités approuvées dans la bibliothèque partagée** (25 maximum).
+- **Photos allégées avant synchronisation** pour éviter des fiches trop volumineuses (les originaux restent dans le brouillon local du navigateur).
+- **Compatibilité V3** : six templates, bandeau 1920 × 282, export PPTX, calcul T1–T10 et modes forfaitaires, export CSV/JSON et sauvegarde locale conservés.
 
-- Prix par tranches **T1 à T10**, calculés à partir du prix extérieur et des taux de subvention ; taux configurables et mémorisables.
-- Autres méthodes : subvention fixe en %, pourcentage payé par le salarié, montant salarié fixe en €.
-- Photos locales (1 ou 2), URL externe (sous réserve de CORS), prévisualisation avant export.
-- Statuts d’inscription auto ou manuels, dates, participants, description, conditions, contact, points CSE, carbone.
-- Lien vers `https://cethaleslasmassy.portailce.com/` par défaut ; lien personnalisé non obligatoire ou aucun lien.
-- Export PPTX à **textes et formes modifiables**, hyperlien cliquable ; export JSON d’une fiche et CSV pour Canva.
-- **Toutes les données sont enregistrées dans le navigateur local**, et non sur GitHub.
+### Important : deux types de sauvegarde
 
-## Mettre à jour depuis V2 sur votre GitHub
+1. **Enregistrer** dans l'en-tête : sauvegarde dans le **navigateur local**.
+2. **☁ Enregistrer en ligne** dans « Espace partagé » : sauvegarde dans la **base commune**, si elle a été configurée.
 
-Dépôt utilisé : <https://github.com/mGresset/CSE_Massy> ; site attendu : <https://mgresset.github.io/CSE_Massy/>.
+Pour les activités en ligne, utiliser « Ouvrir » dans la liste de la bibliothèque partagée, puis « Enregistrer en ligne ». Un clic sur « Synchroniser » récupère la dernière liste sans écraser la fiche en cours de modification.
 
-1. **Sauvegarder** la V2 avant remplacement : sur GitHub → Code → Download ZIP. Si vous avez des fiches enregistrées, ouvrez la V2 et utilisez **Exporter JSON** pour les conserver séparément.
-2. Décompresser l'archive V3, puis transférer **le contenu** du dossier `CSE_Studio_V3_GitHub` à la **racine** du dépôt (ne pas ajouter un dossier enveloppe).
-3. Remplacer `index.html`, `styles.css`, `js/app.js`, `js/layouts.js`, `js/pricing.js` ainsi que les dossiers `assets`, `vendor` et fichiers concernés. Les bibliothèques JSZip/PptxGenJS sont déjà fournies dans `vendor`.
-4. Sur GitHub, cliquez **Commit changes**.
-5. GitHub Pages reste configuré sur **Deploy from a branch / main / (root)** ; le site sera actualisé lors de la publication. Rafraîchir avec **Ctrl + Maj + R** si la V2 apparaît toujours.
-6. Vérifiez que la page annonce **V3** et affiche **6 modèles**.
+## 2. Mettre le site V4 sur GitHub (fonctionne immédiatement en local)
 
-**Attention à `index.html`** : il doit se trouver à la racine et charger les scripts locaux dans cet ordre :
+1. Sur l'application V3, **sauvegarder la bibliothèque locale en JSON** si elle contient des fiches importantes. Le stockage local est normalement conservé car les clés n'ont pas changé, mais mieux vaut garder une copie.
+2. Sur GitHub, télécharger aussi une copie du dépôt V3 (*Code → Download ZIP*).
+3. Décompresser ce paquet V4 puis téléverser **le contenu** du dossier `CSE_Studio_V4_GitHub` à la racine du dépôt `CSE_Massy`.
+4. Remplacer `index.html`, `styles.css`, `js/app.js`, `js/layouts.js`, `js/pricing.js`, `assets/`, `vendor/` ; **ajouter** `js/cloud.js`, `js/cloud-config.js` et `supabase/schema.sql`.
+5. Cliquer **Commit changes**. GitHub Pages reste en mode **Deploy from a branch → main → /(root)**.
+6. Sur https://mgresset.github.io/CSE_Massy/ faire `Ctrl + Maj + R` et vérifier l'étiquette **V4**. Le site fonctionnera immédiatement **sans Supabase**, en mode local.
 
-```html
-<script src="vendor/jszip.min.js" defer></script>
-<script src="vendor/pptxgen.min.js" defer></script>
-<script src="js/pricing.js" defer></script>
-<script src="js/layouts.js" defer></script>
-<script src="js/app.js" defer></script>
+**Ne publiez aucune donnée nominative de bénéficiaires, aucun mot de passe et aucune clé secrète dans le dépôt public.**
+
+## 3. Activer les fonctions collaboratives (étape distincte)
+
+### Étape A — Créer et sécuriser le projet Supabase
+
+1. Créer un projet Supabase sur https://supabase.com/dashboard. Un projet Supabase est **nécessaire** pour la bibliothèque commune ; GitHub Pages seul ne stocke pas les fiches sur le serveur.
+2. Dans **SQL Editor**, ouvrir et exécuter le fichier [`supabase/schema.sql`](supabase/schema.sql). Il crée les tables `cse_members` et `cse_activities`, des politiques **Row Level Security (RLS)** et un trigger de contrôle des rôles. **N'utilisez pas le SQL sur une base qui contient déjà des objets du même nom sans examen préalable.**
+3. Dans **Authentication → URL Configuration**, ajouter :
+   - **Site URL** : `https://mgresset.github.io/CSE_Massy/`
+   - **Redirect URL** : `https://mgresset.github.io/CSE_Massy/`
+4. Dans **Authentication → Users**, créer ou inviter les bénévoles. L'application ne crée pas de comptes par elle-même (`create_user: false`) : c'est voulu pour éviter l'inscription libre.
+5. Dans **SQL Editor**, attribuer le rôle `admin` au premier compte déjà présent dans Auth Users (remplacer l'adresse e-mail) :
+
+```sql
+insert into public.cse_members(user_id, role)
+select id, 'admin' from auth.users where lower(email) = lower('votre-adresse@exemple.fr')
+on conflict (user_id) do update set role = excluded.role;
 ```
 
-## Mode d’emploi quotidien
+Pour ajouter un bénévole qui peut rédiger :
 
-1. Choisir une disposition parmi six, puis saisir le titre, le lieu, les dates, les informations, le barème et les photos.
-2. Vérifier les informations dans **Contrôle avant diffusion**. Les problèmes bloquants empêchent la validation interne, **pas le travail de brouillon ni l’export individuel**.
-3. Cliquez **Mettre à relire**, puis après vérification **Valider cette activité** (statut éditorial local).
-4. Exporter la slide `.pptx` individuellement ou créer un **PPTX groupé** avec les activités enregistrées validées.
-5. Importer le PowerPoint dans Canva, relire et diffuser aux bénéficiaires. Le bouton de chaque slide renvoie au site CSE (ou au lien personnalisé choisi), pas à un deep link Kalidea supposé.
-6. Pour transmettre les fiches à un autre bénévole, exportez la **bibliothèque JSON** et demandez-lui de l’importer dans son navigateur. Cette opération **ne synchronise pas** les modifications : elle crée des copies locales.
+```sql
+insert into public.cse_members(user_id, role)
+select id, 'editor' from auth.users where lower(email) = lower('benevole@exemple.fr')
+on conflict (user_id) do update set role = excluded.role;
+```
 
-## Barème tarifaire
+Pour un responsable chargé de valider les fiches, utiliser `reviewer`. Le compte doit exister dans **Authentication → Users** avant l'attribution du rôle. Il est conseillé de créer un compte test de chaque rôle et de vérifier les autorisations avec plusieurs sessions, avant de l'utiliser en production.
 
-Les taux initiaux sont des **valeurs de démonstration** : 70, 65, 60, 55, 50, 45, 40, 35, 30 et 25 % de subvention. Les huit taux intermédiaires doivent être validés par le CSE.
+### Étape B — Brancher le site sur la base
 
-Calcul par tranche : **prix salarié = prix extérieur × (1 − taux de subvention / 100)**. Exemple : prix extérieur 2 400 €, T1 à 70 % → 720 € ; T10 à 25 % → 1 800 €.
+1. Dans les paramètres du projet Supabase, repérer l'**URL du projet** et la clé **publishable / anon** (clé publique utilisable par un navigateur).
+2. Ouvrir CSE Studio V4, puis **Espace partagé → Configurer l'espace partagé**.
+3. Copier l'URL (ex. `https://xxx.supabase.co`) et **uniquement la clé publique**. Ne jamais coller une clé `service_role` ou `sb_secret_...`.
+4. Cliquer **Enregistrer la configuration**. Renseigner l'adresse e-mail d'un compte autorisé, puis cliquer **Recevoir un lien de connexion**.
+5. Ouvrir le lien reçu par e-mail : le retour doit se faire sur votre application GitHub Pages. Les rôles seront ensuite récupérés depuis `cse_members`.
 
-## Limites importantes
+Pour éviter à chaque bénévole de saisir l'URL et la clé publique, il est possible de modifier `js/cloud-config.js` dans le dépôt :
 
-- **GitHub Pages est un hébergement statique public.** Ne publiez pas de liste nominative de bénéficiaires, d’identifiants ou de mots de passe dans le dépôt.
-- La V3 **n’a ni comptes collaborateurs ni base commune**. « Validée » indique une validation enregistrée localement, pas l’accord d’un responsable authentifié.
-- L’outil **ne modifie pas directement les planches Canva** et **ne communique pas avec Up Expert / Kalidea** ; les URL restent des liens de navigation.
-- Un lien d’image distant peut bloquer la récupération par le navigateur (CORS). Importer le fichier JPG/PNG/WebP garantit la meilleure fiabilité de l’export.
-- Les modèles optimisent la lisibilité mais ne remplacent pas une relecture humaine, notamment pour les programmes très longs.
+```js
+window.CSE_CLOUD_CONFIG = {
+  url: 'https://VOTRE-PROJET.supabase.co',
+  key: 'sb_publishable_VOTRE_CLE_PUBLIQUE'
+};
+```
 
-## Structure
+**Cette clé est publique par conception et ne remplace pas les politiques RLS.** Ne jamais y utiliser de clé de service, de mot de passe ou de jeton d'utilisateur.
 
-- `index.html` : interface V3 ; `styles.css` : thème responsive.
-- `js/pricing.js` : calcul des tarifs ; `js/layouts.js` : six mises en page ; `js/app.js` : formulaire, validation, stockage, exports.
-- `assets/` : bandeau et ressources ; `vendor/` : bibliothèques PPTX locales ; `tests/` : contrôles métier et géométriques.
-- `.nojekyll` : assure la publication des ressources statiques.
+### Étape C — Utiliser les fiches partagées
 
-## Tests
+1. **Rédacteur :** ouvrir une fiche partagée ou créer une nouvelle activité. Modifier les informations, cliquer **☁ Enregistrer en ligne** puis **Soumettre à relecture**.
+2. **Relecteur :** synchroniser, cliquer **Ouvrir** sur une fiche « À relire », vérifier et cliquer **Approuver en ligne**. L'identité du valideur est enregistrée par la base.
+3. **Bénévole responsable de la publication :** cliquer **PPTX groupé des fiches approuvées en ligne**, puis importer le fichier dans Canva et le vérifier visuellement.
+4. **En cas de conflit :** si la fiche a été modifiée par quelqu'un d'autre, l'enregistrement en ligne est refusé. Exporter sa copie locale en JSON avant de recharger la version commune, puis comparer et réappliquer les modifications utiles.
 
-- `node tests/pricing.test.js`
-- `node tests/layouts.test.js`
-- Test navigateur réalisé sur les **6 exports PPTX**, un **lot groupé 2 slides**, le calcul des tranches et la sauvegarde de la bibliothèque JSON.
+## 4. Dépendances et sécurité
+
+- **GitHub Pages :** héberge une application statique publique ; aucun accès administrateur Github n'est nécessaire pour utiliser le site déjà publié.
+- **Supabase :** stocke les activités et gère les sessions des membres autorisés. Les permissions sont imposées par PostgreSQL avec RLS et trigger. **Ne pas retirer la RLS**, même si des boutons sont grisés dans l'interface.
+- **Compte navigateur :** jeton de session Supabase conservé dans `sessionStorage` (effacé à la fermeture de l'onglet/session). Les paramètres publics URL et clé sont conservés dans `localStorage`.
+- **Photos :** insérées dans le JSON d'activité après réduction côté navigateur. Éviter les photos comportant des données personnelles ; pour beaucoup de visuels, une évolution ultérieure vers Supabase Storage privé sera préférable.
+- **Authentification :** le lien magique dépend des paramètres SMTP, modèles d'e-mail et limites d'envoi Supabase. Pour un déploiement à plusieurs bénévoles, configurer un service SMTP approprié.
+- **Tarifs :** le barème T1–T10 par défaut reste **une hypothèse à confirmer** (70, 65, 60, 55, 50, 45, 40, 35, 30, 25 % de subvention). Ne pas publier de tarifs sans validation humaine.
+- **Canva :** la V4 n'édite pas directement les planches sur canva.link ; elle produit un PPTX modifiable à importer. Up Expert/Kalidea reste l'outil de gestion des inscriptions, accessible par lien vers le portail CSE ou lien personnalisé.
+
+## 5. Tests et limites
+
+Tests automatisés locaux réalisés :
+
+```bash
+node tests/pricing.test.js
+node tests/layouts.test.js
+```
+
+Tests navigateur réalisés avec simulation des réponses Supabase : affichage des **six modèles**, création d'un PPTX, chargement de la bibliothèque, création en ligne simulée, approbation et passage à « À relire » après modification. **Aucun véritable projet Supabase CSE n'a été connecté ni testé dans ce paquet :** il faudra tester l'authentification réelle, les RLS et les trois profils après configuration.
+
+**Restrictions :** pas d'édition directe Canva ni de connexion API Up Expert ; pas de synchronisation hors connexion ; stocker un très grand nombre de photos en base JSON n'est pas la solution idéale à long terme ; il n'y a pas encore de journal d'audit complet de chaque modification.
+
+## 6. Structure du projet
+
+- `index.html`, `styles.css` : interface V4 et six templates.
+- `js/pricing.js`, `js/layouts.js`, `js/app.js` : fonctionnement local, tarifs et génération PPTX.
+- `js/cloud.js`, `js/cloud-config.js` : connexion facultative Supabase, bibliothèque partagée et workflow.
+- `supabase/schema.sql` : création et sécurité des tables.
+- `assets/`, `vendor/`, `tests/`, `docs/` : bandeau CSE HD, ressources, bibliothèques PPTX et tests.

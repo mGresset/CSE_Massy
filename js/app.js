@@ -1,4 +1,4 @@
-/* CSE Studio V3 — application autonome pour GitHub Pages (pas de backend). */
+/* CSE Studio V4 — application autonome pour GitHub Pages (pas de backend). */
 (()=>{'use strict';
 const P=window.CSEPricing,L=window.CSELayouts;
 if(!P||!L)throw Error('Modules CSEPricing / CSELayouts absents');
@@ -79,7 +79,7 @@ function readPhoto(file,which){if(!file)return;if(file.size>4*1024*1024)return n
 async function fetchImage(src){if(!src)return null;if(/^data:image\//.test(src))return src;const resp=await fetch(src,{cache:'no-store'});if(!resp.ok)throw Error('HTTP '+resp.status+' : '+src);const blob=await resp.blob();if(!blob.type.startsWith('image/'))throw Error('Format non image');return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob)})}
 async function imageCropPng(data,targetW,targetH){return await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{try{const c=document.createElement('canvas');c.width=Math.ceil(targetW*2);c.height=Math.ceil(targetH*2);const ctx=c.getContext('2d');const scale=Math.max(c.width/im.naturalWidth,c.height/im.naturalHeight);const w=im.naturalWidth*scale,h=im.naturalHeight*scale;ctx.drawImage(im,(c.width-w)/2,(c.height-h)/2,w,h);resolve(c.toDataURL('image/png'))}catch(e){reject(e)}};im.onerror=()=>reject(Error('Décodage image impossible'));im.src=data})}
 async function imageContainPng(data,targetW,targetH){return await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{try{const c=document.createElement('canvas');c.width=Math.ceil(targetW*2);c.height=Math.ceil(targetH*2);const ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.drawImage(im,0,0,w,h);resolve(c.toDataURL('image/png'))}catch(e){reject(e)}};im.onerror=()=>reject(Error('Décodage impossible'));im.src=data})}
-async function loadPicture(which,cache,warnings,a=activity){if(which in cache)return cache[which];const source=photoSource(a,which);const options=which==='banner'?[source,'bandeau-cse.jpg']:which==='primary'?[source]:which==='secondary'?[source,photoSource(a,'primary')]:[];for(const item of [...new Set(options.filter(Boolean))]){try{const data=await fetchImage(item);return cache[which]=data}catch(err){console.warn('[CSE Studio V3]',err);warnings.push('Image inaccessible : '+which)}}return cache[which]=null}
+async function loadPicture(which,cache,warnings,a=activity){if(which in cache)return cache[which];const source=photoSource(a,which);const options=which==='banner'?[source,'bandeau-cse.jpg']:which==='primary'?[source]:which==='secondary'?[source,photoSource(a,'primary')]:[];for(const item of [...new Set(options.filter(Boolean))]){try{const data=await fetchImage(item);return cache[which]=data}catch(err){console.warn('[CSE Studio V4]',err);warnings.push('Image inaccessible : '+which)}}return cache[which]=null}
 function pptColor(v){const s=String(v||'FFFFFF').replace(/^#/,'');const c=/^[0-9a-f]{3}$/i.test(s)?s.split('').map(x=>x+x).join(''):s;return /^[0-9a-f]{6}$/i.test(c)?c.toUpperCase():'FFFFFF'}
 async function appendPowerPointSlide(pptx,a,warnings){
  const slide=pptx.addSlide();slide.background={color:'FFFFFF'};
@@ -111,9 +111,9 @@ async function exportPPTX(){
  const buttons=[$('exportPptx'),$('exportPptxBottom')];buttons.forEach(b=>b.disabled=true);$('exportPptx').textContent='Export en cours…';
  try{
   const Ctor=window.PptxGenJS;if(!Ctor)throw Error('Module PowerPoint non chargé : vérifier le dossier vendor.');
-  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Activité CSE Studio V3';pptx.title=activity.title;pptx.lang='fr-FR';
+  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Activité CSE Studio V4';pptx.title=activity.title;pptx.lang='fr-FR';
   const warnings=[];const lay=await appendPowerPointSlide(pptx,activity,warnings);
-  await pptx.writeFile({fileName:'CSE_V3_'+fileName(activity.title)+'_'+lay.type+'.pptx'});
+  await pptx.writeFile({fileName:'CSE_V4_'+fileName(activity.title)+'_'+lay.type+'.pptx'});
   notify('PowerPoint généré · '+(L.CHOICES.find(x=>x.id===lay.type)?.name||lay.type)+(warnings.length?' (images à contrôler)':''));
  }catch(err){console.error(err);notify('Export PowerPoint impossible : '+err.message,true)}
  finally{buttons.forEach(b=>b.disabled=false);$('exportPptx').textContent='↓ Exporter PowerPoint'}
@@ -125,9 +125,9 @@ async function exportAllPptx(){
  const btn=$('exportAllPptx');btn.disabled=true;btn.textContent='Création du dossier…';
  try{
   const Ctor=window.PptxGenJS;if(!Ctor)throw Error('Module PowerPoint non chargé.');
-  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Activités validées CSE Studio V3';pptx.title='Activités du CSE';pptx.lang='fr-FR';
+  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Activités validées CSE Studio V4';pptx.title='Activités du CSE';pptx.lang='fr-FR';
   const warnings=[];for(const a of candidates)await appendPowerPointSlide(pptx,normalize(a),warnings);
-  await pptx.writeFile({fileName:'CSE_V3_Lot_'+candidates.length+'_activites.pptx'});
+  await pptx.writeFile({fileName:'CSE_V4_Lot_'+candidates.length+'_activites.pptx'});
   notify(candidates.length+' diapositives réunies dans un PowerPoint'+(warnings.length?' · vérifier les images':''));
  }catch(err){console.error(err);notify('Export groupé impossible : '+err.message,true)}
  finally{btn.disabled=false;btn.textContent='↓ PPTX groupé · Activités validées'}
@@ -162,5 +162,19 @@ $('importLibraryJSON').addEventListener('change',e=>{importLibraryJSON(e.target.
 $('exportAllPptx').addEventListener('click',exportAllPptx);
 $('copyImagePrompt').addEventListener('click',copyImagePrompt);
 
-renderForm();renderLibrary();render();window.CSEStudioV3={getActivity:()=>JSON.parse(JSON.stringify(activity)),getPrices:()=>P.compute(activity.outsidePrice,activity.pricingMode,activity.rates,activity.fixedRate,activity.fixedEuro),getLayout:()=>L.render(activity,P),getPreflight:()=>preflight(),getLibrary:()=>JSON.parse(JSON.stringify(activities)),exportPPTX,exportAllPptx};window.CSEStudioV2=window.CSEStudioV3;
+renderForm();renderLibrary();render();window.CSEStudioV3={getActivity:()=>JSON.parse(JSON.stringify(activity)),getPrices:()=>P.compute(activity.outsidePrice,activity.pricingMode,activity.rates,activity.fixedRate,activity.fixedEuro),getLayout:()=>L.render(activity,P),getPreflight:()=>preflight(),getLibrary:()=>JSON.parse(JSON.stringify(activities)),exportPPTX,exportAllPptx};window.CSEStudioV4Editor={
+ getActivity:()=>JSON.parse(JSON.stringify(activity)),
+ setActivity:raw=>{activity=normalize(raw);activeId=null;renderForm();render();dirty();notify('Fiche partagée chargée dans l’éditeur.');},
+ getPreflight:()=>preflight(activity),
+ exportCloudBatch:async rows=>{
+  const candidates=rows.filter(a=>a&&a.editorialStatus==='approved'&&preflight(a).blocking.length===0);
+  if(!candidates.length)throw Error('Aucune activité en ligne approuvée et complète.');
+  if(candidates.length>25)throw Error('25 diapositives maximum par export.');
+  const Ctor=window.PptxGenJS;if(!Ctor)throw Error('Module PowerPoint absent.');
+  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.title='Activités approuvées · espace partagé';pptx.lang='fr-FR';
+  const warnings=[];for(const a of candidates)await appendPowerPointSlide(pptx,normalize(a),warnings);
+  await pptx.writeFile({fileName:'CSE_V4_Activites_Partagees_'+candidates.length+'.pptx'});
+  notify(candidates.length+' diapositives approuvées exportées'+(warnings.length?' · contrôler les visuels':''));
+ }
+};window.CSEStudioV4=window.CSEStudioV4Editor;window.CSEStudioV2=window.CSEStudioV3;
 })();

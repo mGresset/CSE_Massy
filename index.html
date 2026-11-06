@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#162e70">
-  <meta name="description" content="CSE Studio V3 : création et export de slides d'activités pour le CSE Thales LAS Massy.">
+  <meta name="description" content="CSE Studio V4 : création collaborative et export de slides d'activités pour le CSE Thales LAS Massy.">
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
   <link rel="stylesheet" href="styles.css">
-  <title>CSE Studio V3 • Thales LAS Massy</title>
+  <title>CSE Studio V4 • Thales LAS Massy</title>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">C<span>SE</span></div>
-      <div><div class="brand-name">Studio <span class="version">V3</span></div><div class="brand-subtitle">THALES LAS MASSY · CRÉATION D’ACTIVITÉS</div></div>
+      <div><div class="brand-name">Studio <span class="version">V4</span></div><div class="brand-subtitle">THALES LAS MASSY · CRÉATION D’ACTIVITÉS</div></div>
     </div>
     <nav class="top-actions" aria-label="Actions principales">
       <a class="btn btn-quiet" href="https://canva.link/rewv8gx5iilr8kz" rel="noopener noreferrer" target="_blank">↗ Planches Canva</a>
@@ -71,8 +71,40 @@
           <p class="hint">Lien par défaut : <a href="https://cethaleslasmassy.portailce.com/" target="_blank" rel="noopener noreferrer">Portail CSE Massy</a>. Aucun compte bénéficiaire n’est demandé ici.</p>
         </div></details>
       </form>
+      <section class="cloud-card" id="cloudPanel" aria-label="Bibliothèque partagée">
+        <div class="cloud-title"><div><span class="eyebrow">NOUVEAUTÉ V4 · OPTIONNEL</span><h2>☁ Espace partagé</h2></div><span id="cloudBadge" class="cloud-badge">Non connecté</span></div>
+        <p class="hint">Travail collaboratif sécurisé via un projet Supabase à configurer une seule fois. Le mode local et les exports PPTX restent opérationnels sans connexion.</p>
+        <details class="cloud-settings" id="cloudSettings"><summary>Configurer l’espace partagé (administrateur)</summary>
+          <div class="field"><label for="cloudUrl">URL du projet Supabase</label><input id="cloudUrl" type="url" placeholder="https://votre-projet.supabase.co" autocomplete="off"></div>
+          <div class="field"><label for="cloudKey">Clé publique (publishable / anon)</label><input id="cloudKey" type="text" placeholder="sb_publishable_... ou eyJ..." autocomplete="off"></div>
+          <button id="cloudApplyConfig" type="button" class="btn btn-light full-btn">Enregistrer la configuration</button>
+          <p class="hint">Jamais de clé <strong>service_role</strong> ou secrète ici. Consulter le README et le SQL fourni avant d’activer ce mode.</p>
+        </details>
+        <div id="cloudLogin" class="cloud-login">
+          <div class="field"><label for="cloudEmail">Adresse e-mail du bénévole autorisé</label><input id="cloudEmail" type="email" placeholder="prenom.nom@..." autocomplete="email"></div>
+          <button id="cloudSignIn" type="button" class="btn btn-primary full-btn">✉ Recevoir un lien de connexion</button>
+        </div>
+        <div id="cloudConnected" class="hidden">
+          <div class="cloud-user"><span id="cloudWho">Connecté</span><button id="cloudSignOut" type="button" class="text-button">Se déconnecter</button></div>
+          <div class="cloud-actions">
+            <button id="cloudRefresh" type="button" class="btn btn-light">↻ Synchroniser</button>
+            <button id="cloudSave" type="button" class="btn btn-primary">☁ Enregistrer en ligne</button>
+          </div>
+          <div id="cloudLoaded" class="cloud-loaded">Aucune fiche partagée ouverte · l’enregistrement créera une fiche.</div>
+          <div class="cloud-actions cloud-review-actions">
+            <button id="cloudSubmitReview" type="button" class="btn btn-light">Soumettre à relecture</button>
+            <button id="cloudApprove" type="button" class="btn btn-light">✓ Approuver en ligne</button>
+            <button id="cloudDelete" type="button" class="btn btn-danger">Supprimer</button>
+          </div>
+          <div class="cloud-actions"><button id="cloudBatch" type="button" class="btn btn-light full-btn">↓ PPTX groupé des fiches approuvées en ligne</button></div>
+          <div class="field"><label for="cloudSearch">Rechercher dans la bibliothèque commune</label><input id="cloudSearch" type="search" placeholder="Titre ou lieu..."></div>
+          <div class="cloud-list" id="cloudList"></div>
+          <p class="hint">Les modifications non enregistrées en ligne restent locales. La validation en ligne exige le rôle Relecteur ou Administrateur.</p>
+        </div>
+        <p id="cloudNotice" class="cloud-notice" aria-live="polite">Non configuré : l’application fonctionne en mode local.</p>
+      </section>
       <section class="library-card" aria-label="Bibliothèque locale">
-        <div class="library-header"><h2>3. Mes activités</h2><span id="libraryCount">0</span></div>
+        <div class="library-header"><h2>4. Mes activités locales</h2><span id="libraryCount">0</span></div>
         <p>Enregistrées seulement sur ce navigateur. Partage entre bénévoles via les fichiers JSON.</p>
         <div class="library-actions"><button type="button" id="duplicateActivity">Dupliquer</button><button type="button" id="exportProject">Exporter une fiche</button><label for="importProject">Importer une fiche<input type="file" id="importProject" accept="application/json,.json" hidden></label></div>
         <div class="field"><label for="libraryFilter">Filtrer selon validation</label><select id="libraryFilter"><option value="all">Toutes les activités</option><option value="draft">Brouillons</option><option value="review">À relire</option><option value="approved">Validées</option></select></div>
@@ -91,10 +123,10 @@
         <div class="approval-head"><div><span class="eyebrow">CIRCUIT DE VALIDATION</span><h3>Prêt pour la diffusion ?</h3></div><span id="reviewBadge" class="review-badge">Brouillon</span></div>
         <div id="preflightChecks" class="preflight-checks" aria-live="polite"></div>
         <div class="approval-actions"><button type="button" id="markReview" class="btn btn-light">Mettre à relire</button><button type="button" id="markApproved" class="btn btn-primary">✓ Valider cette activité</button></div>
-        <p class="hint">Une validation reste locale à ce navigateur, sans approbation nominative ni partage automatique entre bénévoles.</p>
+        <p class="hint">Cette validation concerne la copie locale. Pour une approbation partagée et nominative, utiliser l’espace partagé (rôle Relecteur / Administrateur).</p>
       </section>
-      <div class="summary-grid"><div class="fact-card"><span class="fact-icon">◈</span><strong>6 dispositions</strong><p>Classique, immersif, en cartes, tarifs, programme ou essentiel.</p></div><div class="fact-card"><span class="fact-icon">↗</span><strong>PowerPoint éditable</strong><p>Textes, formes et bouton cliquable, puis import dans Canva.</p></div><div class="fact-card"><span class="fact-icon">◇</span><strong>Sans serveur</strong><p>Site GitHub Pages. Les sauvegardes restent locales.</p></div></div>
-      <p class="fineprint">Le lien Canva ouvre vos planches, mais le site ne modifie pas automatiquement les planches en ligne. L’export PowerPoint est la méthode de publication de cette V3. Un contrôle humain reste nécessaire avant diffusion.</p>
+      <div class="summary-grid"><div class="fact-card"><span class="fact-icon">◈</span><strong>6 dispositions</strong><p>Classique, immersif, en cartes, tarifs, programme ou essentiel.</p></div><div class="fact-card"><span class="fact-icon">↗</span><strong>PowerPoint éditable</strong><p>Textes, formes et bouton cliquable, puis import dans Canva.</p></div><div class="fact-card"><span class="fact-icon">◇</span><strong>Sans serveur</strong><p>Site GitHub Pages, espace partagé facultatif avec Supabase.</p></div></div>
+      <p class="fineprint">Le lien Canva ouvre vos planches, mais le site ne modifie pas automatiquement les planches en ligne. L’export PowerPoint est la méthode de publication de cette V4. Un contrôle humain reste nécessaire avant diffusion.</p>
     </section>
   </main>
   <div id="toast" role="status" class="toast" aria-live="polite"></div>
@@ -103,5 +135,7 @@
   <script src="js/pricing.js" defer></script>
   <script src="js/layouts.js" defer></script>
   <script src="js/app.js" defer></script>
+  <script src="js/cloud-config.js" defer></script>
+  <script src="js/cloud.js" defer></script>
 </body>
 </html>
