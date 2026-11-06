@@ -96,7 +96,24 @@ function exportCSV(){const p=pricing();const fields={TITRE:activity.title,CATEGO
  for(let i=0;i<10;i++)fields['T'+(i+1)]=p[i]?.price!==undefined&&activity.pricingMode==='tranches'?P.frMoney(p[i].price):'';
  fields.PRIX_UNIQUE=activity.pricingMode!=='tranches'?(p[0]?P.frMoney(p[0].price):''):'';
  const keys=Object.keys(fields),csv='\ufeff'+keys.map(csvCell).join(';')+'\r\n'+keys.map(k=>csvCell(fields[k])).join(';')+'\r\n';download(csv,'text/csv;charset=utf-8','CSE_'+fileBase(activity.title)+'.csv');notify('CSV exporté. Associez les colonnes aux champs de votre modèle Canva.')}
-function asData(url){if(String(url||'').startsWith('data:image/'))return Promise.resolve(url);return fetch(url).then(r=>{if(!r.ok)throw Error('Image inaccessible');return r.blob()}).then(blob=>new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)}))}
+async function asData(url){
+ if(String(url||'').startsWith('data:image/'))return url;
+ let response;
+ try{response=await fetch(url,{cache:'no-store'});}catch(e){throw Error('Accès à l’image bloqué : '+url+' ('+(e.message||'réseau/CORS')+')')}
+ if(!response.ok)throw Error('Image introuvable : '+url+' (HTTP '+response.status+')');
+ const blob=await response.blob();
+ if(!blob.type.startsWith('image/'))throw Error('Le fichier n’est pas une image : '+url);
+ return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(Error('Lecture impossible : '+url));fr.readAsDataURL(blob)});
+}
+// Les images facultatives ne doivent pas empêcher la création du PowerPoint.
+// Priorité au nouveau bandeau fourni à la racine par le CSE ; repli sur /assets.
+async function firstAvailableImage(sources){
+ for(const source of [...new Set(sources.filter(Boolean))]){
+  try{return {data:await asData(source),source};}
+  catch(e){console.warn('[CSE Studio] '+e.message)}
+ }
+ return null;
+}
 // A Canva-importable PPTX with editable shapes/text fields and a functioning hyperlink.
 async function exportPPTX(){const button=$('exportPptx');if(!activity.title.trim()){notify('Le titre de l’activité est requis.',true);$('title').focus();return}button.disabled=true;$('exportPptxBottom').disabled=true;button.textContent='Création...';
  try{
@@ -105,10 +122,18 @@ async function exportPPTX(){const button=$('exportPptx');if(!activity.title.trim
  const px=x=>x/90;
  function t(value,x,y,w,h,opts={}){s.addText(String(value??''),{x:px(x),y:px(y),w:px(w),h:px(h),margin:0,fontFace:'Arial',fontSize:11,breakLine:false,fit:'shrink',color:'111111',valign:'mid',...opts})}
  function rect(x,y,w,h,color){s.addShape(Sh.rect,{x:px(x),y:px(y),w:px(w),h:px(h),line:{color},fill:{color}})}
- let banner=await asData('assets/bandeau-cse.jpg');s.addImage({data:banner,x:px(10),y:px(7),w:px(1180),h:px(171)});rect(10,644,1180,31,'3648A0');
+ const imageWarnings=[];
+ const banner=await firstAvailableImage(['bandeau-cse.jpg','assets/bandeau-cse.jpg']);
+ if(banner){s.addImage({data:banner.data,x:px(10),y:px(7),w:px(1180),h:px(171)})}
+ else{rect(10,7,1180,171,'E6EDF8');t('CSE THALES LAS MASSY',58,60,840,60,{fontSize:27,bold:true,color:'2E4396'});imageWarnings.push('bandeau CSE manquant')}
+ rect(10,644,1180,31,'3648A0');
  t(activity.category+(activity.location?' · '+activity.location:''),29,182,195,35,{fontSize:13.5,color:'153C9B',bold:true});t(activity.subtitle,29,217,195,22,{fontSize:10.5,bold:true,color:'123F9E'});
- let photo;try{photo=await asData(activity.photoData||activity.photoUrl||'assets/sri-lanka.jpg')}catch(e){photo=await asData('assets/sri-lanka.jpg');notify('Image externe inaccessible pour l’export, visuel modèle utilisé.',true)}
- s.addImage({data:photo,x:px(41),y:px(240),w:px(156),h:px(activity.template==='simple'?215:195),sizingCrop:true});
+ const imageDemandee=activity.photoData||activity.photoUrl||'';
+ const photo=await firstAvailableImage([imageDemandee,'assets/sri-lanka.jpg']);
+ if(photo){s.addImage({data:photo.data,x:px(41),y:px(240),w:px(156),h:px(activity.template==='simple'?215:195),sizingCrop:true});
+  if(imageDemandee&&photo.source!==imageDemandee)imageWarnings.push('photo personnalisée inaccessible, visuel de remplacement utilisé')}
+ else{rect(41,240,156,activity.template==='simple'?215:195,'F0F3F9');t('VISUEL À AJOUTER',48,310,142,38,{fontSize:10,color:'6F7993',bold:true,align:'center'});imageWarnings.push('photo manquante')}
+
  const priceY=activity.template==='simple'?464:438;
  t(activity.priceLabel||'Tarif CSE',29,priceY,197,23,{fontSize:10.4,bold:true});
  const rows=pricing();if(activity.pricingMode==='tranches')rows.forEach((r,i)=>{const col=i%2,row=Math.floor(i/2);t(r.label+' : '+P.frMoney(r.price),29+col*101,priceY+25+row*17,98,17,{fontSize:8.8,bold:true,color:'14409C'})});else{t(P.frMoney(rows[0]?.price??0),29,priceY+25,190,26,{fontSize:17,bold:true,color:'15419A'});const rate=rows[0]?.subsidy;t(rate===null?'':('Subvention CSE : '+rate+' %'),29,priceY+55,190,21,{fontSize:9.3,color:'14409C'})}
@@ -131,7 +156,7 @@ async function exportPPTX(){const button=$('exportPptx');if(!activity.title.trim
  s.addShape(Sh.roundRect,{x:px(971),y:px(580),w:px(203),h:px(42),rectRadius:.08,fill:{color:'EFF4FC'},line:{color:'B6CAE9'},hyperlink:{url:u}});
  t(activity.ctaLabel||'Plus d’infos',974,586,197,29,{fontSize:12.3,color:'174295',bold:true,align:'center',hyperlink:{url:u}});
  }
- await pptx.writeFile({fileName:'CSE_'+fileBase(activity.title)+'.pptx'});notify('PowerPoint généré. Vous pouvez l’importer dans vos planches Canva.');
+ await pptx.writeFile({fileName:'CSE_'+fileBase(activity.title)+'.pptx'});notify('PowerPoint généré'+(imageWarnings.length?' (attention : '+imageWarnings.join(' ; ')+')':'')+'. Vous pouvez l’importer dans Canva.',Boolean(imageWarnings.length));
  }catch(e){console.error(e);notify('Export PowerPoint impossible : '+e.message,true)}finally{button.disabled=false;$('exportPptxBottom').disabled=false;button.textContent='↓ Générer PPTX'}
 }
 // Events

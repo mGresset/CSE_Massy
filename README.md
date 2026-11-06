@@ -95,3 +95,9 @@ node tests/pricing.test.js
 ```
 
 
+## Correctif images / export PPTX (06/11/2026)
+
+- L’export recherche le bandeau en `bandeau-cse.jpg` (racine), puis en `assets/bandeau-cse.jpg`.
+- Une image distante bloquée par CORS ou absente ne bloque plus le téléchargement du PPTX : un visuel de remplacement ou un encadré neutre est utilisé.
+- Pour garantir l’image souhaitée, privilégier « Choisir une image depuis l’ordinateur ».
+- En cas de fichier manquant, vérifier exactement le chemin et les majuscules/minuscules des noms sur GitHub Pages.
