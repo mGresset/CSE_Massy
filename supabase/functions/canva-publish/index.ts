@@ -1,3 +1,12 @@
+/** CSE Studio — EXPÉRIMENTAL, NON BRANCHÉ SUR L'INTERFACE V9 ET NON DÉMONTRÉ.
+ * Ébauche de fonction serveur (Supabase Edge Function) pour ajouter une diapositive à une présentation Canva :
+ * import du PPTX (POST /v1/imports) puis insertion des pages (POST /v1/merges, type modify_existing_design,
+ * opération insert_pages). Prérequis vérifiés dans la documentation Canva Connect (novembre 2026) :
+ *  - l'API « merges » est en PRÉVERSION (une application publique l'utilisant ne passe pas la revue Canva) ;
+ *  - authentification OAuth d'une « service app » (client_credentials, scopes service:*) avec crédits API de l'équipe ;
+ *  - un lien de partage canva.link « modifiable » ne donne AUCUNE autorisation API.
+ * Ne pas déployer sans accord du CSE, compte Canva habilité, tests sur un design de test et revue de sécurité.
+ */
 /** CSE Studio V5 — Canva publication, Supabase Edge Function.
  * Prerequisites: Supabase Auth + cse_members/cse_activities from V4;
  * Canva SERVICE app eligible and granted the required service scopes.

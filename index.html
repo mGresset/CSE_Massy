@@ -3,155 +3,62 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#162e70">
-  <meta name="description" content="CSE Studio V8 : création collaborative et export de slides d'activités pour le CSE Thales LAS Massy.">
+  <meta name="theme-color" content="#1C3474">
+  <meta name="description" content="CSE Studio V9 : fiches d’activités et composition du MEL hebdomadaire du CSE Thales LAS Massy, export PowerPoint modifiable.">
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
-  <link rel="stylesheet" href="styles.css">
-  <title>CSE Studio V8 • Thales LAS Massy</title>
+  <link rel="stylesheet" href="css/app.css?v=9.1.0">
+  <link rel="stylesheet" href="css/slide.css?v=9.1.0">
+  <title>CSE Studio V9 · CSE Thales LAS Massy</title>
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark">C<span>SE</span></div>
-      <div><div class="brand-name">Studio <span class="version">V8</span></div><div class="brand-subtitle">THALES LAS MASSY · CRÉATION D’ACTIVITÉS</div></div>
-    </div>
-    <nav class="top-actions" aria-label="Actions principales">
-      <a href="mel.html" class="btn btn-primary">✦ Composer le MEL (V8)</a>
-      <a id="canvaOpenHeader" class="btn btn-quiet" href="https://canva.link/rewv8gx5iilr8kz" rel="noopener noreferrer" target="_blank">↗ Planches Canva</a>
-      <button id="newActivity" type="button" class="btn btn-quiet">+ Nouvelle</button>
-      <button id="saveActivity" type="button" class="btn btn-light">Enregistrer</button>
-      <button id="exportPptx" type="button" class="btn btn-primary">↓ Exporter PowerPoint</button>
+<body data-default-route="tableau-de-bord">
+  <a class="skip" href="#main">Aller au contenu</a>
+  <header class="appbar">
+    <a class="brand" href="#/tableau-de-bord" aria-label="CSE Studio, tableau de bord">
+      <span class="brand-mark" aria-hidden="true">CSE</span>
+      <span class="brand-text"><strong>CSE Studio <span class="ver">V9</span></strong><small>THALES LAS MASSY · MEL DU CSE</small></span>
+    </a>
+    <nav class="mainnav" aria-label="Navigation principale">
+      <a href="#/tableau-de-bord" data-nav="tableau-de-bord">Tableau de bord</a>
+      <a href="#/bibliotheque" data-nav="bibliotheque">Bibliothèque</a>
+      <a href="#/mel" data-nav="mel">Composer le MEL</a>
+      <a href="#/modeles" data-nav="modeles">Modèles</a>
+      <a href="#/parametres" data-nav="parametres">Paramètres</a>
+      <a href="#/exports" data-nav="exports">Sauvegardes &amp; exports</a>
     </nav>
+    <div class="appbar-right">
+      <span id="saveStatus" class="save-status" role="status" aria-live="polite">Chargement…</span>
+    </div>
   </header>
-  <main class="layout">
-    <aside class="sidebar" aria-label="Éditeur d'activité">
-      <div class="side-intro"><div class="eyebrow">VOTRE ACTIVITÉ</div><h1>Créer une diapositive</h1><p>Renseignez les informations une fois, sélectionnez une disposition puis exportez un PowerPoint modifiable.</p></div>
-      <div class="section-title"><h2>1. Choisir une disposition</h2><span class="tag">5 modèles</span></div>
-      <div id="templateGallery" class="template-gallery" role="group" aria-label="Choisir une disposition"></div>
-      <div class="template-help" id="templateHelp">Disposition classique, adaptée aux activités détaillées.</div>
-      <div class="section-title"><h2>2. Informations de l’activité</h2></div>
-      <form id="activityForm" autocomplete="off">
-        <details class="fold" open><summary>Présentation et programme</summary><div class="fold-content">
-          <div class="field"><label for="title">Titre de l’activité <em>*</em></label><input id="title" data-field="title" required maxlength="120" placeholder="Ex. Circuit Sri Lanka Authenticité"></div>
-          <div class="cols"><div class="field"><label for="category">Catégorie</label><select id="category" data-field="category"><option>Informations</option></select></div><div class="field"><label for="subtitle">Sous-titre / saison</label><input id="subtitle" data-field="subtitle" placeholder="Vacances de printemps"></div></div>
-          <div class="category-editor"><div class="field"><label for="newCategory">Gérer les catégories</label><input id="newCategory" maxlength="45" placeholder="Nouvelle catégorie..."></div><div class="category-buttons"><button type="button" id="addCategory" class="btn btn-light">+ Ajouter</button><button type="button" id="deleteCategory" class="btn btn-quiet">Supprimer la sélection</button></div><p class="hint">Les catégories personnalisées sont enregistrées sur cet appareil et dans l’export de bibliothèque JSON. La suppression est bloquée si une activité sauvegardée l’utilise.</p></div>
-          <div class="cols"><div class="field"><label for="location">Ville / destination</label><input id="location" data-field="location" placeholder="Sri Lanka"></div><div class="field"><label for="venue">Lieu / établissement</label><input id="venue" data-field="venue" placeholder="Nom du lieu"></div></div>
-          <div class="cols"><div class="field"><label for="activityStart">Début de l’activité</label><input id="activityStart" type="date" data-field="activityStart"></div><div class="field"><label for="activityEnd">Fin de l’activité</label><input id="activityEnd" type="date" data-field="activityEnd"></div></div>
-          <div class="field"><label for="summary">Description courte</label><textarea id="summary" data-field="summary" rows="3" maxlength="900" placeholder="Deux ou trois phrases pour donner envie..."></textarea></div>
-          <div class="field"><label for="highlights">Temps forts <span>(une ligne par élément)</span></label><textarea id="highlights" data-field="highlights" rows="5" placeholder="Visite guidée...&#10;Dîner spectacle..."></textarea></div>
-          <div class="field"><label for="included">Prestations incluses <span>(une ligne par élément)</span></label><textarea id="included" data-field="included" rows="3"></textarea></div>
-          <div class="field"><label for="administrative">Formalités / informations pratiques</label><textarea id="administrative" data-field="administrative" rows="2"></textarea></div>
-          <div class="field"><label for="warning">Point d’attention</label><textarea id="warning" data-field="warning" rows="2" placeholder="Conditions particulières, restrictions..."></textarea></div>
-        </div></details>
-        <details class="fold"><summary>Tarifs et subventions CSE · facultatif</summary><div class="fold-content">
-          <label class="switch-row"><input id="showPricing" type="checkbox"><span>Afficher des tarifs sur cette activité</span></label><p class="hint">Décochez pour les informations, annonces ou activités gratuites. Aucun tarif n’apparaîtra sur la slide.</p><div id="pricingFields" class="hidden">
-          <div class="cols"><div class="field"><label for="outsidePrice">Prix extérieur (€)</label><input id="outsidePrice" data-field="outsidePrice" type="number" step="0.01" min="0" inputmode="decimal"></div><div class="field"><label for="pricingMode">Méthode de calcul</label><select id="pricingMode" data-field="pricingMode"><option value="tranches">Tranches T1 à T10</option><option value="fixedSubsidy">Subvention fixe (%)</option><option value="fixedEmployee">Participation salarié (%)</option><option value="fixedEuro">Prix salarié fixe (€)</option></select></div></div>
-          <div class="field"><label for="priceLabel">Libellé du tarif</label><input id="priceLabel" data-field="priceLabel" placeholder="Tarif chambre double"></div>
-          <div id="fixedRow" class="cols hidden"><div class="field" id="fixedRateField"><label id="fixedRateLabel" for="fixedRate">Pourcentage</label><input id="fixedRate" data-field="fixedRate" type="number" min="0" max="100" step="0.5"></div><div class="field" id="fixedEuroField"><label for="fixedEuro">Prix salarié (€)</label><input id="fixedEuro" data-field="fixedEuro" type="number" min="0" step="0.01"></div></div>
-          <div id="trancheConfig"><div class="field-caption"><strong>Taux de subvention par tranche</strong><button type="button" class="text-button" id="saveRates">Utiliser par défaut</button></div><div class="rate-editor" id="rateInputs"></div><p class="hint">Les taux sont modifiables. Ne les utilisez comme barème officiel qu’après validation par le CSE.</p></div>
-          <div id="pricingTable" class="pricing-results" aria-live="polite"></div>
-          <div class="field"><label for="priceNotes">Notes sur les tarifs / options</label><textarea id="priceNotes" data-field="priceNotes" rows="2"></textarea></div>
-          <div class="field"><label for="conditions">Conditions d’attribution</label><textarea id="conditions" data-field="conditions" rows="2"></textarea></div>
-        </div></div></details>
-        <details class="fold" open><summary>Inscriptions, contact et validation</summary><div class="fold-content">
-          <div class="cols"><div class="field"><label for="registrationStart">Ouverture des inscriptions</label><input id="registrationStart" data-field="registrationStart" type="date"></div><div class="field"><label for="registrationEnd">Clôture des inscriptions</label><input id="registrationEnd" data-field="registrationEnd" type="date"></div></div>
-          <div class="cols"><div class="field"><label for="status">Statut</label><select id="status" data-field="status"><option value="auto">Automatique (selon les dates)</option><option>À venir</option><option>Inscriptions ouvertes</option><option>Complet</option><option>Clôturé</option><option>Annulé</option></select></div><div class="field"><label for="audience">Public concerné</label><input id="audience" data-field="audience" placeholder="Tous les bénéficiaires"></div></div>
-          <div class="cols"><div class="field"><label for="minimum">Participants min.</label><input id="minimum" data-field="minimum" type="number" min="0"></div><div class="field"><label for="maximum">Participants max.</label><input id="maximum" data-field="maximum" type="number" min="0"></div></div>
-          <div class="cols"><div class="field"><label for="points">Valeur en points (facultative)</label><input id="points" data-field="points" type="number" min="0" step="0.5" placeholder="Ex. 24"></div><div class="field"><label for="pointCounter">Compteur de points</label><select id="pointCounter" data-field="pointCounter"><option value="">Aucun compteur</option><option value="long">Séjour long</option><option value="short">Séjour court</option><option value="france">Séjour FRANCE</option></select></div></div><div class="field"><label for="carbon">Bilan carbone (optionnel)</label><input id="carbon" data-field="carbon" placeholder="Ex. 3029 kg CO₂e"></div>
-          <div class="cols"><div class="field"><label for="internalReference">Référence interne (facultative)</label><input id="internalReference" data-field="internalReference" placeholder="Ex. VOY-2027-018" maxlength="50"></div><div class="field"><label for="editorialStatus">Validation interne</label><select id="editorialStatus" data-field="editorialStatus"><option value="draft">Brouillon</option><option value="review">À relire</option><option value="approved">Validée pour diffusion</option></select></div></div>
-          <p class="hint">La validation interne est différente du statut des inscriptions affiché aux bénéficiaires.</p>
-          <div class="field-caption"><strong>Personnes référentes / contacts</strong><button type="button" id="addContact" class="text-button">+ Ajouter un contact</button></div>
-          <div id="contactsList" class="contacts-list" aria-label="Liste des référents"></div>
-          <p class="hint">Ajoutez autant de référents que nécessaire. Leurs noms seront repris automatiquement dans les diapositives.</p>
-        </div></details>
-        <details class="fold"><summary>Photos et destination du bouton</summary><div class="fold-content">
-          <label class="upload-button" for="photoFile">+ Ajouter la photo principale<input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" hidden></label><div id="photoIndicator" class="upload-indicator">Visuel d’exemple tant qu’aucune photo n’est ajoutée.</div>
-          <div class="field"><label for="photoUrl">Ou utiliser une URL publique (HTTPS)</label><input id="photoUrl" data-field="photoUrl" type="url" placeholder="https://...jpg"><small>Les URL distantes peuvent être bloquées par le site hébergeur. L’import de fichier est recommandé.</small></div>
-          <label class="upload-button secondary-upload" for="photo2File">+ Ajouter une deuxième photo (facultatif)<input type="file" id="photo2File" accept="image/png,image/jpeg,image/webp" hidden></label><div id="photo2Indicator" class="upload-indicator">Une deuxième photo est utilisée sur certains modèles.</div>
-          <div class="cols"><div class="field"><label for="linkType">Lien de destination</label><select id="linkType" data-field="linkType"><option value="cse">Portail du CSE</option><option value="custom">Lien personnalisé</option><option value="none">Aucun lien</option></select></div><div class="field"><label for="ctaLabel">Texte du bouton</label><input id="ctaLabel" data-field="ctaLabel" placeholder="Plus d’infos"></div></div>
-          <div id="customLinkField" class="field hidden"><label for="customUrl">Lien personnalisé (facultatif)</label><input id="customUrl" data-field="customUrl" type="url" placeholder="https://..."></div>
-          <div id="effectiveLink" class="link-preview"></div>
-          <button class="btn btn-light btn-inline" type="button" id="copyImagePrompt">✦ Copier un brief d’image pour une IA</button>
-          <p class="hint">La génération d’images n’est pas intégrée à cette application statique ; ce bouton prépare un texte à coller dans votre outil de création d’images.</p>
-          <p class="hint">Lien par défaut : <a href="https://cethaleslasmassy.portailce.com/" target="_blank" rel="noopener noreferrer">Portail CSE Massy</a>. Aucun compte bénéficiaire n’est demandé ici.</p>
-        </div></details>
-      </form>
-      <section class="cloud-card" id="cloudPanel" aria-label="Bibliothèque partagée">
-        <div class="cloud-title"><div><span class="eyebrow">NOUVEAUTÉ V4 · OPTIONNEL</span><h2>☁ Espace partagé</h2></div><span id="cloudBadge" class="cloud-badge">Non connecté</span></div>
-        <p class="hint">Travail collaboratif sécurisé via un projet Supabase à configurer une seule fois. Le mode local et les exports PPTX restent opérationnels sans connexion.</p>
-        <details class="cloud-settings" id="cloudSettings"><summary>Configurer l’espace partagé (administrateur)</summary>
-          <div class="field"><label for="cloudUrl">URL du projet Supabase</label><input id="cloudUrl" type="url" placeholder="https://votre-projet.supabase.co" autocomplete="off"></div>
-          <div class="field"><label for="cloudKey">Clé publique (publishable / anon)</label><input id="cloudKey" type="text" placeholder="sb_publishable_... ou eyJ..." autocomplete="off"></div>
-          <button id="cloudApplyConfig" type="button" class="btn btn-light full-btn">Enregistrer la configuration</button>
-          <p class="hint">Jamais de clé <strong>service_role</strong> ou secrète ici. Consulter le README et le SQL fourni avant d’activer ce mode.</p>
-        </details>
-        <div id="cloudLogin" class="cloud-login">
-          <div class="field"><label for="cloudEmail">Adresse e-mail du bénévole autorisé</label><input id="cloudEmail" type="email" placeholder="prenom.nom@..." autocomplete="email"></div>
-          <button id="cloudSignIn" type="button" class="btn btn-primary full-btn">✉ Recevoir un lien de connexion</button>
-        </div>
-        <div id="cloudConnected" class="hidden">
-          <div class="cloud-user"><span id="cloudWho">Connecté</span><button id="cloudSignOut" type="button" class="text-button">Se déconnecter</button></div>
-          <div class="cloud-actions">
-            <button id="cloudRefresh" type="button" class="btn btn-light">↻ Synchroniser</button>
-            <button id="cloudSave" type="button" class="btn btn-primary">☁ Enregistrer en ligne</button>
-          </div>
-          <div id="cloudLoaded" class="cloud-loaded">Aucune fiche partagée ouverte · l’enregistrement créera une fiche.</div>
-          <div class="cloud-actions cloud-review-actions">
-            <button id="cloudSubmitReview" type="button" class="btn btn-light">Soumettre à relecture</button>
-            <button id="cloudApprove" type="button" class="btn btn-light">✓ Approuver en ligne</button>
-            <button id="cloudDelete" type="button" class="btn btn-danger">Supprimer</button>
-          </div>
-          <div class="cloud-actions"><button id="cloudBatch" type="button" class="btn btn-light full-btn">↓ PPTX groupé des fiches approuvées en ligne</button></div>
-          <div class="field"><label for="cloudSearch">Rechercher dans la bibliothèque commune</label><input id="cloudSearch" type="search" placeholder="Titre ou lieu..."></div>
-          <div class="cloud-list" id="cloudList"></div>
-          <p class="hint">Les modifications non enregistrées en ligne restent locales. La validation en ligne exige le rôle Relecteur ou Administrateur.</p>
-        </div>
-        <p id="cloudNotice" class="cloud-notice" aria-live="polite">Non configuré : l’application fonctionne en mode local.</p>
-      </section>
-      <section class="canva-card" aria-label="Publication dans Canva">
-        <div class="canva-card-head"><span class="eyebrow">NOUVEAUTÉ V5</span><h2>Publication Canva</h2></div>
-        <p class="hint">Choisis la présentation de destination. Le lien de partage ouvre le document, mais ne donne pas à lui seul une autorisation technique de publication.</p>
-        <div class="field"><label for="canvaTargetUrl">Lien de la présentation Canva</label><input id="canvaTargetUrl" type="url" placeholder="https://canva.link/…" value="https://canva.link/rewv8gx5iilr8kz" autocomplete="off"></div>
-        <div class="field"><label for="canvaTargetId">ID du design Canva (administrateur)</label><input id="canvaTargetId" type="text" placeholder="Ex. DAFxxxxxxxx" autocomplete="off"><small>Requis uniquement pour la publication API. Il figure dans l'URL complète <code>canva.com/design/ID/…</code>. Un lien court canva.link ne permet pas de déduire cet ID de manière fiable.</small></div>
-        <div class="canva-actions"><button id="canvaSaveTarget" type="button" class="btn btn-light">✓ Mémoriser</button><a id="canvaOpenTarget" class="btn btn-quiet" href="https://canva.link/rewv8gx5iilr8kz" target="_blank" rel="noopener noreferrer">↗ Ouvrir Canva</a></div>
-        <button id="publishCanva" type="button" class="btn btn-primary full-btn">➕ Ajouter la diapositive à Canva</button>
-        <p id="canvaPublishNotice" class="canva-notice" role="status" aria-live="polite">Mode préparation : le PowerPoint modifiable reste disponible même sans intégration Canva. L'ajout automatique nécessite un compte de service Canva et une fonction serveur Supabase configurés.</p>
-        <p class="hint">Par sécurité, la publication API est réservée aux activités approuvées dans l'espace partagé, par un Relecteur ou Administrateur.</p>
-      </section>
-      <section class="library-card" aria-label="Bibliothèque locale">
-        <div class="library-header"><h2>4. Mes activités locales</h2><span id="libraryCount">0</span></div>
-        <p>Enregistrées seulement sur ce navigateur. Partage entre bénévoles via les fichiers JSON.</p>
-        <div class="library-actions"><button type="button" id="duplicateActivity">Dupliquer</button><button type="button" id="exportProject">Exporter une fiche</button><label for="importProject">Importer une fiche<input type="file" id="importProject" accept="application/json,.json" hidden></label></div>
-        <div class="field"><label for="libraryFilter">Filtrer selon validation</label><select id="libraryFilter"><option value="all">Toutes les activités</option><option value="draft">Brouillons</option><option value="review">À relire</option><option value="approved">Validées</option></select></div>
-        <div class="library-actions"><button type="button" id="exportLibraryJSON">Sauvegarder toute la bibliothèque (JSON)</button><label for="importLibraryJSON">Importer une bibliothèque<input type="file" id="importLibraryJSON" accept="application/json,.json" hidden></label></div>
-        <button type="button" id="exportAllPptx" class="btn btn-primary full-btn">↓ PPTX groupé · Activités validées</button>
-        <input type="search" id="librarySearch" placeholder="Rechercher une activité..." aria-label="Rechercher une activité">
-        <div id="activityLibrary" class="library-items"></div>
-      </section>
-      <div class="sidebar-footer"><button id="exportCSV" type="button" class="btn btn-light">↓ Exporter CSV pour Canva</button><button id="exportPptxBottom" type="button" class="btn btn-primary">↓ Générer le PowerPoint</button></div>
-    </aside>
-    <section class="preview-panel" aria-label="Prévisualisation">
-      <div class="preview-heading"><div><div class="eyebrow">APERÇU EN TEMPS RÉEL</div><h2>Votre slide, votre mise en page</h2><p>5 dispositions · Bandeau officiel HD 1920 × 282 · Format 16:9</p></div><div class="preview-toolbar"><span id="saveState" class="save-state">● Brouillon local</span><button type="button" id="printSlide" class="btn btn-light">Imprimer / PDF</button></div></div>
-      <div class="slide-card"><div id="slideMount" class="slide-mount"><article id="slide" class="slide-canvas" aria-label="Diapositive générée"></article></div></div>
-      <div id="warnings" class="validation"></div>
-      <section class="approval-card" aria-label="Contrôle avant diffusion">
-        <div class="approval-head"><div><span class="eyebrow">CIRCUIT DE VALIDATION</span><h3>Prêt pour la diffusion ?</h3></div><span id="reviewBadge" class="review-badge">Brouillon</span></div>
-        <div id="preflightChecks" class="preflight-checks" aria-live="polite"></div>
-        <div class="approval-actions"><button type="button" id="markReview" class="btn btn-light">Mettre à relire</button><button type="button" id="markApproved" class="btn btn-primary">✓ Valider cette activité</button></div>
-        <p class="hint">Cette validation concerne la copie locale. Pour une approbation partagée et nominative, utiliser l’espace partagé (rôle Relecteur / Administrateur).</p>
-      </section>
-      <div class="summary-grid"><div class="fact-card"><span class="fact-icon">◈</span><strong>5 dispositions</strong><p>Classique, immersif, en cartes, tarifs, programme ou essentiel.</p></div><div class="fact-card"><span class="fact-icon">↗</span><strong>PowerPoint éditable</strong><p>Textes, formes et bouton cliquable, puis import dans Canva.</p></div><div class="fact-card"><span class="fact-icon">◇</span><strong>Sans serveur</strong><p>Site GitHub Pages, espace partagé facultatif avec Supabase.</p></div></div>
-      <p class="fineprint">V5 : la publication directe est disponible uniquement après configuration de l’intégration Canva + Supabase et validation des permissions sur le design cible. En l’absence de connexion, exporter le PowerPoint puis l’importer dans Canva.</p>
-    </section>
+  <main id="main" class="app-main" tabindex="-1">
+    <div class="boot">
+      <p>Chargement de CSE Studio…</p>
+      <noscript><p class="alert">JavaScript est nécessaire pour utiliser CSE Studio.</p></noscript>
+    </div>
   </main>
-  <div id="toast" role="status" class="toast" aria-live="polite"></div>
-  <script src="vendor/jszip.min.js" defer></script>
-  <script src="vendor/pptxgen.min.js" defer></script>
-  <script src="js/pricing.js" defer></script>
-  <script src="js/layouts.js" defer></script>
-  <script src="js/app.js" defer></script>
-  <script src="js/cloud-config.js" defer></script>
-  <script src="js/cloud.js" defer></script>
-  <script src="js/canva-publish.js" defer></script>
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+  <script src="vendor/jszip.min.js?v=9.1.0" defer></script>
+  <script src="vendor/pptxgen.min.js?v=9.1.0" defer></script>
+  <script src="js/core/dates.js?v=9.1.0" defer></script>
+  <script src="js/pricing.js?v=9.1.0" defer></script>
+  <script src="js/engine/metrics.js?v=9.1.0" defer></script>
+  <script src="js/core/model.js?v=9.1.0" defer></script>
+  <script src="js/core/compose.js?v=9.1.0" defer></script>
+  <script src="js/engine/layout.js?v=9.1.0" defer></script>
+  <script src="js/engine/templates.js?v=9.1.0" defer></script>
+  <script src="js/engine/render-html.js?v=9.1.0" defer></script>
+  <script src="js/core/images.js?v=9.1.0" defer></script>
+  <script src="js/core/migrate.js?v=9.1.0" defer></script>
+  <script src="js/core/store.js?v=9.1.0" defer></script>
+  <script src="js/core/demo-art.js?v=9.1.0" defer></script>
+  <script src="js/core/demo.js?v=9.1.0" defer></script>
+  <script src="js/export/pptx.js?v=9.1.0" defer></script>
+  <script src="js/cloud-config.js?v=9.1.0" defer></script>
+  <script src="js/core/cloud-sync.js?v=9.1.0" defer></script>
+  <script src="js/app/ui.js?v=9.1.0" defer></script>
+  <script src="js/app/editor.js?v=9.1.0" defer></script>
+  <script src="js/app/composer.js?v=9.1.0" defer></script>
+  <script src="js/app/views.js?v=9.1.0" defer></script>
+  <script src="js/app/cloud.js?v=9.1.0" defer></script>
+  <script src="js/app/main.js?v=9.1.0" defer></script>
 </body>
 </html>
