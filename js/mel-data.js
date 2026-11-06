@@ -5,6 +5,8 @@ const SECTIONS = ['Couverture','Permanences','Nouveautés','En cours','Dernière
 const CATEGORIES = ['Informations','Voyages','Week-ends','Animations','Sorties culturelles','Musiques','Œnologie','Sport','Randonnées','Sports mécaniques','Parapentes','Couture','Dessins','La Ruche'];
 const TEMPLATES = [
  {id:'cover',label:'Couverture du MEL',hint:'Éditorial, informations importantes, dernières chances et trois nouveautés.',reference:1},
+ {id:'newsgrid',label:'Nouveautés · mosaïque',hint:'Mosaïque impactante de 1 à 6 activités. Sélection automatique ou personnalisée des fiches.',reference:1},
+ {id:'lastboard',label:'Urgences · dernière semaine',hint:'Page collective « Dernière chance » : dates limites en grand, photos et pastilles J−.',reference:9},
  {id:'calendar',label:'Permanences / planning',hint:'Calendrier mensuel interactif, codes couleur, horaires, contact et catalogue.',reference:2},
  {id:'information',label:'Information CSE',hint:'Communication administrative, consignes, rappels ou procédure.',reference:4},
  {id:'activity',label:'Fiche activité',hint:'Description, photos, date, tarifs facultatifs, points et contacts.',reference:12},
@@ -17,7 +19,7 @@ const TEMPLATES = [
  {id:'rules',label:'Règlement / modalités',hint:'Deux colonnes de règles et d’informations durables.',reference:32}
 ];
 const DEFAULT_SETTINGS={week:46,year:2026,newsletterDate:'2026-11-09',title:'MEL DU CSE',cseUrl:'https://cethaleslasmassy.portailce.com/',canvaUrl:'https://canva.link/rewv8gx5iilr8kz',planningUrl:'',footer:'CSE THALES LAS MASSY · Informations susceptibles d’évoluer',rates:[70,65,60,55,50,45,40,35,30,25]};
-const BLANK = {id:'',kind:'activity',section:'En cours',included:true,originPage:0,title:'',subtitle:'',category:'Informations',location:'',date:'',dateEnd:'',deadline:'',description:'',details:'',highlight:'',contact:'',image:'',image2:'',badge:'',priceEnabled:false,pricingMode:'tranches',outsidePrice:'',fixedPrice:'',fixedPercent:'',manualPrices:'',priceNotes:'',minParticipants:'',maxParticipants:'',points:'',counter:'',carbon:'',age:'',code:'',linkType:'cse',linkCustom:'',linkLabel:'Plus d’infos',calendarMonth:'2026-11',scheduleDays:{},openHours:'13h–16h',shortHours:'14h30–16h',catalogueUrl:'',agendaRows:[],footerText:''};
+const BLANK = {id:'',kind:'activity',section:'En cours',included:true,density:'auto',featureIds:[],smartCategory:'Toutes',originPage:0,title:'',subtitle:'',category:'Informations',location:'',date:'',dateEnd:'',deadline:'',description:'',details:'',highlight:'',contact:'',image:'',image2:'',badge:'',priceEnabled:false,pricingMode:'tranches',outsidePrice:'',fixedPrice:'',fixedPercent:'',manualPrices:'',priceNotes:'',minParticipants:'',maxParticipants:'',points:'',counter:'',carbon:'',age:'',code:'',linkType:'cse',linkCustom:'',linkLabel:'Plus d’infos',calendarMonth:'2026-11',scheduleDays:{},openHours:'13h–16h',shortHours:'14h30–16h',catalogueUrl:'',agendaRows:[],footerText:''};
 const COPY_REG1="Texte des modalités d’inscription à renseigner et faire valider.\n\nSite du CSE : modalités de réservation.\n\nAccueil CSE : horaires et contact.\n\nPaiement : selon règlement en vigueur.";
 const COPY_REG2="Texte du règlement à renseigner et faire valider.\n\nPaiement des activités et conditions applicables.\n\nConditions de désistement, remboursement et assurances.";
 const DEMO = [
@@ -595,12 +597,14 @@ const DEMO = [
   }
  ]
 ];
-function makeSlide(kind,section,title,extra){return {...BLANK,id:'mel-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),kind:kind||'activity',section:section||'En cours',title:title||'',...(extra||{}),scheduleDays:{...(extra?.scheduleDays||{})},agendaRows:Array.isArray(extra?.agendaRows)?extra.agendaRows.map(a=>({...a})):[]};}
+function makeSlide(kind,section,title,extra){return {...BLANK,id:'mel-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),kind:kind||'activity',section:section||'En cours',title:title||'',...(extra||{}),scheduleDays:{...(extra?.scheduleDays||{})},featureIds:Array.isArray(extra?.featureIds)?extra.featureIds.slice(0,6):[],agendaRows:Array.isArray(extra?.agendaRows)?extra.agendaRows.map(a=>({...a})):[]};}
 function demoSlides(){return DEMO.map(row=>makeSlide(row[0],row[1],row[2],row[3]));}
 function starterSlides(){return [
  makeSlide('cover','Couverture','MEL DU CSE',{description:'',details:'',highlight:''}),
  makeSlide('calendar','Permanences','Permanences du CSE',{calendarMonth:new Date().toISOString().slice(0,7),contact:'Assistantes du CSE'}),
  makeSlide('calendar','Permanences','Prêt de matériel',{calendarMonth:new Date().toISOString().slice(0,7),contact:'Service prêt matériel'}),
+ makeSlide('newsgrid','Nouveautés','Les nouveautés de la semaine'),
+ makeSlide('lastboard','Dernière semaine','Dernières chances'),
  makeSlide('rules','Règlement','Modalités d’inscription aux activités du CSE',{description:COPY_REG1}),
  makeSlide('rules','Règlement','Paiement et désistement',{description:COPY_REG2,highlight:'Toute inscription doit être accompagnée de son paiement.'})
 ];}
