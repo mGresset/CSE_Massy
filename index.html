@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#162e70">
-  <meta name="description" content="CSE Studio V4 : création collaborative et export de slides d'activités pour le CSE Thales LAS Massy.">
+  <meta name="description" content="CSE Studio V5 : création collaborative et export de slides d'activités pour le CSE Thales LAS Massy.">
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
   <link rel="stylesheet" href="styles.css">
-  <title>CSE Studio V4 • Thales LAS Massy</title>
+  <title>CSE Studio V5 • Thales LAS Massy</title>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">C<span>SE</span></div>
-      <div><div class="brand-name">Studio <span class="version">V4</span></div><div class="brand-subtitle">THALES LAS MASSY · CRÉATION D’ACTIVITÉS</div></div>
+      <div><div class="brand-name">Studio <span class="version">V5</span></div><div class="brand-subtitle">THALES LAS MASSY · CRÉATION D’ACTIVITÉS</div></div>
     </div>
     <nav class="top-actions" aria-label="Actions principales">
-      <a class="btn btn-quiet" href="https://canva.link/rewv8gx5iilr8kz" rel="noopener noreferrer" target="_blank">↗ Planches Canva</a>
+      <a id="canvaOpenHeader" class="btn btn-quiet" href="https://canva.link/rewv8gx5iilr8kz" rel="noopener noreferrer" target="_blank">↗ Planches Canva</a>
       <button id="newActivity" type="button" class="btn btn-quiet">+ Nouvelle</button>
       <button id="saveActivity" type="button" class="btn btn-light">Enregistrer</button>
       <button id="exportPptx" type="button" class="btn btn-primary">↓ Exporter PowerPoint</button>
@@ -103,6 +103,16 @@
         </div>
         <p id="cloudNotice" class="cloud-notice" aria-live="polite">Non configuré : l’application fonctionne en mode local.</p>
       </section>
+      <section class="canva-card" aria-label="Publication dans Canva">
+        <div class="canva-card-head"><span class="eyebrow">NOUVEAUTÉ V5</span><h2>Publication Canva</h2></div>
+        <p class="hint">Choisis la présentation de destination. Le lien de partage ouvre le document, mais ne donne pas à lui seul une autorisation technique de publication.</p>
+        <div class="field"><label for="canvaTargetUrl">Lien de la présentation Canva</label><input id="canvaTargetUrl" type="url" placeholder="https://canva.link/…" value="https://canva.link/rewv8gx5iilr8kz" autocomplete="off"></div>
+        <div class="field"><label for="canvaTargetId">ID du design Canva (administrateur)</label><input id="canvaTargetId" type="text" placeholder="Ex. DAFxxxxxxxx" autocomplete="off"><small>Requis uniquement pour la publication API. Il figure dans l'URL complète <code>canva.com/design/ID/…</code>. Un lien court canva.link ne permet pas de déduire cet ID de manière fiable.</small></div>
+        <div class="canva-actions"><button id="canvaSaveTarget" type="button" class="btn btn-light">✓ Mémoriser</button><a id="canvaOpenTarget" class="btn btn-quiet" href="https://canva.link/rewv8gx5iilr8kz" target="_blank" rel="noopener noreferrer">↗ Ouvrir Canva</a></div>
+        <button id="publishCanva" type="button" class="btn btn-primary full-btn">➕ Ajouter la diapositive à Canva</button>
+        <p id="canvaPublishNotice" class="canva-notice" role="status" aria-live="polite">Mode préparation : le PowerPoint modifiable reste disponible même sans intégration Canva. L'ajout automatique nécessite un compte de service Canva et une fonction serveur Supabase configurés.</p>
+        <p class="hint">Par sécurité, la publication API est réservée aux activités approuvées dans l'espace partagé, par un Relecteur ou Administrateur.</p>
+      </section>
       <section class="library-card" aria-label="Bibliothèque locale">
         <div class="library-header"><h2>4. Mes activités locales</h2><span id="libraryCount">0</span></div>
         <p>Enregistrées seulement sur ce navigateur. Partage entre bénévoles via les fichiers JSON.</p>
@@ -126,7 +136,7 @@
         <p class="hint">Cette validation concerne la copie locale. Pour une approbation partagée et nominative, utiliser l’espace partagé (rôle Relecteur / Administrateur).</p>
       </section>
       <div class="summary-grid"><div class="fact-card"><span class="fact-icon">◈</span><strong>6 dispositions</strong><p>Classique, immersif, en cartes, tarifs, programme ou essentiel.</p></div><div class="fact-card"><span class="fact-icon">↗</span><strong>PowerPoint éditable</strong><p>Textes, formes et bouton cliquable, puis import dans Canva.</p></div><div class="fact-card"><span class="fact-icon">◇</span><strong>Sans serveur</strong><p>Site GitHub Pages, espace partagé facultatif avec Supabase.</p></div></div>
-      <p class="fineprint">Le lien Canva ouvre vos planches, mais le site ne modifie pas automatiquement les planches en ligne. L’export PowerPoint est la méthode de publication de cette V4. Un contrôle humain reste nécessaire avant diffusion.</p>
+      <p class="fineprint">V5 : la publication directe est disponible uniquement après configuration de l’intégration Canva + Supabase et validation des permissions sur le design cible. En l’absence de connexion, exporter le PowerPoint puis l’importer dans Canva.</p>
     </section>
   </main>
   <div id="toast" role="status" class="toast" aria-live="polite"></div>
@@ -137,5 +147,6 @@
   <script src="js/app.js" defer></script>
   <script src="js/cloud-config.js" defer></script>
   <script src="js/cloud.js" defer></script>
+  <script src="js/canva-publish.js" defer></script>
 </body>
 </html>

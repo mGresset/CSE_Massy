@@ -37,3 +37,9 @@
 .cloud-item-info{flex:1;min-width:0}.cloud-item strong{display:block;font-size:11px;color:#1d3669}.cloud-item small{font-size:10px;color:#7385a4;line-height:1.7}.cloud-item button{font-size:11px;padding:7px 9px;border:1px solid #d1dbef;border-radius:7px;background:#f2f6ff;color:#294a8c;cursor:pointer}
 .cloud-notice{margin:10px 0 0;font-size:10px;line-height:1.5;color:#4a5f84}.cloud-notice.error{color:#9f354b}.cloud-review-actions .btn:disabled,.cloud-actions .btn:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:650px){.cloud-actions .btn{min-width:110px}}
+
+/* V5 — destination Canva et publication conditionnelle */
+.canva-card{margin-top:18px;padding:18px;border:1px solid #bbd4ec;border-radius:14px;background:linear-gradient(145deg,#edf5ff,#ffffff);box-shadow:0 4px 18px #173b6c10}
+.canva-card-head h2{margin:3px 0 7px;font-size:17px;color:#203b79}.canva-card .field{margin:12px 0}.canva-card input{display:block;width:100%;font-size:12px;padding:10px;border:1px solid #d0dced;border-radius:8px;overflow-wrap:anywhere;background:#fff}
+.canva-card small{display:block;color:#667894;font-size:10px;line-height:1.55;margin-top:6px}.canva-card small code{font-size:10px}.canva-actions{display:flex;gap:8px;align-items:center}.canva-actions>*{flex:1;justify-content:center!important;font-size:11px!important;padding:10px 7px!important}
+.canva-notice{border-radius:8px;background:#e9f0fb;color:#284579;font-size:11px;line-height:1.6;padding:11px 12px;white-space:pre-wrap;overflow-wrap:anywhere}.canva-notice.error{background:#fff1ef;color:#943b41}.canva-notice.success{background:#e6f6ec;color:#236540}.canva-card button:disabled{opacity:.6;cursor:progress}

@@ -1,124 +1,121 @@
-# CSE Studio V4 — CSE Thales LAS Massy
+# CSE Studio V5 — Lien Canva & publication dans une présentation existante
 
-Application Web pour **préparer et exporter les diapositives d'activités** du CSE. Compatible avec [GitHub Pages](https://docs.github.com/fr/pages). V4 ajoute un **espace collaboratif facultatif** basé sur Supabase, avec authentification des bénévoles et approbation par rôle.
+Cette version conserve toutes les fonctionnalités V4 (6 modèles, bandeau haute qualité, tarifs T1–T10, validations et bibliothèque Supabase facultative) et ajoute la préparation à la **publication automatique d'une diapositive dans un design Canva existant**.
 
-**Adresse habituelle du site :** https://mgresset.github.io/CSE_Massy/  
-**Dépôt :** https://github.com/mGresset/CSE_Massy  
-**Portail bénéficiaires :** https://cethaleslasmassy.portailce.com/
+**Site** : https://mgresset.github.io/CSE_Massy/  
+**Dépôt** : https://github.com/mGresset/CSE_Massy  
+**Lien Canva test proposé** : https://canva.link/rewv8gx5iilr8kz
 
-## 1. Nouveautés V4
+## Ce qui fonctionne dès l'installation
 
-- **Espace partagé facultatif** : les fiches deviennent accessibles aux bénévoles autorisés depuis plusieurs navigateurs. Le site reste hébergé sur GitHub Pages ; la base de données et l'authentification nécessitent un projet Supabase distinct.
-- **Connexion par lien envoyé à l'adresse e-mail** des bénévoles déjà créés par l'administrateur.
-- **Trois rôles réels en base de données** :
-  - `editor` (Rédacteur) : créer, modifier et soumettre à relecture ; ne peut pas approuver.
-  - `reviewer` (Relecteur) : consulter et approuver / renvoyer les fiches ; ne modifie pas les descriptions ni les tarifs.
-  - `admin` (Administrateur) : créer, modifier, approuver et supprimer.
-- **Concurrence contrôlée** : chaque fiche a un numéro de version. Un enregistrement ne peut pas écraser silencieusement une version modifiée par une autre personne.
-- **Approbation nominative enregistrée dans la base** (`approved_by`, `approved_at`), avec déclassement automatique d'une fiche approuvée lorsqu'elle est modifiée.
-- **Export d'un lot PowerPoint des activités approuvées dans la bibliothèque partagée** (25 maximum).
-- **Photos allégées avant synchronisation** pour éviter des fiches trop volumineuses (les originaux restent dans le brouillon local du navigateur).
-- **Compatibilité V3** : six templates, bandeau 1920 × 282, export PPTX, calcul T1–T10 et modes forfaitaires, export CSV/JSON et sauvegarde locale conservés.
+- Champ **Lien de la présentation Canva**, mémorisé dans le navigateur ; une URL `canva.link` ou `canva.com` peut être saisie.
+- Bouton **Ouvrir Canva**, qui mène au lien mémorisé.
+- Champ séparé **ID du design Canva** pour la future API : il doit correspondre à l'ID du document cible configuré par l'administrateur. Un lien raccourci `canva.link` ne permet pas d'extraire cet ID de façon fiable.
+- Export PPTX et six templates V4 inchangés. Sauvegardes V4 et rôles Supabase conservés.
+- Bouton **Ajouter la diapositive à Canva** avec contrôle explicite de configuration et messages d'erreur. Aucune réussite n'est affichée sans confirmation de la réponse Canva.
 
-### Important : deux types de sauvegarde
+**Attention :** copier une URL Canva éditable par des invités **n'autorise pas automatiquement** un autre logiciel à modifier ce design. Le lien n'est **pas** une clé d'API. L'insertion réellement automatique demande les étapes de configuration ci-dessous, et n'a pas pu être validée avec le compte Canva du CSE (non connecté pendant le développement).
 
-1. **Enregistrer** dans l'en-tête : sauvegarde dans le **navigateur local**.
-2. **☁ Enregistrer en ligne** dans « Espace partagé » : sauvegarde dans la **base commune**, si elle a été configurée.
+## 1. Publier la V5 sur GitHub Pages
 
-Pour les activités en ligne, utiliser « Ouvrir » dans la liste de la bibliothèque partagée, puis « Enregistrer en ligne ». Un clic sur « Synchroniser » récupère la dernière liste sans écraser la fiche en cours de modification.
+1. Faire une copie de sauvegarde du dépôt actuel et exporter les activités locales en JSON, si nécessaire.
+2. Transférer **tout le contenu** du présent dossier à la racine du dépôt GitHub `CSE_Massy`, en remplaçant les fichiers de la V4.
+3. Vérifier que le nouveau fichier `js/canva-publish.js` est présent et que `index.html` porte la mention **V5**.
+4. Valider avec **Commit changes**. GitHub Pages reste `main` / `/(root)`.
+5. Actualiser le site avec `Ctrl + Maj + R`.
 
-## 2. Mettre le site V4 sur GitHub (fonctionne immédiatement en local)
+À ce stade : **préparation du lien et export PPTX** uniquement. Le clic « Ajouter » n'insérera aucune page sans configuration du serveur Canva.
 
-1. Sur l'application V3, **sauvegarder la bibliothèque locale en JSON** si elle contient des fiches importantes. Le stockage local est normalement conservé car les clés n'ont pas changé, mais mieux vaut garder une copie.
-2. Sur GitHub, télécharger aussi une copie du dépôt V3 (*Code → Download ZIP*).
-3. Décompresser ce paquet V4 puis téléverser **le contenu** du dossier `CSE_Studio_V4_GitHub` à la racine du dépôt `CSE_Massy`.
-4. Remplacer `index.html`, `styles.css`, `js/app.js`, `js/layouts.js`, `js/pricing.js`, `assets/`, `vendor/` ; **ajouter** `js/cloud.js`, `js/cloud-config.js` et `supabase/schema.sql`.
-5. Cliquer **Commit changes**. GitHub Pages reste en mode **Deploy from a branch → main → /(root)**.
-6. Sur https://mgresset.github.io/CSE_Massy/ faire `Ctrl + Maj + R` et vérifier l'étiquette **V4**. Le site fonctionnera immédiatement **sans Supabase**, en mode local.
+## 2. Vérifier l'éligibilité Canva avant tout paramétrage
 
-**Ne publiez aucune donnée nominative de bénéficiaires, aucun mot de passe et aucune clé secrète dans le dépôt public.**
+Canva a introduit les **service apps** (applications de service) le 6 novembre 2026. Elles peuvent appeler les API sans connexion Canva des bénévoles :
 
-## 3. Activer les fonctions collaboratives (étape distincte)
+- il faut une équipe Canva **Business, Teams ou Nonprofit** ;
+- l'administrateur Canva doit disposer de la MFA ou d'une connexion SSO ;
+- l'équipe ne peut avoir qu'une application de service ;
+- les requêtes utilisent des crédits d'API potentiellement payants ;
+- l'API **Merges / insert_pages**, nécessaire pour ajouter une page à un design existant, est encore **en version preview** et son comportement peut évoluer.
 
-### Étape A — Créer et sécuriser le projet Supabase
+Sources officielles :
+- https://www.canva.dev/docs/apps/quickstart/
+- https://www.canva.dev/docs/apps/rest-apis/authentication/
+- https://www.canva.dev/docs/apps/rest-apis/reference/design-imports/create-design-import-job/
+- https://www.canva.dev/docs/apps/rest-apis/reference/merges/create-design-merge-job/
 
-1. Créer un projet Supabase sur https://supabase.com/dashboard. Un projet Supabase est **nécessaire** pour la bibliothèque commune ; GitHub Pages seul ne stocke pas les fiches sur le serveur.
-2. Dans **SQL Editor**, ouvrir et exécuter le fichier [`supabase/schema.sql`](supabase/schema.sql). Il crée les tables `cse_members` et `cse_activities`, des politiques **Row Level Security (RLS)** et un trigger de contrôle des rôles. **N'utilisez pas le SQL sur une base qui contient déjà des objets du même nom sans examen préalable.**
-3. Dans **Authentication → URL Configuration**, ajouter :
-   - **Site URL** : `https://mgresset.github.io/CSE_Massy/`
-   - **Redirect URL** : `https://mgresset.github.io/CSE_Massy/`
-4. Dans **Authentication → Users**, créer ou inviter les bénévoles. L'application ne crée pas de comptes par elle-même (`create_user: false`) : c'est voulu pour éviter l'inscription libre.
-5. Dans **SQL Editor**, attribuer le rôle `admin` au premier compte déjà présent dans Auth Users (remplacer l'adresse e-mail) :
+**Point à confirmer avant mise en production :** l'application de service Canva doit pouvoir accéder au **design de destination CSE**. Le droit d'édition par lien destiné aux invités ne garantit pas les droits API de ce service.
 
-```sql
-insert into public.cse_members(user_id, role)
-select id, 'admin' from auth.users where lower(email) = lower('votre-adresse@exemple.fr')
-on conflict (user_id) do update set role = excluded.role;
-```
+## 3. Obtenir l'ID du design cible
 
-Pour ajouter un bénévole qui peut rédiger :
+1. Ouvrir la présentation cible dans Canva, idéalement depuis le compte propriétaire du CSE.
+2. Copier l'adresse **complète de l'éditeur** ressemblant à `https://www.canva.com/design/DAFxxxxxxxx/edit`.
+3. La portion `DAFxxxxxxxx` est l'ID. **Ne pas confondre cet ID avec le lien court canva.link.**
+4. Reporter cet ID dans le champ « ID du design Canva » de CSE Studio, puis cliquer sur **Mémoriser**.
+5. Faire configurer **le même ID** dans le secret Supabase `CANVA_TARGET_DESIGN_ID` ; le serveur refusera toute autre destination.
 
-```sql
-insert into public.cse_members(user_id, role)
-select id, 'editor' from auth.users where lower(email) = lower('benevole@exemple.fr')
-on conflict (user_id) do update set role = excluded.role;
-```
+Le lien public `canva.link` sera conservé pour le bouton Ouvrir Canva et pour les bénévoles n'ayant pas de compte ; l'API travaille avec l'ID et des autorisations distinctes.
 
-Pour un responsable chargé de valider les fiches, utiliser `reviewer`. Le compte doit exister dans **Authentication → Users** avant l'attribution du rôle. Il est conseillé de créer un compte test de chaque rôle et de vérifier les autorisations avec plusieurs sessions, avant de l'utiliser en production.
+## 4. Créer une application de service Canva
 
-### Étape B — Brancher le site sur la base
+Dans le portail développeur Canva, créer une **service app** (« No Canva sign-in required ») si le compte est éligible. Autoriser les scopes de service requis par les endpoints de **design import** et **merges**, notamment :
 
-1. Dans les paramètres du projet Supabase, repérer l'**URL du projet** et la clé **publishable / anon** (clé publique utilisable par un navigateur).
-2. Ouvrir CSE Studio V4, puis **Espace partagé → Configurer l'espace partagé**.
-3. Copier l'URL (ex. `https://xxx.supabase.co`) et **uniquement la clé publique**. Ne jamais coller une clé `service_role` ou `sb_secret_...`.
-4. Cliquer **Enregistrer la configuration**. Renseigner l'adresse e-mail d'un compte autorisé, puis cliquer **Recevoir un lien de connexion**.
-5. Ouvrir le lien reçu par e-mail : le retour doit se faire sur votre application GitHub Pages. Les rôles seront ensuite récupérés depuis `cse_members`.
+- `service:design:content:write`
+- `service:design:meta:read`
 
-Pour éviter à chaque bénévole de saisir l'URL et la clé publique, il est possible de modifier `js/cloud-config.js` dans le dépôt :
+Récupérer les **Client ID** et **Client Secret** dans un gestionnaire de secrets. **Ne jamais les mettre dans GitHub, index.html, cloud-config.js ou dans les champs du navigateur.**
 
-```js
-window.CSE_CLOUD_CONFIG = {
-  url: 'https://VOTRE-PROJET.supabase.co',
-  key: 'sb_publishable_VOTRE_CLE_PUBLIQUE'
-};
-```
+## 5. Déployer la fonction serveur Supabase (obligatoire pour l'ajout automatique)
 
-**Cette clé est publique par conception et ne remplace pas les politiques RLS.** Ne jamais y utiliser de clé de service, de mot de passe ou de jeton d'utilisateur.
+La V5 réutilise **le même projet Supabase V4**, avec le schéma `supabase/schema.sql` et les rôles `cse_members`.
 
-### Étape C — Utiliser les fiches partagées
-
-1. **Rédacteur :** ouvrir une fiche partagée ou créer une nouvelle activité. Modifier les informations, cliquer **☁ Enregistrer en ligne** puis **Soumettre à relecture**.
-2. **Relecteur :** synchroniser, cliquer **Ouvrir** sur une fiche « À relire », vérifier et cliquer **Approuver en ligne**. L'identité du valideur est enregistrée par la base.
-3. **Bénévole responsable de la publication :** cliquer **PPTX groupé des fiches approuvées en ligne**, puis importer le fichier dans Canva et le vérifier visuellement.
-4. **En cas de conflit :** si la fiche a été modifiée par quelqu'un d'autre, l'enregistrement en ligne est refusé. Exporter sa copie locale en JSON avant de recharger la version commune, puis comparer et réappliquer les modifications utiles.
-
-## 4. Dépendances et sécurité
-
-- **GitHub Pages :** héberge une application statique publique ; aucun accès administrateur Github n'est nécessaire pour utiliser le site déjà publié.
-- **Supabase :** stocke les activités et gère les sessions des membres autorisés. Les permissions sont imposées par PostgreSQL avec RLS et trigger. **Ne pas retirer la RLS**, même si des boutons sont grisés dans l'interface.
-- **Compte navigateur :** jeton de session Supabase conservé dans `sessionStorage` (effacé à la fermeture de l'onglet/session). Les paramètres publics URL et clé sont conservés dans `localStorage`.
-- **Photos :** insérées dans le JSON d'activité après réduction côté navigateur. Éviter les photos comportant des données personnelles ; pour beaucoup de visuels, une évolution ultérieure vers Supabase Storage privé sera préférable.
-- **Authentification :** le lien magique dépend des paramètres SMTP, modèles d'e-mail et limites d'envoi Supabase. Pour un déploiement à plusieurs bénévoles, configurer un service SMTP approprié.
-- **Tarifs :** le barème T1–T10 par défaut reste **une hypothèse à confirmer** (70, 65, 60, 55, 50, 45, 40, 35, 30, 25 % de subvention). Ne pas publier de tarifs sans validation humaine.
-- **Canva :** la V4 n'édite pas directement les planches sur canva.link ; elle produit un PPTX modifiable à importer. Up Expert/Kalidea reste l'outil de gestion des inscriptions, accessible par lien vers le portail CSE ou lien personnalisé.
-
-## 5. Tests et limites
-
-Tests automatisés locaux réalisés :
+Installer la CLI Supabase (ou demander à l'administrateur technique) et se connecter au projet Supabase :
 
 ```bash
-node tests/pricing.test.js
-node tests/layouts.test.js
+supabase login
+supabase link --project-ref VOTRE_PROJECT_REF
+supabase secrets set CANVA_CLIENT_ID=VOTRE_ID CANVA_CLIENT_SECRET=VOTRE_SECRET CANVA_TARGET_DESIGN_ID=DAFxxxxxxxx CSE_ALLOWED_ORIGIN=https://mgresset.github.io
+supabase functions deploy canva-publish
 ```
 
-Tests navigateur réalisés avec simulation des réponses Supabase : affichage des **six modèles**, création d'un PPTX, chargement de la bibliothèque, création en ligne simulée, approbation et passage à « À relire » après modification. **Aucun véritable projet Supabase CSE n'a été connecté ni testé dans ce paquet :** il faudra tester l'authentification réelle, les RLS et les trois profils après configuration.
+Les variables Supabase `SUPABASE_URL` et `SUPABASE_ANON_KEY` sont normalement fournies à la fonction dans le projet. Si le projet utilise un mode de clés différent, adapter la fonction et la configuration Supabase.
 
-**Restrictions :** pas d'édition directe Canva ni de connexion API Up Expert ; pas de synchronisation hors connexion ; stocker un très grand nombre de photos en base JSON n'est pas la solution idéale à long terme ; il n'y a pas encore de journal d'audit complet de chaque modification.
+**Ne jamais mettre les vraies valeurs dans ce README ou dans le dépôt public.** Les exemples ci-dessus sont des placeholders.
 
-## 6. Structure du projet
+### Sécurité et déroulement
 
-- `index.html`, `styles.css` : interface V4 et six templates.
-- `js/pricing.js`, `js/layouts.js`, `js/app.js` : fonctionnement local, tarifs et génération PPTX.
-- `js/cloud.js`, `js/cloud-config.js` : connexion facultative Supabase, bibliothèque partagée et workflow.
-- `supabase/schema.sql` : création et sécurité des tables.
-- `assets/`, `vendor/`, `tests/`, `docs/` : bandeau CSE HD, ressources, bibliothèques PPTX et tests.
+Le site utilise la connexion Supabase de la V4 pour identifier le bénévole. Il ne peut appeler la fonction serveur de publication que s'il :
+
+1. est connecté à Supabase ;
+2. possède le rôle `reviewer` ou `admin` ;
+3. a ouvert une fiche **approuvée et synchronisée** dans la bibliothèque partagée.
+
+La fonction vérifie elle-même l'identité, le rôle, la version et le statut de l'activité dans Supabase. Elle accepte uniquement le `CANVA_TARGET_DESIGN_ID` autorisé, puis :
+
+1. importe le PowerPoint comme **nouveau design Canva** ;
+2. attend la fin de l'import ;
+3. lance un **merge `modify_existing_design` / `insert_pages`** sans `after_page_number` (ajout à la fin) ;
+4. attend la confirmation Canva et propose de vérifier la planche cible.
+
+Le lien de partage public n'est jamais utilisé comme jeton d'autorisation. Les secrets sont utilisés exclusivement dans la fonction serveur.
+
+### Limites importantes
+
+- **Non testé de bout en bout avec le compte Canva du CSE** : il faudra d'abord tester sur une présentation *de test* avant d'autoriser une publication sur les planches officielles.
+- L'API `merges` étant **preview**, Canva peut refuser l'opération pour l'application ou l'équipe. En cas de refus, conserver le flux **Exporter PowerPoint → importer dans Canva**.
+- L'import PPTX dans Canva peut nécessiter des ajustements de mise en page ou de polices. Une vérification humaine avant diffusion reste nécessaire.
+- L'app n'empêche pas encore toutes les publications en doublon si deux validateurs publient la même fiche simultanément. Vérifier le document cible avant de retenter en cas de délai d'attente.
+- Le lien Canva test fourni n'a pas pu être inspecté avec un accès éditeur API ; sa compatibilité avec les droits du service reste à confirmer.
+- Le site GitHub Pages est **statique et public** ; la fonction Supabase est responsable de la sécurité et de l'authentification. **Ne pas** exposer des activités internes ni des données personnelles dans le dépôt.
+
+## Fichiers V5
+
+- `index.html` / `styles.css` : panneau de publication Canva.
+- `js/canva-publish.js` : destination, validations, dialogue avec Supabase.
+- `js/app.js` : génération en mémoire d'un PPTX modifiable (en plus de l'export fichier existant).
+- `js/cloud.js` : récupération sécurisée du contexte utilisateur en ligne.
+- `supabase/functions/canva-publish/index.ts` : fonction serveur, authentification, import PPTX et merge Canva.
+- `supabase/schema.sql` : reprend la base de données de la V4 (ne pas réexécuter sans précaution sur une base déjà en production).
+- `assets/`, `vendor/`, `tests/` : modèles existants, images et bibliothèques.
+
+## Tests locaux effectués et tests restant à faire
+
+Vérification de syntaxe JavaScript, affichage du panneau V5, persistance du lien Canva, conservation des six templates, export PPTX en mémoire et refus explicite d'une publication non configurée. Les appels vers l'API Canva et le projet Supabase du CSE n'ont **pas** pu être testés sans accès autorisés.

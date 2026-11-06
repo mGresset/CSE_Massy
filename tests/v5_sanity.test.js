@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+for(const p of ['index.html','styles.css','js/app.js','js/layouts.js','js/pricing.js','js/cloud.js','js/cloud-config.js','supabase/schema.sql','js/canva-publish.js','supabase/functions/canva-publish/index.ts','assets/bandeau-cse.jpg','vendor/jszip.min.js','vendor/pptxgen.min.js'])assert(fs.existsSync(path.join(root,p)),`Fichier manquant: ${p}`);
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+for(const s of ['cloudPanel','cloudSignIn','cloudSave','cloudApprove','cloudBatch','CSE Studio V5','canvaTargetUrl','publishCanva','canvaTargetId'])assert(html.includes(s),`UI absente: ${s}`);
+const pos=['jszip.min.js','pptxgen.min.js','js/pricing.js','js/layouts.js','js/app.js','js/cloud-config.js','js/cloud.js','js/canva-publish.js'].map(k=>html.indexOf('src="'+(k.startsWith('jszip')||k.startsWith('pptxgen')?'vendor/':'')+k+'"'));
+assert(pos.every((v,i)=>v>=0&&(i===0||v>pos[i-1])),'Scripts mal ordonnés');
+const sql=fs.readFileSync(path.join(root,'supabase/schema.sql'),'utf8');
+for(const s of ['enable row level security','cse_guard_trigger','cse_current_role','cse_activities_create','cse_activities_update','cse_activities_delete'])assert(sql.includes(s),`Sécurité SQL absente: ${s}`);
+console.log('✓ V5 : fichiers, interfaces et scripts présents.');

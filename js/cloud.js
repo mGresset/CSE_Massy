@@ -133,5 +133,17 @@ $('activityLibrary').addEventListener('click',()=>{loaded=null;changed=false;vie
 $('importProject').addEventListener('change',()=>{loaded=null;changed=false;view()});
 if(config?.url){$('cloudUrl').value=config.url;$('cloudKey').value=config.key}else{$('cloudSettings').open=true}
 fromHash();view();restore();
-window.CSECloudV4={getState:()=>({configured:!!config,connected:!!role,role,count:items.length,loaded:loaded?.id||null}),refresh:sync};
+window.CSECloudV4={
+ getState:()=>({configured:!!config,connected:!!role,role,count:items.length,loaded:loaded?.id||null}),
+ refresh:sync,
+ getPublishContext:async()=>{
+  if(!config?.url||!config?.key||!session?.access_token||!user||!role)throw Error('Connecte-toi à l’espace partagé Supabase.');
+  if(!allowedApprove())throw Error('Publication réservée aux relecteurs et administrateurs.');
+  if(!loaded||changed)throw Error('Ouvre une fiche partagée approuvée et enregistre les modifications avant de publier.');
+  const found=items.find(x=>x.id===loaded.id);
+  if(!found||found.editorial_status!=='approved'||found.version!==loaded.version)throw Error('La fiche partagée doit être approuvée et synchronisée avant publication.');
+  if((session.expires_at||0)<Math.floor(Date.now()/1000)+45)await refreshSession();
+  return {url:config.url,key:config.key,token:session.access_token,id:loaded.id,version:loaded.version};
+ }
+};
 })();

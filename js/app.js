@@ -176,5 +176,14 @@ renderForm();renderLibrary();render();window.CSEStudioV3={getActivity:()=>JSON.p
   await pptx.writeFile({fileName:'CSE_V4_Activites_Partagees_'+candidates.length+'.pptx'});
   notify(candidates.length+' diapositives approuvées exportées'+(warnings.length?' · contrôler les visuels':''));
  }
-};window.CSEStudioV4=window.CSEStudioV4Editor;window.CSEStudioV2=window.CSEStudioV3;
+};
+window.CSEStudioV5Export=async function(){
+ const report=preflight(activity);if(report.blocking.length)throw Error('Fiche incomplète : corriger les points bloquants avant publication.');
+ const Ctor=window.PptxGenJS;if(!Ctor)throw Error('Module PowerPoint manquant.');
+ const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.title=activity.title;pptx.lang='fr-FR';
+ const warnings=[];await appendPowerPointSlide(pptx,activity,warnings);
+ const bytes=await pptx.write({outputType:'blob'});
+ return {blob:bytes instanceof Blob?bytes:new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'}),warnings};
+};
+window.CSEStudioV4=window.CSEStudioV4Editor;window.CSEStudioV2=window.CSEStudioV3;
 })();
