@@ -43,3 +43,14 @@
 .canva-card-head h2{margin:3px 0 7px;font-size:17px;color:#203b79}.canva-card .field{margin:12px 0}.canva-card input{display:block;width:100%;font-size:12px;padding:10px;border:1px solid #d0dced;border-radius:8px;overflow-wrap:anywhere;background:#fff}
 .canva-card small{display:block;color:#667894;font-size:10px;line-height:1.55;margin-top:6px}.canva-card small code{font-size:10px}.canva-actions{display:flex;gap:8px;align-items:center}.canva-actions>*{flex:1;justify-content:center!important;font-size:11px!important;padding:10px 7px!important}
 .canva-notice{border-radius:8px;background:#e9f0fb;color:#284579;font-size:11px;line-height:1.6;padding:11px 12px;white-space:pre-wrap;overflow-wrap:anywhere}.canva-notice.error{background:#fff1ef;color:#943b41}.canva-notice.success{background:#e6f6ec;color:#236540}.canva-card button:disabled{opacity:.6;cursor:progress}
+
+/* V6 — catégories personnalisables, plusieurs référents, tarifs facultatifs */
+.category-editor{margin:2px 0 13px;padding:12px;border:1px solid #dce5f3;background:#f7faff;border-radius:10px}
+.category-editor .field{margin:0 0 8px}.category-buttons{display:flex;gap:7px;flex-wrap:wrap}
+.category-buttons .btn{font-size:11px;padding:9px 11px}.switch-row{display:flex;align-items:center;gap:12px;cursor:pointer;font-weight:750;color:#1e3a73;font-size:13px;padding:12px;background:#edf4ff;border-radius:9px;margin-bottom:9px}
+.switch-row input{accent-color:#3452a9;width:19px;height:19px;flex-shrink:0}
+.contacts-list{display:grid;gap:10px;margin-top:12px}.contact-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:8px;background:#f7f9fe;padding:11px;border:1px solid #dfe7f3;border-radius:10px}
+.contact-row .field{margin:0}.contact-row button{height:36px;border:1px solid #ebc7cf;background:#fff6f7;border-radius:7px;color:#9d3b4c;cursor:pointer;padding:0 10px;font-size:12px}
+.template-option[data-t="info"] .mini-content{display:flex;gap:4px}.template-option[data-t="info"] .mini-content span:first-child{width:65%;height:100%;background:#d8e6fb}.template-option[data-t="info"] .mini-content span:nth-child(2){width:30%;height:100%;background:#9fb8e9}
+.template-option[data-t="upcoming"] .mini-content{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:3px}.template-option[data-t="upcoming"] .mini-content span{width:auto!important;height:auto!important;background:#d4e3f7}
+@media(max-width:520px){.contact-row{grid-template-columns:1fr}.contact-row button{justify-self:start}}

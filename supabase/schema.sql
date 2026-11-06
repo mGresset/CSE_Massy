@@ -1,4 +1,4 @@
--- CSE Studio V4 — À exécuter UNE FOIS dans SQL Editor Supabase.
+-- CSE Studio V6 — installation initiale dans SQL Editor Supabase. Voir v6_migration.sql pour une instance V4/V5 existante.
 -- Ne jamais exposer la clé service_role dans les fichiers du site.
 -- Création des tables et verrouillage RLS. Rôles : editor, reviewer, admin.
 
@@ -82,11 +82,19 @@ begin
   if new.editorial_status = 'approved' then
     if r not in ('reviewer','admin') then raise exception 'Approbation interdite'; end if;
     price := new.payload ->> 'outsidePrice';
-    if length(btrim(new.title)) = 0 or price is null or price !~ '^[0-9]+(\.[0-9]+)?$' then
-      raise exception 'Titre ou prix extérieur manquant';
+    if length(btrim(new.title)) = 0 then
+      raise exception 'Titre obligatoire pour approbation';
     end if;
-    if coalesce(new.payload->>'activityStart','') = '' then
-      raise exception 'Date de début obligatoire pour approbation';
+    -- La V6 permet des informations et des annonces sans tarification.
+    -- Les anciennes fiches sans showPricing restent soumises à la règle historique.
+    if coalesce(new.payload->>'showPricing','true') = 'true' and
+       (price is null or price !~ '^[0-9]+(\.[0-9]+)?$') then
+      raise exception 'Prix extérieur obligatoire lorsque les tarifs sont activés';
+    end if;
+    -- Une information ou un agenda collectif n'ont pas besoin de date propre.
+    if coalesce(new.payload->>'template','classic') not in ('info','upcoming') and
+       coalesce(new.payload->>'activityStart','') = '' then
+      raise exception 'Date de début obligatoire pour cette activité';
     end if;
     if coalesce(new.payload->>'activityEnd','') <> '' and new.payload->>'activityEnd' < new.payload->>'activityStart' then
       raise exception 'Dates incohérentes';
