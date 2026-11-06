@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#2e4396">
+  <meta name="description" content="Générateur de slides pour les activités du CSE Thales LAS Massy.">
+  <title>CSE Studio · Thales LAS Massy</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="brand"><div class="brand-icon">▦</div><div><strong>CSE Studio</strong><small>THALES LAS MASSY <span class="brand-sep">/</span> Générateur de slides</small></div></div>
+  <div class="toolbar">
+    <a class="btn ghost" href="https://canva.link/rewv8gx5iilr8kz" target="_blank" rel="noopener noreferrer">↗ Planches Canva</a>
+    <button id="newActivity" class="btn ghost" type="button">＋ Nouvelle</button>
+    <button id="saveActivity" class="btn secondary" type="button">💾 Enregistrer</button>
+    <button id="exportPptx" class="btn primary" type="button">↓ Générer PPTX</button>
+  </div>
+</header>
+<main class="workspace">
+<aside class="editor" aria-label="Formulaire activité">
+  <div class="editor-intro"><span class="eyebrow">ÉDITION DE L’ACTIVITÉ</span><h1>Renseigner une activité</h1><p>La diapositive s’actualise instantanément. Les informations restent sur cet appareil jusqu’à leur export.</p></div>
+  <section class="panel library-panel"><h2>📚 Mes activités <span id="libraryCount" class="count">0</span></h2><div class="inline-actions"><button id="duplicateActivity" class="small-btn" type="button">Dupliquer la fiche</button><button id="exportProject" class="small-btn" type="button">Exporter JSON</button><label class="small-btn file-label">Importer JSON<input id="importProject" type="file" accept="application/json,.json" hidden></label></div><div id="activityLibrary" class="library-list"></div></section>
+  <form id="activityForm" autocomplete="off">
+  <details class="panel" open><summary>📌 Activité et présentation</summary><div class="panel-body">
+    <div class="field"><label for="title">Nom de l’activité <b>*</b></label><input id="title" data-field="title" placeholder="Ex. Circuit Sri Lanka Authenticité" maxlength="120" required></div>
+    <div class="two-fields"><div class="field"><label for="category">Catégorie</label><select id="category" data-field="category"><option>Voyages</option><option>Culture et spectacles</option><option>Sports</option><option>Famille</option><option>Loisirs</option><option>Billetterie</option><option>Avantages</option><option>Solidarité</option><option>Autres</option></select></div><div class="field"><label for="template">Disposition</label><select id="template" data-field="template"><option value="detail">Détaillée</option><option value="simple">Épurée</option></select></div></div>
+    <div class="two-fields"><div class="field"><label for="location">Destination / ville</label><input id="location" data-field="location" placeholder="Sri Lanka"></div><div class="field"><label for="venue">Lieu / établissement</label><input id="venue" data-field="venue" placeholder="Hôtel, théâtre, adresse..."></div></div>
+    <div class="two-fields"><div class="field"><label for="activityStart">Début de l’activité</label><input type="date" id="activityStart" data-field="activityStart"></div><div class="field"><label for="activityEnd">Fin de l’activité</label><input type="date" id="activityEnd" data-field="activityEnd"></div></div>
+    <div class="field"><label for="subtitle">Sous-titre / période</label><input id="subtitle" data-field="subtitle" placeholder="Vacances de printemps"></div>
+    <div class="field"><label for="summary">Accroche (1 à 3 phrases)</label><textarea id="summary" data-field="summary" rows="3" maxlength="700" placeholder="Présentation de l’activité..."></textarea></div>
+    <div class="field"><label for="highlights">Temps forts <span class="muted">(une ligne par élément)</span></label><textarea id="highlights" data-field="highlights" rows="6" placeholder="Visites guidées...&#10;Excursions...&#10;Spectacle..."></textarea></div>
+    <div class="field"><label for="included">Inclus / prestations <span class="muted">(une ligne par élément)</span></label><textarea id="included" data-field="included" rows="4" placeholder="Transport...&#10;Hébergement..."></textarea></div>
+    <div class="field"><label for="administrative">Formalités / modalités</label><textarea id="administrative" data-field="administrative" rows="2"></textarea></div>
+    <div class="field"><label for="warning">Avertissement important</label><textarea id="warning" data-field="warning" rows="2" placeholder="Ex. non accessible aux PMR..."></textarea></div>
+  </div></details>
+  <details class="panel" open><summary>💶 Tarifs et subventions</summary><div class="panel-body">
+    <div class="field"><label for="priceLabel">Intitulé du tarif</label><input id="priceLabel" data-field="priceLabel" placeholder="Tarif base chambre double"></div>
+    <div class="two-fields"><div class="field"><label for="outsidePrice">Prix extérieur (€)</label><input type="number" id="outsidePrice" data-field="outsidePrice" step="0.01" min="0" max="999999" inputmode="decimal"></div><div class="field"><label for="pricingMode">Mode de calcul</label><select id="pricingMode" data-field="pricingMode"><option value="tranches">Barème T1 à T10</option><option value="fixedSubsidy">Subvention CSE fixe (%)</option><option value="fixedEmployee">Participation salarié fixe (%)</option><option value="fixedEuro">Prix salarié fixe (€)</option></select></div></div>
+    <div id="fixedRateRow" class="two-fields hidden"><div class="field"><label id="fixedRateLabel" for="fixedRate">Taux (%)</label><input type="number" id="fixedRate" data-field="fixedRate" min="0" max="100" step="0.1"></div><div id="fixedEuroField" class="field hidden"><label for="fixedEuro">Prix salarié (€)</label><input type="number" id="fixedEuro" data-field="fixedEuro" step="0.01" min="0"></div></div>
+    <div id="trancheConfig"><div class="subheading"><strong>Barème des 10 tranches</strong><button id="saveRates" type="button" class="small-btn">Définir par défaut</button></div><p class="helper">Pourcentages de subvention du CSE. Le tarif payé = prix extérieur × (1 − subvention).</p><div id="rateInputs" class="rates-editor"></div></div>
+    <div id="pricingTable" class="pricing-table" aria-live="polite"></div>
+    <div class="field"><label for="priceNotes">Précisions sur les tarifs / options</label><textarea id="priceNotes" data-field="priceNotes" rows="2" placeholder="Supplément chambre individuelle, tarif enfant, conditions..."></textarea></div>
+    <div class="field"><label for="conditions">Conditions d’application</label><textarea id="conditions" data-field="conditions" rows="2" placeholder="Réductions non cumulables, conditions d’éligibilité..."></textarea></div>
+  </div></details>
+  <details class="panel"><summary>📅 Inscription et organisation</summary><div class="panel-body">
+    <div class="two-fields"><div class="field"><label for="registrationStart">Ouverture des inscriptions</label><input type="date" id="registrationStart" data-field="registrationStart"></div><div class="field"><label for="registrationEnd">Date limite d’inscription</label><input type="date" id="registrationEnd" data-field="registrationEnd"></div></div>
+    <div class="two-fields"><div class="field"><label for="status">État de l’activité</label><select id="status" data-field="status"><option>À venir</option><option>Inscriptions ouvertes</option><option>Complet</option><option>Clôturé</option><option>Annulé</option></select></div><div class="field"><label for="audience">Public concerné</label><input id="audience" data-field="audience" placeholder="Tous les bénéficiaires"></div></div>
+    <div class="two-fields"><div class="field"><label for="minimum">Minimum participants</label><input id="minimum" data-field="minimum" type="number" min="0"></div><div class="field"><label for="maximum">Maximum participants</label><input id="maximum" data-field="maximum" type="number" min="0"></div></div>
+    <div class="two-fields"><div class="field"><label for="points">Valeur en points CSE</label><input id="points" data-field="points" placeholder="24 points"></div><div class="field"><label for="carbon">Bilan carbone</label><input id="carbon" data-field="carbon" placeholder="3029 kg CO2e"></div></div>
+    <div class="field"><label for="contact">Contact CSE</label><input id="contact" data-field="contact" placeholder="Prénom Nom / Commission"></div>
+    <div class="field"><label for="contactEmail">Email contact (facultatif)</label><input id="contactEmail" type="email" data-field="contactEmail" placeholder="contact@exemple.fr"></div>
+  </div></details>
+  <details class="panel"><summary>🖼 Visuel et lien d’accès</summary><div class="panel-body">
+    <div class="field"><label>Photo principale</label><label class="upload-zone" for="photoFile">＋ Choisir une image depuis l’ordinateur<input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden></label></div>
+    <div class="field"><label for="photoUrl">Ou URL d’une image publique (https)</label><input id="photoUrl" data-field="photoUrl" placeholder="https://...jpg"><small class="helper">Une URL distante peut empêcher l’export si le serveur interdit l’accès entre domaines. L’import de fichier est plus fiable.</small></div>
+    <div class="two-fields"><div class="field"><label for="linkType">Lien de destination</label><select id="linkType" data-field="linkType"><option value="cse">Portail du CSE</option><option value="custom">Lien personnalisé</option><option value="none">Aucun lien</option></select></div><div class="field"><label for="ctaLabel">Libellé du bouton</label><input id="ctaLabel" data-field="ctaLabel" placeholder="Plus d’infos"></div></div>
+    <div class="field hidden" id="customLinkField"><label for="customUrl">URL personnalisée (facultative)</label><input id="customUrl" data-field="customUrl" type="url" placeholder="https://..."></div>
+    <p class="helper">Le lien CSE par défaut est <a href="https://cethaleslasmassy.portailce.com/" target="_blank" rel="noopener noreferrer">cethaleslasmassy.portailce.com</a>. Le bouton dans le PowerPoint contient un hyperlien cliquable.</p>
+    <div class="link-output" id="effectiveLink"></div>
+  </div></details>
+  </form>
+  <div class="editor-end"><button id="exportCSV" type="button" class="btn secondary">↓ CSV pour Canva (Création en lot)</button><button id="exportPptxBottom" type="button" class="btn primary">↓ Générer la slide modifiable</button></div>
+</aside>
+<section class="viewer" aria-label="Prévisualisation diapositive">
+  <div class="viewer-head"><div><span class="eyebrow">PRÉVISUALISATION EN DIRECT</span><h2>Votre slide CSE</h2><p>16:9 · Organisation inspirée de la planche Sri Lanka.</p></div><div class="viewer-actions"><span class="status-bubble" id="saveState">● Brouillon local</span><button id="printSlide" class="btn ghost" type="button">Imprimer / PDF</button></div></div>
+  <div class="slide-surface"><div id="slideMount" class="slide-mount"><article id="slide" class="slide">
+      <div class="slide-banner"></div><div class="slide-bottom"></div>
+      <div class="slide-left">
+        <div id="pCategory" class="slide-category"></div><div id="pSubtitle" class="slide-subtitle"></div>
+        <img id="pPhoto" alt="Photo de l’activité" class="slide-photo">
+        <div id="pPriceLabel" class="slide-price-label"></div>
+        <div id="pPriceRows" class="slide-price-rows"></div>
+        <div id="pOutside" class="slide-outside"></div>
+        <div id="pPriceNotes" class="slide-price-notes"></div>
+        <div id="pConditions" class="slide-conditions"></div>
+      </div>
+      <div class="slide-center">
+        <h2 id="pTitle"></h2><div id="pDate" class="slide-dates"></div>
+        <p id="pSummary" class="slide-summary"></p>
+        <div id="pHighlightsBlock" class="slide-list-block"><b>Temps forts :</b><ul id="pHighlights"></ul></div>
+        <div id="pIncludedBlock" class="slide-list-block"><b>Prestations incluses :</b><ul id="pIncluded"></ul></div>
+        <p id="pAdministrative" class="slide-administrative"></p><p id="pWarning" class="slide-warning"></p>
+        <div class="slide-info"><div id="pRegistration"></div><div id="pPoints"></div><div id="pContact"></div></div>
+      </div>
+      <div class="slide-right"><div id="pStatus" class="slide-status"></div><div id="pParticipants" class="slide-participants"></div><div id="pCarbon" class="slide-carbon"></div><a id="pLink" class="slide-link" target="_blank" rel="noopener noreferrer"><span>🌐</span><strong id="pLinkLabel">Plus d’infos</strong></a></div>
+    </article></div></div>
+  <div id="warnings" class="warnings" aria-live="polite"></div>
+  <div class="info-grid"><div class="info-tile"><strong>✏️ Modifiable</strong><p>Le PPTX produit des zones de texte et des photos éditables après importation dans Canva.</p></div><div class="info-tile"><strong>🔗 Lien d’accès</strong><p>Bouton cliquable vers le portail CSE ou une adresse personnalisée, sans deep link obligatoire.</p></div><div class="info-tile"><strong>🔒 Données locales</strong><p>Pas de serveur, pas de compte requis. Exportez le JSON pour transférer une fiche à un autre bénévole.</p></div></div>
+  <p class="limitations">Cette première version génère un PowerPoint à importer dans Canva : elle ne modifie pas directement les planches Canva en ligne. L’export CSV est destiné à la fonction « Création en lot » de Canva après paramétrage du modèle.</p>
+</section>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="vendor/jszip.min.js" defer></script>
+<script src="vendor/pptxgen.min.js" defer></script>
+<script src="js/pricing.js" defer></script>
+<script src="js/app.js" defer></script>
+</body></html>

@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict');
+const P=require('../js/pricing.js');
+const prices=P.compute(2400,'tranches',P.DEFAULT_RATES);
+assert.deepEqual(prices.map(r=>r.price),[720,840,960,1080,1200,1320,1440,1560,1680,1800]);
+assert.deepEqual(prices.map(r=>r.subsidy),[70,65,60,55,50,45,40,35,30,25]);
+assert.equal(P.compute(1000,'fixedSubsidy',[],40)[0].price,600);
+assert.equal(P.compute(1000,'fixedEmployee',[],40)[0].price,400);
+assert.equal(P.compute(1000,'fixedEuro',[],0,280)[0].price,280);
+assert.equal(P.compute(99.99,'fixedSubsidy',[],50)[0].price,50);
+assert.equal(P.toFrDate('2027-04-04'),'4 avril 2027');
+assert.equal(P.dateRange('2027-04-04','2027-04-15'),'DU 4 AVRIL AU 15 AVRIL 2027');
+console.log('✓ 7 tests de calcul CSE validés');
