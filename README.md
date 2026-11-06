@@ -93,3 +93,5 @@ Les images intégrées sont extraites de la capture communiquée pour le projet.
 ```bash
 node tests/pricing.test.js
 ```
+
+
