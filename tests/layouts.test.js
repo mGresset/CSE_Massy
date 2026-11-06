@@ -12,6 +12,6 @@ assert.equal(infoWithoutPrice.rows.length,0);
 assert.ok(!infoWithoutPrice.elements.some(e=>/tarifs/i.test(String(e.text||''))));
 const upcoming=L.render({...sample,template:'upcoming',showPricing:false,outsidePrice:''},P,{upcomingItems:[{title:'Randonnée 2027',category:'Randonnées',location:'Massy',activityStart:'2027-04-15'}]});
 assert.ok(upcoming.elements.some(e=>String(e.text).includes('Randonnée 2027')));
-const points=L.render({...sample,template:'classic',points:'24',pointCounter:'france',showPricing:false,outsidePrice:'',contacts:[{name:'Sylvie',email:''},{name:'Michel',email:''}]},P);
+const points=L.render({...sample,template:'classic',points:'24',pointCounter:'france',showPricing:false,outsidePrice:'',contacts:[{name:'Camille',email:''},{name:'Michel',email:''}]},P);
 assert.ok(points.elements.some(e=>String(e.text).includes('Séjour FRANCE')));
 assert.ok(points.elements.some(e=>String(e.text).includes('Michel')));

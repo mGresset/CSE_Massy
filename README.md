@@ -1,95 +1,75 @@
-# CSE Studio V6 — Éditeur de slides CSE Thales LAS Massy
+# CSE Studio V7 — Composer le MEL du CSE Thales LAS Massy
 
-**Site cible :** https://mgresset.github.io/CSE_Massy/  
-**Dépot :** https://github.com/mGresset/CSE_Massy
+**Nouveauté majeure :** éditeur `mel.html` de MEL complets, inspiré des **33 diapositives** du PDF semaine 46 transmis. La V6 (`index.html`) est conservée pour éditer les activités, avec un nouveau lien vers le compositeur V7.
 
-Application statique pour GitHub Pages, avec export PowerPoint modifiable. Le bandeau CSE envoyé par l'utilisateur est utilisé sur toutes les diapositives. Cette version conserve la configuration facultative Supabase (bibliothèque partagée) et les préparatifs d'intégration Canva de la V5.
+**Site GitHub Pages :** `https://mgresset.github.io/CSE_Massy/`  
+**Compositeur :** `https://mgresset.github.io/CSE_Massy/mel.html`
 
-## Nouveautés V6
+## 1. Fonctions du compositeur V7
 
-### Catégories
+**11 modèles éditables** : couverture, calendrier permanences / prêt matériel, information, fiche activité, dernière chance, immersif, partenaire, affiche événement, liste des activités à venir, tableau de programmation et règlement.
 
-Quatorze catégories, avec **Informations en premier** :
+- Bandeau CSE **1 920 × 282** exact et bande bleue de pied de page, identiques pour tous les modèles.
+- Composition de plusieurs diapositives dans un seul MEL, ordre manuel (glisser-déposer ou ↑↓), tri automatique par rubriques, page exclue sans suppression.
+- Prévisualisation immédiate 16:9, contrôles des champs essentiels, export de la slide seule ou du **MEL complet en PPTX éditable** (objets de texte indépendants, liens cliquables).
+- Couverture qui récupère automatiquement les premières nouveautés et une activité « Dernière semaine ».
+- Permanences avec calendrier modifiable en cliquant sur les jours ouvrables : vert, jaune ou rouge, et légende / horaires / contact.
+- Agenda à venir en liste ou en tableau, alimenté à la main ou depuis les activités datées de la bibliothèque du MEL.
+- 14 catégories initiales avec **Informations** en premier, ajout et suppression des catégories dans Paramètres, enregistrement partagé avec la V6 sur ce navigateur.
+- Tarifs entièrement facultatifs, grilles T1–T10, 10 montants saisis manuellement, prix fixe, **subvention fixe %** et **participation salarié fixe %**.
+- Contacts multiples saisis à raison d'un contact par ligne, limites de participants, points séjour long / court / France, CO₂ facultatif, code promo, liens CSE / personnalisés / aucun.
+- Sauvegarde automatique locale + export/import de sauvegarde JSON. Possibilité d'importer les **activités enregistrées dans la V6 sur le même navigateur** sans les supprimer.
+- Bouton « Charger les 33 schémas » pour créer 33 exemples **anonymisés** reprenant la structure du PDF. Les contenus historiques réels sont fournis séparément dans un **fichier de référence privé**, à ne pas importer sur GitHub.
+- Miniatures **schématiques anonymisées** des 33 mises en page disponibles dans l’interface pour comparer leur structure.
 
-1. Informations
-2. Voyages
-3. Week-ends
-4. Animations
-5. Sorties culturelles
-6. Musiques
-7. Œnologie
-8. Sport
-9. Randonnées
-10. Sports mécaniques
-11. Parapentes
-12. Couture
-13. Dessins
-14. La Ruche
+## 2. Installation / mise à jour sur GitHub Pages
 
-Dans **Présentation et programme**, saisissez un nom dans « Gérer les catégories » puis **+ Ajouter**. Une catégorie créée est enregistrée dans `localStorage` (`cse-studio-massy:v6:categories`), et sera disponible sur ce navigateur lors des prochaines visites. **Supprimer la sélection** efface une catégorie du catalogue, sauf si des activités locales enregistrées l'utilisent encore : modifiez d'abord ces fiches pour éviter de laisser des références orphelines. Les catégories personnalisées figurent également dans l'export de bibliothèque JSON et sont récupérées lors de son import.
+1. **Dans la V6**, exporter la bibliothèque d'activités en JSON et, si une autre version du MEL existe déjà, télécharger sa sauvegarde dans la V7.
+2. Décompresser le ZIP V7, en conservant l'arborescence. Vous devez avoir `index.html` et **`mel.html` à la racine**.
+3. Déposer sur `mGresset/CSE_Massy` les **fichiers et sous-dossiers contenus** dans cette archive, sans créer un niveau de dossier supplémentaire. Pour les mises à jour répétées, **GitHub Desktop** permet de remplacer l'ensemble des fichiers puis de faire Commit et Push ; c'est plus fiable qu'une copie manuelle des seuls nouveaux fichiers.
+4. Garder la configuration actuelle de GitHub Pages : **Settings → Pages → Deploy from a branch → main → /(root)**.
+5. Sur le site, forcer le rechargement avec **Ctrl + Maj + R**.
+6. Ouvrir l'onglet **Composer le MEL (V7)** sur `index.html`, ou aller directement sur `/mel.html`.
 
-**Important** : le catalogue de catégories est **local au navigateur**. Il n'est pas encore automatiquement synchronisé via Supabase entre les bénévoles. Pour le répliquer sur un autre appareil, exportez puis importez la bibliothèque JSON. Les activités, elles, peuvent toujours être stockées dans la bibliothèque collaborative Supabase V4/V5.
+Les bibliothèques JavaScript nécessaires aux PPTX sont incluses dans `vendor/`. Pas de serveur Node, de compte tiers, ni de build GitHub Actions nécessaire pour le fonctionnement local.
 
-### Cinq dispositions de slides
+## 3. Workflow hebdomadaire conseillé
 
-- **Classique** : fiche complète en trois colonnes.
-- **Immersif** : photo principale et présentation de l'activité.
-- **Informations** : annonce de service, communication CSE ou procédure.
-- **Essentiel** : message court et dates clés.
-- **Activités à venir** : agenda collectif généré automatiquement à partir des **huit prochaines activités validées et datées de la bibliothèque locale** (`activityStart` >= date du jour, statut différent de « Annulé »). Les activités sont triées par date croissante. Si aucune activité validée n'existe, un message informatif s'affiche.
+1. Ouvrir **Paramètres** et définir la semaine, l'année, la date de référence, le lien portail CSE et (facultatif) le lien Canva.
+2. Créer les pages fixes (couverture, permanences, règlement), puis les fiches de nouveautés, d'activités en cours, d'information et de partenaires.
+3. Compléter les dates de clôture. Utiliser **⏳** pour classer les échéances des 7 prochains jours en « Dernière semaine ».
+4. Préparer les programmes à venir : choisir la catégorie, puis « Depuis les activités enregistrées ».
+5. Vérifier le prévol (dates, tarifs, liens, textes trop longs), désélectionner les pages non publiées et classer par rubrique avec **⇅**.
+6. **Sauvegarde JSON** ; **Exporter le MEL (.pptx)** ; importer dans Canva et vérifier le rendu final. L'application ne remplace pas Up Expert/Kalidea.
 
-La disposition est choisie sur la gauche et utilisée **à la fois** par l'aperçu et par le PowerPoint exporté. Les anciens modèles « En cartes », « Tarifs en avant » et « Programme » sont automatiquement ouverts avec le modèle **Classique** pour préserver les informations des anciennes fiches. Aucun ancien enregistrement n'est effacé.
+## 4. Publication Canva et collaboration : périmètre réel
 
-### Tarifs facultatifs
+- Le site contient un **bouton pour ouvrir** la présentation Canva test. Le PowerPoint V7 est importable et modifiable dans Canva, avec des variations possibles des polices et espacements.
+- **L'ajout automatique d'une slide dans la présentation Canva existante n'est pas activé par le lien d'édition libre.** La V5/V6 comporte des préparatifs API Canva, mais il faut une connexion serveur et des autorisations pour finaliser le flux.
+- Les données du compositeur MEL V7 résident dans **localStorage** sur le navigateur du bénévole. Elles **ne sont pas encore synchronisées avec Supabase** même si la V4/V6 est déjà configurée ; la sauvegarde JSON est prévue pour les échanges et la reprise sur un autre poste.
+- Le dépôt GitHub Pages est public : ne publiez jamais de secrets, d'identifiants d'accès, ou de données individuelles sensibles dans le code. Les noms et courriels intégrés à la slide exportée deviennent visibles pour les bénéficiaires.
+- La grille de subventions initiale est **illustrative** : valider les taux avec le CSE ; les tarifs des 33 exemples sont saisis manuellement lorsqu'ils diffèrent d'un calcul arrondi.
 
-Dans **Tarifs et subventions CSE**, cochez **Afficher des tarifs sur cette activité** uniquement si la slide doit montrer un prix. Sinon aucun encart ni tableau tarifaire n'est ajouté. Quand les tarifs sont activés, les calculs existants T1–T10, taux de subvention, participation salariale ou prix fixe restent disponibles. Les taux T1–T10 de démonstration sont à confirmer par le CSE.
+## 5. Pages d'origine et fiabilité des données
 
-### Référents multiples
+L’analyse détaillée des 33 pages est fournie **séparément dans une archive privée non destinée au dépôt GitHub**. Le site contient uniquement les modèles et des schémas anonymisés dans `assets/references/`, avec un montage dans `docs/wireframes_33_pages.jpg`. Cette séparation empêche que les coordonnées et conditions internes du MEL d’origine deviennent publiques par inadvertance.
 
-Sous **Inscriptions, contact et validation**, utilisez **+ Ajouter un contact**, indiquez un nom et un e-mail facultatif, puis ajoutez d'autres référents si besoin. Ces données restent dans la fiche de l'activité, y compris ses export/import JSON et sa sauvegarde Supabase. Les noms des référents sont repris dans les modèles de diapositives. Limite pratique : 15 référents par activité.
+Les **deux pages de règlement** du site public sont des **trames vides**, à renseigner puis faire contrôler par les responsables CSE. Un règlement générique ne remplace jamais le document officiel en vigueur. Le contenu historique du PDF est inclus uniquement dans l’archive de références privées séparée.
 
-### Valeur en points facultative
+## 6. Tests
 
-Saisissez un nombre de points (facultatif), puis sélectionnez **Séjour long**, **Séjour court** ou **Séjour FRANCE**. Lorsque la valeur est absente, l'information n'apparaît pas sur la slide. Le contrôle avant publication exige un compteur lorsque des points sont indiqués. Les fiches anciennes « 24 points » sont converties automatiquement en « 24 » (compteur Séjour long par défaut, à revérifier).
+- Tests visuels Chromium : 11 modèles, composition de 33 pages, calendrier cliquable, gestion de catégories, sauvegarde JSON, export d'une page et de 33 pages.
+- Exports PPTX analysés avec `python-pptx` : 33 slides, textes modifiables, liens CSE présents. Une slide a été ouverte via LibreOffice pour contrôler le rendu.
+- Test de structure reproductible depuis la racine : `node tests/mel-layouts.test.js`.
 
-## Mettre à jour GitHub Pages sans perdre ses fiches
+### Si un export d'image échoue
 
-1. Depuis la V5, sauvegardez la bibliothèque locale avec **Sauvegarder toute la bibliothèque (JSON)**.
-2. Téléchargez et décompressez ce dossier V6.
-3. Dans le dépôt GitHub `mGresset/CSE_Massy`, remplacez les fichiers présents à la **racine**, ainsi que les sous-dossiers `js`, `assets`, `vendor`, `supabase`, `tests` et `docs`. Attention : l'import via le navigateur GitHub peut ne pas écraser les fichiers déjà présents ; utilisez l'éditeur ou GitHub Desktop si besoin.
-4. Vérifiez que `index.html` affiche **V6** et que `js/layouts.js` et `js/app.js` ont bien été mis à jour.
-5. Faites **Commit changes** sur `main`. La configuration Pages reste **Deploy from a branch → main → /(root)**.
-6. Ouvrez https://mgresset.github.io/CSE_Massy/ et actualisez avec **Ctrl + Maj + R**.
-7. En cas de souci de stockage local, réimportez le JSON que vous avez sauvegardé. Évitez de vider les données du navigateur avant la sauvegarde.
+Une URL d'image publique peut bloquer son téléchargement depuis GitHub Pages en raison du CORS. L'application crée une zone de remplacement sans bloquer le PowerPoint ; utiliser **Importer un visuel** dans l'éditeur pour garantir son export.
 
-## Supabase existant : migration recommandée
+### Si une sauvegarde locale échoue
 
-La V6 rend les tarifs facultatifs et introduit les fiches « Informations » et « Activités à venir » sans date propre. Les anciens contrôles de la base Supabase V4/V5 refuseraient leur approbation.
+Le stockage local du navigateur a une taille limitée. Sauvegarder le MEL en JSON, alléger les photos et supprimer les anciennes compositions si nécessaire. Ne pas vider les données du navigateur sans sauvegarde préalable.
 
-**Si un projet Supabase est déjà actif**, exécutez **`supabase/v6_migration.sql`** dans le SQL Editor du projet administrateur. Cette migration remplace uniquement la fonction de validation serveur. Elle ne crée pas de nouvel utilisateur et ne supprime pas les fiches.
+## 7. Confidentialité de la démonstration historique
 
-**Si vous n'avez jamais créé de projet Supabase**, le site fonctionne en mode local sans aucune action supplémentaire. Lorsque vous souhaiterez le mode partagé, installez **`supabase/schema.sql`** et configurez les rôles comme dans la documentation V4.
-
-La validation Supabase conserve les protections de rôles et versions. Si les tarifs sont activés, le prix extérieur est toujours obligatoire. Les activités classiques conservent l'exigence d'une date d'activité ; seuls les modèles Informations et Activités à venir en sont dispensés.
-
-**Limite de l'agenda collectif :** le modèle « Activités à venir » utilise pour l'instant les fiches validées **localement** sur le navigateur. Il ne récupère pas encore automatiquement les activités approuvées de la bibliothèque Supabase. Le module partagé et l'export PowerPoint groupé des activités approuvées sont conservés.
-
-## Canva
-
-La destination Canva, les liens mémorisés et la fonction de publication de la V5 sont conservés. **L'insertion automatique dans une présentation Canva n'est pas activée par la seule possession d'un lien de partage** : elle nécessite les autorisations API du compte CSE et la configuration d'une fonction serveur Supabase. Le chemin sûr reste **Exporter PowerPoint** et l'importer manuellement dans Canva, tant que la publication API réelle n'a pas été validée.
-
-## Tests
-
-En environnement Node :
-
-```bash
-node tests/pricing.test.js
-node tests/layouts.test.js
-node tests/v5_sanity.test.js
-```
-
-Essais navigateur : ajout/suppression d'une catégorie, sauvegarde locale, contacts multiples, tarification désactivée, compteur de points, génération d'agenda à partir d'activités validées et export de 5 PowerPoint. La connexion à un véritable compte Canva ou Supabase n'a pas été testée.
-
-## Sécurité et données
-
-GitHub Pages héberge un site public : ne déposez pas de données personnelles non destinées à la publication dans le code du dépôt. Les noms et e-mails des référents seront visibles sur les slides publiées. Ne placez **jamais** une clé Supabase `service_role`, `sb_secret_` ni les secrets Canva dans les fichiers statiques.
+Le dépôt est public : les miniatures et la démonstration embarquées dans le site sont **anonymisées**. Un **deuxième ZIP privé**, fourni à part, contient les 33 captures de référence et une sauvegarde JSON d’exemples avec noms, tarifs et conditions historiques extraits du document communiqué au CSE. **Ne pas déposer ce deuxième ZIP dans un dépôt public** ; importer uniquement le JSON depuis le navigateur en utilisant « Importer JSON » si nécessaire.
