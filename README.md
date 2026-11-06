@@ -1,103 +1,81 @@
-# CSE Studio – Thales LAS Massy
+# CSE Studio V3 — Thales LAS Massy
 
-Site web statique pour préparer les activités du CSE et générer des diapositives PowerPoint importables et modifiables dans Canva.
+Application Web de création de diapositives CSE, **prête à déployer sur GitHub Pages**, sans serveur ni installation. Un bénévole remplit le formulaire, sélectionne un modèle et obtient un PowerPoint 16:9 modifiable, importable dans Canva.
 
-![Capture de l’application](docs/apercu-application.png)
+## Nouveautés de la V3
 
-*Exemple de slide exportée :* ![Diapositive Sri Lanka](docs/apercu-slide-pptx.png)
+- **6 dispositions au choix** : Classique, Immersif, En cartes, Tarifs en avant, **Programme** (nouveau), **Essentiel** (nouveau).
+- **Bandeau haute définition officiel** : `assets/bandeau-cse.jpg` (1920 × 282 pixels). Le bandeau reste fixe sur les six modèles.
+- **Circuit de vérification avant diffusion** : titre, dates, prix extérieur, cohérence inscriptions et participants, validité du lien ; avertissements pour image/description manquantes.
+- **Statut éditorial distinct du statut d’inscription** : Brouillon / À relire / Validée. La modification du contenu d’une fiche validée la remet en « À relire ».
+- **Bibliothèque locale filtrable par statut**.
+- **Export PowerPoint groupé** des fiches *validées* (25 slides maximum par lot), en plus de l’export unitaire.
+- **Sauvegarde / import de bibliothèque entière au format JSON** : partage manuel entre bénévoles, sans base de données. L’import complète la bibliothèque existante ; les fiches peuvent être dupliquées, et les images encodées augmentent le volume.
+- **Prompt de création d’image copiable** pour servir dans un outil IA extérieur. **Ne génère pas d’image automatiquement** et ne demande aucune clé d’API.
 
-## Fonctionnalités de la version 1
+### Fonctionnalités conservées de la V2
 
-- Édition et prévisualisation de la slide au format 16:9.
-- Champs : activité, catégorie, lieu, dates, sous-titre, descriptif, temps forts, prestations, formalités, alertes, statut, inscriptions, capacités, points, contact, bilan carbone, photo.
-- Tarifs calculés à partir du **prix extérieur** selon les tranches T1 à T10 (subventions du CSE paramétrables) ou une subvention fixe %, une participation du salarié fixe %, ou un prix salarié fixe €.
-- Barème initial : T1 70 %, T2 65 %, T3 60 %, T4 55 %, T5 50 %, T6 45 %, T7 40 %, T8 35 %, T9 30 %, T10 25 % (correspond à la slide Sri Lanka fournie, avec prix extérieur de 2 400 €).
-- Lien : `Portail du CSE` par défaut, `Lien personnalisé`, ou `Aucun lien`.
-- Bouton avec hyperlien vers https://cethaleslasmassy.portailce.com/ ou autre destination.
-- Enregistrement local dans le navigateur, bibliothèque de fiches, duplication, import/export JSON.
-- Export CSV (une ligne, variables à mapper dans Canva Création en lot), PowerPoint (.pptx) et impression/PDF via navigateur.
-- Aucun service tiers nécessaire pour la génération de slides.
+- Prix par tranches **T1 à T10**, calculés à partir du prix extérieur et des taux de subvention ; taux configurables et mémorisables.
+- Autres méthodes : subvention fixe en %, pourcentage payé par le salarié, montant salarié fixe en €.
+- Photos locales (1 ou 2), URL externe (sous réserve de CORS), prévisualisation avant export.
+- Statuts d’inscription auto ou manuels, dates, participants, description, conditions, contact, points CSE, carbone.
+- Lien vers `https://cethaleslasmassy.portailce.com/` par défaut ; lien personnalisé non obligatoire ou aucun lien.
+- Export PPTX à **textes et formes modifiables**, hyperlien cliquable ; export JSON d’une fiche et CSV pour Canva.
+- **Toutes les données sont enregistrées dans le navigateur local**, et non sur GitHub.
 
-## Déploiement GitHub Pages (sans installation)
+## Mettre à jour depuis V2 sur votre GitHub
 
-1. Créer un nouveau dépôt GitHub, par exemple `cse-studio-massy` (public, ou privé si votre formule GitHub permet Pages privé).
-2. Importer **tous les fichiers et dossiers** de ce projet à la racine du dépôt, en conservant `assets/`, `js/`, `vendor/` et `.github/workflows/`.
-3. Mettre la branche principale sous le nom `main` et effectuer un commit.
-4. Dans **Settings → Pages → Build and deployment**, choisir **GitHub Actions**.
-5. Le workflow `Publier CSE Studio sur GitHub Pages` se lance à chaque `push` sur `main`.
-6. Ouvrir l’adresse indiquée dans GitHub Actions → déploiement Pages (habituellement `https://VOTRE-COMPTE.github.io/cse-studio-massy/`).
+Dépôt utilisé : <https://github.com/mGresset/CSE_Massy> ; site attendu : <https://mgresset.github.io/CSE_Massy/>.
 
-L’application étant statique, aucun serveur applicatif, aucune base de données et aucune clé API ne sont nécessaires. Pour tester en local, lancer un petit serveur HTTP dans le dossier :
+1. **Sauvegarder** la V2 avant remplacement : sur GitHub → Code → Download ZIP. Si vous avez des fiches enregistrées, ouvrez la V2 et utilisez **Exporter JSON** pour les conserver séparément.
+2. Décompresser l'archive V3, puis transférer **le contenu** du dossier `CSE_Studio_V3_GitHub` à la **racine** du dépôt (ne pas ajouter un dossier enveloppe).
+3. Remplacer `index.html`, `styles.css`, `js/app.js`, `js/layouts.js`, `js/pricing.js` ainsi que les dossiers `assets`, `vendor` et fichiers concernés. Les bibliothèques JSZip/PptxGenJS sont déjà fournies dans `vendor`.
+4. Sur GitHub, cliquez **Commit changes**.
+5. GitHub Pages reste configuré sur **Deploy from a branch / main / (root)** ; le site sera actualisé lors de la publication. Rafraîchir avec **Ctrl + Maj + R** si la V2 apparaît toujours.
+6. Vérifiez que la page annonce **V3** et affiche **6 modèles**.
 
-```bash
-python -m http.server 8000
+**Attention à `index.html`** : il doit se trouver à la racine et charger les scripts locaux dans cet ordre :
+
+```html
+<script src="vendor/jszip.min.js" defer></script>
+<script src="vendor/pptxgen.min.js" defer></script>
+<script src="js/pricing.js" defer></script>
+<script src="js/layouts.js" defer></script>
+<script src="js/app.js" defer></script>
 ```
 
-Puis ouvrir `http://localhost:8000/`. L’ouverture directe du fichier `index.html` sans serveur peut empêcher l’export PPTX de charger les images locales.
+## Mode d’emploi quotidien
 
-## Processus de publication dans Canva
+1. Choisir une disposition parmi six, puis saisir le titre, le lieu, les dates, les informations, le barème et les photos.
+2. Vérifier les informations dans **Contrôle avant diffusion**. Les problèmes bloquants empêchent la validation interne, **pas le travail de brouillon ni l’export individuel**.
+3. Cliquez **Mettre à relire**, puis après vérification **Valider cette activité** (statut éditorial local).
+4. Exporter la slide `.pptx` individuellement ou créer un **PPTX groupé** avec les activités enregistrées validées.
+5. Importer le PowerPoint dans Canva, relire et diffuser aux bénéficiaires. Le bouton de chaque slide renvoie au site CSE (ou au lien personnalisé choisi), pas à un deep link Kalidea supposé.
+6. Pour transmettre les fiches à un autre bénévole, exportez la **bibliothèque JSON** et demandez-lui de l’importer dans son navigateur. Cette opération **ne synchronise pas** les modifications : elle crée des copies locales.
 
-1. Créer ou ouvrir une activité dans CSE Studio.
-2. Vérifier le tarif et le texte, puis cliquer sur **Générer PPTX**.
-3. Importer le PowerPoint dans Canva et ajouter la diapositive à la planche de publication.
-4. Vérifier la mise en page **et le lien cliquable** dans Canva après importation, puis publier.
+## Barème tarifaire
 
-Le lien vers les planches Canva de test est dans l’en-tête de l’application : https://canva.link/rewv8gx5iilr8kz
+Les taux initiaux sont des **valeurs de démonstration** : 70, 65, 60, 55, 50, 45, 40, 35, 30 et 25 % de subvention. Les huit taux intermédiaires doivent être validés par le CSE.
 
-**Attention :** le lien de partage Canva n’est pas une autorisation d’écriture pour une application externe. Cette V1 ne fait pas d’automatisation directe dans les fichiers Canva. Pour le faire, il faudra connecter Canva via OAuth et utiliser ses API Autofill, avec des champs de données définis sur les modèles et un compte éligible.
+Calcul par tranche : **prix salarié = prix extérieur × (1 − taux de subvention / 100)**. Exemple : prix extérieur 2 400 €, T1 à 70 % → 720 € ; T10 à 25 % → 1 800 €.
 
-## Partage entre bénévoles et confidentialité
+## Limites importantes
 
-Les fiches sauvegardées sont dans le `localStorage` du navigateur **de chaque utilisateur** : elles ne se synchronisent pas entre ordinateurs. Le site n’a pas d’authentification et n’offre pas encore de validation centralisée. Utiliser « Exporter JSON » pour transférer des fiches. Éviter toute donnée personnelle non nécessaire.
-
-Pour un usage collaboratif (comptes, rôles bénévole/validateur, stockage commun), ajouter dans une V2 une base de données avec gestion d’accès (par exemple Supabase) et protéger l’écriture des activités.
-
-## Définition des tarifs
-
-- **Tranches T1 à T10** : `prix salarié = prix extérieur × (1 − taux de subvention CSE / 100)`.
-- **Subvention CSE fixe** : exemple 40 % de subvention → salarié paie 60 % du prix extérieur.
-- **Participation salarié fixe** : exemple salarié paie 40 % du prix extérieur → subvention 60 %.
-- **Prix salarié fixe (€)** : montant communiqué directement.
-- Les taux sont **modifiables** et peuvent être sauvegardés par défaut pour les prochaines fiches via « Définir par défaut » ; ces préférences restent propres au navigateur.
-- Les calculs arrondissent au centime. Ils ne gèrent pas encore les plafonds, quotients familiaux, cumuls de subventions ou arrondis spécifiques à votre règlement interne.
+- **GitHub Pages est un hébergement statique public.** Ne publiez pas de liste nominative de bénéficiaires, d’identifiants ou de mots de passe dans le dépôt.
+- La V3 **n’a ni comptes collaborateurs ni base commune**. « Validée » indique une validation enregistrée localement, pas l’accord d’un responsable authentifié.
+- L’outil **ne modifie pas directement les planches Canva** et **ne communique pas avec Up Expert / Kalidea** ; les URL restent des liens de navigation.
+- Un lien d’image distant peut bloquer la récupération par le navigateur (CORS). Importer le fichier JPG/PNG/WebP garantit la meilleure fiabilité de l’export.
+- Les modèles optimisent la lisibilité mais ne remplacent pas une relecture humaine, notamment pour les programmes très longs.
 
 ## Structure
 
-```text
-index.html
-styles.css
-assets/bandeau-cse.jpg      # extrait d'une slide fournie par le CSE
-assets/sri-lanka.jpg        # illustration d'exemple
-assets/icon.svg
-js/app.js                  # interface et export PPTX/CSV/JSON
-js/pricing.js              # calculs tarifaires testables
-vendor/pptxgen.min.js       # PptxGenJS 4.0.0 (code tiers)
-vendor/jszip.min.js          # JSZip (dépendance tierce du PPTX)
-.github/workflows/pages.yml
-.nojekyll
-tests/pricing.test.js
-```
+- `index.html` : interface V3 ; `styles.css` : thème responsive.
+- `js/pricing.js` : calcul des tarifs ; `js/layouts.js` : six mises en page ; `js/app.js` : formulaire, validation, stockage, exports.
+- `assets/` : bandeau et ressources ; `vendor/` : bibliothèques PPTX locales ; `tests/` : contrôles métier et géométriques.
+- `.nojekyll` : assure la publication des ressources statiques.
 
-Les images intégrées sont extraites de la capture communiquée pour le projet. Le code embarqué de PptxGenJS et JSZip est fourni avec ses mentions de licence dans `vendor/`. Remplacez-les par des éléments graphiques validés par le CSE si vous publiez l’outil publiquement.
+## Tests
 
-## Limitations et évolutions
-
-- La version 1 est une maquette avancée : le modèle PPTX est proche de la capture, **pas une copie exacte** des planches Canva éditables.
-- Le contenu d’une diapositive a une capacité finie. L’outil signale des textes longs, mais la vérification visuelle reste indispensable.
-- L’export de photos chargées depuis certaines URLs peut échouer à cause de CORS ; importer le fichier image directement est plus fiable.
-- Le bouton dans le PowerPoint est cliquable, sous réserve du comportement de l’import Canva. Tester après chaque import.
-- L’IA d’images et le travail multiutilisateur ne sont pas inclus dans cette V1.
-
-## Test du calcul des tarifs
-
-```bash
-node tests/pricing.test.js
-```
-
-
-## Correctif images / export PPTX (06/11/2026)
-
-- L’export recherche le bandeau en `bandeau-cse.jpg` (racine), puis en `assets/bandeau-cse.jpg`.
-- Une image distante bloquée par CORS ou absente ne bloque plus le téléchargement du PPTX : un visuel de remplacement ou un encadré neutre est utilisé.
-- Pour garantir l’image souhaitée, privilégier « Choisir une image depuis l’ordinateur ».
-- En cas de fichier manquant, vérifier exactement le chemin et les majuscules/minuscules des noms sur GitHub Pages.
+- `node tests/pricing.test.js`
+- `node tests/layouts.test.js`
+- Test navigateur réalisé sur les **6 exports PPTX**, un **lot groupé 2 slides**, le calcul des tranches et la sauvegarde de la bibliothèque JSON.

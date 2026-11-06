@@ -1,179 +1,166 @@
-/* CSE Studio · application 100 % statique · pour GitHub Pages. */
+/* CSE Studio V3 — application autonome pour GitHub Pages (pas de backend). */
 (()=>{'use strict';
-const P=window.CSEPricing;
-const PORTAL_URL='https://cethaleslasmassy.portailce.com/';
-const CANVA_URL='https://canva.link/rewv8gx5iilr8kz';
-const STORAGE_ACTIVITIES='cse-studio-massy:v1:activities';
-const STORAGE_DRAFT='cse-studio-massy:v1:draft';
-const STORAGE_RATES='cse-studio-massy:v1:rates';
-const FORM_FIELDS=['title','category','template','location','venue','activityStart','activityEnd','subtitle','summary','highlights','included','administrative','warning','priceLabel','outsidePrice','pricingMode','fixedRate','fixedEuro','priceNotes','conditions','registrationStart','registrationEnd','status','audience','minimum','maximum','points','carbon','contact','contactEmail','photoUrl','linkType','customUrl','ctaLabel'];
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const lines=s=>String(s||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-const fileBase=s=>String(s||'activite').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').slice(0,70);
-const sample={
- title:'CIRCUIT SRI LANKA AUTHENTICITÉ', category:'Voyages', template:'detail',location:'Sri Lanka',venue:'',activityStart:'2027-04-04',activityEnd:'2027-04-15',subtitle:'Vacances de printemps',
- summary:'Circuit découverte très varié des splendeurs et activités du centre du Sri Lanka, pendant les vacances scolaires de printemps.',
- highlights:'Visites du temple d’or de DAMBULLA et du site de SIGIRIYA.\nImmersion dans la vie rurale et rencontre avec les éléphants.\nSites archéologiques de POLONNARUWA et RITIGALA.\nParcours en 4×4 dans la réserve naturelle et safari à MINNERIYA.\nInitiation à ANGAMPORA chez le Maître SUMEDA.\nDétente à PASSIKUDAH, plage et massage ayurvédique.',
- included:'Vol aller-retour pour Colombo avec escale.\nGuide local parlant français durant le circuit.\nHôtels de catégorie supérieure.\nPension complète (hors boissons) et assurances.',
- administrative:'Passeport valable 6 mois après le retour + ETA (e-visa).',warning:'Séjour non adapté aux PMR ni aux très jeunes enfants.',
- priceLabel:'Tarif de base chambre double',outsidePrice:'2400',pricingMode:'tranches',fixedRate:'50',fixedEuro:'',priceNotes:'',
- conditions:'Réductions non cumulables. Bien lire les conditions d’application sur le site du CSE.',
- registrationStart:'',registrationEnd:'2026-12-03',status:'Inscriptions ouvertes',audience:'Bénéficiaires du CSE',minimum:'31',maximum:'40',points:'24 points',carbon:'3029 kg CO2e',contact:'Sylvie Casassus-Builhé',contactEmail:'',
- photoUrl:'',photoData:'',linkType:'cse',customUrl:'',ctaLabel:'Plus d’infos',rates:[...P.DEFAULT_RATES]
-};
-function makeBlank(){return {...sample,title:'',location:'',venue:'',activityStart:'',activityEnd:'',subtitle:'',summary:'',highlights:'',included:'',administrative:'',warning:'',outsidePrice:'',priceLabel:'Tarif bénéficiaire',priceNotes:'',conditions:'',registrationStart:'',registrationEnd:'',status:'À venir',minimum:'',maximum:'',points:'',carbon:'',contact:'',contactEmail:'',photoUrl:'',photoData:'',rates:[...defaultRates]}}
-function clean(value){const obj={...sample,...Object.fromEntries(FORM_FIELDS.map(k=>[k,value?.[k]??sample[k]]))};obj.rates=Array.from({length:10},(_,i)=>P.boundedRate(value?.rates?.[i]??defaultRates[i]));obj.photoData=typeof value?.photoData==='string'&&/^data:image\/(png|jpeg|webp);base64,/.test(value.photoData)?value.photoData:'';return obj}
-function readJSON(key,fallback){try{const s=localStorage.getItem(key);return s?JSON.parse(s):fallback}catch{return fallback}}
-let defaultRates=readJSON(STORAGE_RATES,[...P.DEFAULT_RATES]);
-if(!Array.isArray(defaultRates)||defaultRates.length!==10)defaultRates=[...P.DEFAULT_RATES];
-defaultRates=defaultRates.map(P.boundedRate);
-let activities=readJSON(STORAGE_ACTIVITIES,{});
-if(!activities||Array.isArray(activities)||typeof activities!=='object')activities={};
-let draft=readJSON(STORAGE_DRAFT,null);
-let activity=clean(draft||sample),activeId=null,dirty=true;
-function notify(s,isError=false){const e=$('toast');e.textContent=s;e.style.background=isError?'#a52c42':'#173875';e.style.display='block';clearTimeout(notify._t);notify._t=setTimeout(()=>{e.style.display='none'},4200)}
-function saveDraft(){try{localStorage.setItem(STORAGE_DRAFT,JSON.stringify(activity))}catch{ /* localStorage image can be too large */ }}
-function setDirty(){dirty=true;$('saveState').textContent='● Brouillon local';saveDraft()}
-function effectiveUrl(){if(activity.linkType==='none')return '';if(activity.linkType==='cse')return PORTAL_URL;return String(activity.customUrl||'').trim()}
-function safeUrl(u){try{const x=new URL(u);return /^https?:$/.test(x.protocol)&&!!x.hostname}catch{return false}}
-function pricing(){return P.compute(activity.outsidePrice,activity.pricingMode,activity.rates,activity.fixedRate,activity.fixedEuro)}
-function renderForm(){for(const key of FORM_FIELDS)$(key).value=activity[key]??'';drawRates();renderDynamicFields()}
-function drawRates(){const e=$('rateInputs');e.innerHTML='';activity.rates.forEach((value,i)=>{const el=document.createElement('label');el.className='rate-cell';el.innerHTML=`T${i+1} · CSE %<input aria-label="Subvention T${i+1}" type="number" min="0" max="100" step="0.5" value="${P.boundedRate(value)}" data-rate="${i}">`;e.appendChild(el)});e.querySelectorAll('[data-rate]').forEach(input=>input.addEventListener('input',()=>{activity.rates[Number(input.dataset.rate)]=P.boundedRate(input.value);render();setDirty()}))}
-function renderDynamicFields(){let m=activity.pricingMode;$('trancheConfig').classList.toggle('hidden',m!=='tranches');$('fixedRateRow').classList.toggle('hidden',m==='tranches');$('fixedRate').parentElement.classList.toggle('hidden',m==='fixedEuro');$('fixedEuroField').classList.toggle('hidden',m!=='fixedEuro');$('fixedRateLabel').textContent=m==='fixedEmployee'?'Part du salarié (%)':'Subvention du CSE (%)';$('customLinkField').classList.toggle('hidden',activity.linkType!=='custom');const u=effectiveUrl();$('effectiveLink').textContent=!u?'Aucun lien':safeUrl(u)?'🔗 '+u:'⚠ URL personnalisée invalide (https://...)';}
-function renderPrices(){const rows=pricing();const container=$('pricingTable');container.innerHTML='<table><thead><tr><th>Tarif</th><th>Subvention CSE</th><th>Prix salarié</th></tr></thead><tbody>'+rows.map(row=>`<tr><td>${esc(row.label)}</td><td>${row.subsidy===null?'—':row.subsidy+' %'}</td><td>${esc(P.frMoney(row.price))}</td></tr>`).join('')+'</tbody></table>';
- const box=$('pPriceRows');box.innerHTML='';for(const row of rows){const cell=document.createElement('div');cell.textContent=(activity.pricingMode==='tranches'?row.label+' : ':'Tarif CSE : ')+P.frMoney(row.price);box.appendChild(cell)}
- $('pPriceLabel').textContent=activity.priceLabel||'Tarif bénéficiaire';$('pOutside').textContent=activity.outsidePrice!==''?'Ext. : '+P.frMoney(activity.outsidePrice):'';
- $('pPriceNotes').textContent=activity.priceNotes||'';$('pConditions').textContent=activity.conditions||'';
-}
-function render(){renderDynamicFields();renderPrices();
- $('slide').classList.toggle('simple',activity.template==='simple');
- $('pCategory').textContent=(activity.category||'Activité')+(activity.location?' · '+activity.location:'');
- $('pSubtitle').textContent=activity.subtitle||'';
- $('pPhoto').src=activity.photoData||activity.photoUrl||'assets/sri-lanka.jpg';
- $('pTitle').textContent=activity.title||'NOM DE L’ACTIVITÉ';
- $('pDate').textContent=P.dateRange(activity.activityStart,activity.activityEnd);
- $('pSummary').textContent=activity.summary||'';
- const high=lines(activity.highlights),inc=lines(activity.included);
- $('pHighlightsBlock').classList.toggle('hidden',!high.length);
- $('pIncludedBlock').classList.toggle('hidden',!inc.length);
- $('pHighlights').innerHTML=high.map(s=>`<li>${esc(s)}</li>`).join('');
- $('pIncluded').innerHTML=inc.map(s=>`<li>${esc(s)}</li>`).join('');
- $('pAdministrative').textContent=activity.administrative?'Formalités : '+activity.administrative:'';
- $('pWarning').textContent=activity.warning||'';
- $('pRegistration').innerHTML='Date limite d’inscription : <b>'+esc(P.toFrDate(activity.registrationEnd)||'À confirmer')+'</b>';
- $('pPoints').textContent='Valeur en points : '+(activity.points||'—');
- $('pContact').innerHTML='Contact : <i>'+esc(activity.contact||'CSE')+'</i>';
- $('pStatus').textContent=activity.status||'À venir';
- const colors={'Complet':'#c57932','Annulé':'#b63b48','Clôturé':'#748093','À venir':'#5d85c0','Inscriptions ouvertes':'#80b139'};
- $('pStatus').style.backgroundColor=colors[activity.status]||'#80b139';
- $('pParticipants').innerHTML=(activity.minimum||activity.maximum)?'<strong>Nombre de participants :</strong><br>Minimum '+esc(activity.minimum||'—')+'<br>Maximum <span class="max">'+esc(activity.maximum||'—')+'</span>':'';
- $('pCarbon').innerHTML=activity.carbon?'Bilan carbone estimé<br><strong>🍃 '+esc(activity.carbon)+'</strong>':'';
- const l=effectiveUrl(),a=$('pLink');a.classList.toggle('is-hidden',!safeUrl(l));if(safeUrl(l))a.href=l;else a.removeAttribute('href');$('pLinkLabel').textContent=activity.ctaLabel||'Plus d’infos';
- makeWarnings();fitSlide();
-}
-function makeWarnings(){const issues=[];
- const title=activity.title.trim();if(!title)issues.push('Complétez le nom de l’activité avant l’export.');
- if(activity.activityStart&&activity.activityEnd&&activity.activityEnd<activity.activityStart)issues.push('La date de fin précède la date de début.');
- if(activity.registrationStart&&activity.registrationEnd&&activity.registrationEnd<activity.registrationStart)issues.push('La clôture des inscriptions précède leur ouverture.');
- if(activity.minimum!==''&&activity.maximum!==''&&Number(activity.maximum)<Number(activity.minimum))issues.push('Le maximum de participants est inférieur au minimum.');
- if(activity.pricingMode==='fixedEuro'&&P.finite(activity.fixedEuro)>P.finite(activity.outsidePrice))issues.push('Le tarif fixe salarié dépasse le prix extérieur : vérifiez le montant.');
- if(!safeUrl(effectiveUrl())&&activity.linkType!=='none')issues.push('Le lien choisi est invalide : le bouton sera absent.');
- if(lines(activity.highlights).length>8)issues.push('Plus de 8 temps forts : le contenu risque de déborder.');
- if(lines(activity.included).length>6)issues.push('Plus de 6 prestations incluses : vérifiez la lisibilité.');
- if(activity.summary.length>350)issues.push('Le résumé est long pour une seule slide.');
- $('warnings').innerHTML=issues.length?issues.map(s=>`<div class="warning-item">⚠ ${esc(s)}</div>`).join(''):'<span class="good-item">✓ Aperçu prêt pour vérification avant export.</span>';
- requestAnimationFrame(()=>{const middle=$('pWarning').getBoundingClientRect().bottom,info=$('pRegistration').getBoundingClientRect().top;if(middle&&info&&middle>info-3){const el=document.createElement('div');el.className='warning-item critical';el.textContent='⚠ Risque de chevauchement des textes : raccourcissez la description ou sélectionnez la disposition épurée.';$('warnings').appendChild(el)}});
-}
-function fitSlide(){const w=$('slideMount').clientWidth;if(w>0)$('slide').style.transform='scale('+(w/1200)+')'}
-function storeActivities(){try{localStorage.setItem(STORAGE_ACTIVITIES,JSON.stringify(activities));return true}catch{notify('Stockage local plein : exportez un JSON et réduisez la taille des images.',true);return false}}
-function saveActivity(){if(!activity.title.trim()){notify('Saisissez d’abord le titre de l’activité.',true);$('title').focus();return}if(!activeId)activeId='act-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);activities[activeId]={...activity,updatedAt:new Date().toISOString()};if(storeActivities()){dirty=false;$('saveState').textContent='● Activité enregistrée';renderLibrary();notify('Activité enregistrée sur cet appareil.')}}
-function renderLibrary(){const root=$('activityLibrary'),ids=Object.keys(activities).sort((a,b)=>String(activities[b]?.updatedAt||'').localeCompare(String(activities[a]?.updatedAt||'')));$('libraryCount').textContent=String(ids.length);root.innerHTML='';if(!ids.length){root.innerHTML='<p class="library-empty">Aucune activité enregistrée pour le moment.</p>';return}for(const id of ids){const o=activities[id];const row=document.createElement('div');row.className='library-item';const title=document.createElement('span');title.textContent=o.title||'Activité';title.title=title.textContent;row.appendChild(title);const open=document.createElement('button');open.type='button';open.textContent='Ouvrir';open.addEventListener('click',()=>{activeId=id;activity=clean(activities[id]);renderForm();render();saveDraft();dirty=false;$('saveState').textContent='● Activité enregistrée'});row.appendChild(open);const del=document.createElement('button');del.type='button';del.textContent='Suppr.';del.className='delete';del.addEventListener('click',()=>{if(confirm('Supprimer « '+o.title+' » du navigateur ?')){delete activities[id];if(activeId===id)activeId=null;storeActivities();renderLibrary()}});row.appendChild(del);root.appendChild(row)}}
-function download(text,type,name){const blob=new Blob([text],{type}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-function exportProject(){download(JSON.stringify({schema:'cse-studio:1',exportDate:new Date().toISOString(),activity},null,2),'application/json','CSE_'+fileBase(activity.title)+'.json');notify('Fiche JSON téléchargée. Elle peut être importée par un autre bénévole.')}
-function csvCell(x){return '"'+String(x??'').replaceAll('"','""')+'"'}
-function exportCSV(){const p=pricing();const fields={TITRE:activity.title,CATEGORIE:activity.category,LIEU:activity.location,ETABLISSEMENT:activity.venue,DATE_ACTIVITE:P.dateRange(activity.activityStart,activity.activityEnd),ACCROCHE:activity.summary,TEMPS_FORTS:lines(activity.highlights).join(' • '),PRESTATIONS:lines(activity.included).join(' • '),FORMALITES:activity.administrative,ATTENTION:activity.warning,STATUT:activity.status,OUVERTURE_INSCRIPTIONS:P.toFrDate(activity.registrationStart),FIN_INSCRIPTIONS:P.toFrDate(activity.registrationEnd),PRIX_EXTERIEUR:P.frMoney(activity.outsidePrice),LIBELLE_TARIF:activity.priceLabel,CONDITIONS:activity.conditions,POINTS:activity.points,CONTACT:activity.contact,MINIMUM:activity.minimum,MAXIMUM:activity.maximum,BILAN_CARBONE:activity.carbon,LIEN:effectiveUrl(),LIBELLE_BOUTON:activity.ctaLabel};
- for(let i=0;i<10;i++)fields['T'+(i+1)]=p[i]?.price!==undefined&&activity.pricingMode==='tranches'?P.frMoney(p[i].price):'';
- fields.PRIX_UNIQUE=activity.pricingMode!=='tranches'?(p[0]?P.frMoney(p[0].price):''):'';
- const keys=Object.keys(fields),csv='\ufeff'+keys.map(csvCell).join(';')+'\r\n'+keys.map(k=>csvCell(fields[k])).join(';')+'\r\n';download(csv,'text/csv;charset=utf-8','CSE_'+fileBase(activity.title)+'.csv');notify('CSV exporté. Associez les colonnes aux champs de votre modèle Canva.')}
-async function asData(url){
- if(String(url||'').startsWith('data:image/'))return url;
- let response;
- try{response=await fetch(url,{cache:'no-store'});}catch(e){throw Error('Accès à l’image bloqué : '+url+' ('+(e.message||'réseau/CORS')+')')}
- if(!response.ok)throw Error('Image introuvable : '+url+' (HTTP '+response.status+')');
- const blob=await response.blob();
- if(!blob.type.startsWith('image/'))throw Error('Le fichier n’est pas une image : '+url);
- return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(Error('Lecture impossible : '+url));fr.readAsDataURL(blob)});
-}
-// Les images facultatives ne doivent pas empêcher la création du PowerPoint.
-// Priorité au nouveau bandeau fourni à la racine par le CSE ; repli sur /assets.
-async function firstAvailableImage(sources){
- for(const source of [...new Set(sources.filter(Boolean))]){
-  try{return {data:await asData(source),source};}
-  catch(e){console.warn('[CSE Studio] '+e.message)}
- }
- return null;
-}
-// A Canva-importable PPTX with editable shapes/text fields and a functioning hyperlink.
-async function exportPPTX(){const button=$('exportPptx');if(!activity.title.trim()){notify('Le titre de l’activité est requis.',true);$('title').focus();return}button.disabled=true;$('exportPptxBottom').disabled=true;button.textContent='Création...';
- try{
- const PPTX=window.PptxGenJS;if(!PPTX)throw Error('Bibliothèque PowerPoint non chargée');const pptx=new PPTX();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Diapositive d’activité';pptx.title=activity.title;pptx.lang='fr-FR';
- const s=pptx.addSlide();s.background={color:'FFFFFF'};const Sh=pptx.ShapeType;
- const px=x=>x/90;
- function t(value,x,y,w,h,opts={}){s.addText(String(value??''),{x:px(x),y:px(y),w:px(w),h:px(h),margin:0,fontFace:'Arial',fontSize:11,breakLine:false,fit:'shrink',color:'111111',valign:'mid',...opts})}
- function rect(x,y,w,h,color){s.addShape(Sh.rect,{x:px(x),y:px(y),w:px(w),h:px(h),line:{color},fill:{color}})}
- const imageWarnings=[];
- const banner=await firstAvailableImage(['bandeau-cse.jpg','assets/bandeau-cse.jpg']);
- if(banner){s.addImage({data:banner.data,x:px(10),y:px(7),w:px(1180),h:px(171)})}
- else{rect(10,7,1180,171,'E6EDF8');t('CSE THALES LAS MASSY',58,60,840,60,{fontSize:27,bold:true,color:'2E4396'});imageWarnings.push('bandeau CSE manquant')}
- rect(10,644,1180,31,'3648A0');
- t(activity.category+(activity.location?' · '+activity.location:''),29,182,195,35,{fontSize:13.5,color:'153C9B',bold:true});t(activity.subtitle,29,217,195,22,{fontSize:10.5,bold:true,color:'123F9E'});
- const imageDemandee=activity.photoData||activity.photoUrl||'';
- const photo=await firstAvailableImage([imageDemandee,'assets/sri-lanka.jpg']);
- if(photo){s.addImage({data:photo.data,x:px(41),y:px(240),w:px(156),h:px(activity.template==='simple'?215:195),sizingCrop:true});
-  if(imageDemandee&&photo.source!==imageDemandee)imageWarnings.push('photo personnalisée inaccessible, visuel de remplacement utilisé')}
- else{rect(41,240,156,activity.template==='simple'?215:195,'F0F3F9');t('VISUEL À AJOUTER',48,310,142,38,{fontSize:10,color:'6F7993',bold:true,align:'center'});imageWarnings.push('photo manquante')}
+const P=window.CSEPricing,L=window.CSELayouts;
+if(!P||!L)throw Error('Modules CSEPricing / CSELayouts absents');
+const $=id=>document.getElementById(id),euro=P.frMoney;
+const KEYS={draft:'cse-studio-massy:v1:draft',activities:'cse-studio-massy:v1:activities',rates:'cse-studio-massy:v1:rates'};
+const FIELDS=['title','category','location','venue','activityStart','activityEnd','subtitle','summary','highlights','included','administrative','warning','priceLabel','outsidePrice','pricingMode','fixedRate','fixedEuro','priceNotes','conditions','registrationStart','registrationEnd','status','audience','minimum','maximum','points','carbon','contact','contactEmail','photoUrl','linkType','customUrl','ctaLabel','internalReference','editorialStatus'];
+const sample={title:'CIRCUIT SRI LANKA AUTHENTICITÉ',category:'Voyages',template:'classic',location:'Sri Lanka',venue:'',activityStart:'2027-04-04',activityEnd:'2027-04-15',subtitle:'Vacances de printemps',summary:'Circuit découverte très varié des splendeurs et activités du centre du Sri Lanka, pendant les vacances scolaires de printemps.',highlights:'Temple d’or de DAMBULLA et site de SIGIRIYA.\nImmersion dans la vie rurale et rencontre avec les éléphants.\nDécouverte des sites de POLONNARUWA et RITIGALA.\nSafari en 4×4 dans la réserve naturelle de MINNERIYA.\nInitiation à l’ANGAMPORA et détente à PASSIKUDAH.',included:'Vol aller-retour pour Colombo avec escale.\nGuide local parlant français.\nHébergement en hôtels de catégorie supérieure.\nPension complète (hors boissons) et assurances.',administrative:'Passeport valable 6 mois après le retour + ETA (e-visa).',warning:'Séjour non adapté aux PMR ni aux très jeunes enfants.',priceLabel:'Tarif chambre double',outsidePrice:'2400',pricingMode:'tranches',fixedRate:'50',fixedEuro:'',priceNotes:'',conditions:'Réductions non cumulables. Consulter les conditions d’application du CSE.',registrationStart:'',registrationEnd:'2026-12-03',status:'Inscriptions ouvertes',audience:'Bénéficiaires du CSE',minimum:'31',maximum:'40',points:'24 points',carbon:'3029 kg CO₂e',contact:'Sylvie Casassus-Builhé',contactEmail:'',internalReference:'',editorialStatus:'draft',photoUrl:'',photoData:'',photo2Data:'',linkType:'cse',customUrl:'',ctaLabel:'Plus d’infos',rates:[...P.DEFAULT_RATES]};
+function read(key,fallback){try{const v=localStorage.getItem(key);return v?JSON.parse(v):fallback}catch{return fallback}}
+let defaultRates=read(KEYS.rates,[...P.DEFAULT_RATES]);if(!Array.isArray(defaultRates)||defaultRates.length!==10)defaultRates=[...P.DEFAULT_RATES];defaultRates=defaultRates.map(P.boundedRate);
+function normalize(source){const v=source&&typeof source==='object'?source:{};const a={...sample};for(const k of FIELDS)a[k]=v[k]??sample[k];a.template=({detail:'classic',simple:'hero'}[v.template]||v.template||sample.template);if(!L.CHOICES.some(c=>c.id===a.template))a.template='classic';a.rates=Array.from({length:10},(_,i)=>P.boundedRate(v.rates?.[i]??defaultRates[i]));a.photoData=/^data:image\/(png|jpeg|webp);base64,/i.test(String(v.photoData||''))?v.photoData:'';a.photo2Data=/^data:image\/(png|jpeg|webp);base64,/i.test(String(v.photo2Data||''))?v.photo2Data:'';a.editorialStatus=['draft','review','approved'].includes(v.editorialStatus)?v.editorialStatus:'draft';a.internalReference=String(v.internalReference||'').slice(0,50);return a}
+function blank(){return normalize({...sample,title:'',location:'',venue:'',activityStart:'',activityEnd:'',subtitle:'',summary:'',highlights:'',included:'',administrative:'',warning:'',outsidePrice:'',priceLabel:'Tarif bénéficiaire',priceNotes:'',conditions:'',registrationStart:'',registrationEnd:'',status:'auto',minimum:'',maximum:'',points:'',carbon:'',contact:'',contactEmail:'',photoData:'',photo2Data:'',photoUrl:'',internalReference:'',editorialStatus:'draft',rates:defaultRates})}
+let activities=read(KEYS.activities,{});if(!activities||typeof activities!=='object'||Array.isArray(activities))activities={};
+let activity=normalize(read(KEYS.draft,null)||sample),activeId=null;
+const demoPhoto=a=>/sri.?lanka/i.test(a.title||'')&&a.category==='Voyages';
+function photoSource(a,which){if(which==='banner')return 'assets/bandeau-cse.jpg';if(which==='secondary')return a.photo2Data||a.photoData||a.photoUrl||(demoPhoto(a)?'assets/sri-lanka.jpg':'');return a.photoData||a.photoUrl||(demoPhoto(a)?'assets/sri-lanka.jpg':'')}
+function notify(message,error=false){const n=$('toast');n.textContent=message;n.style.background=error?'#a5364b':'#234282';n.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.style.display='none',5500)}
+function fileName(s){return String(s||'activite').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').slice(0,65)}
+function store(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch{notify('Stockage plein : exportez la fiche JSON et réduisez la taille des images.',true);return false}}
+function dirty(){store(KEYS.draft,activity);$('saveState').textContent='● Brouillon local'}
+function download(content,mime,name){const u=URL.createObjectURL(new Blob([content],{type:mime}));const a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+function renderGallery(){const root=$('templateGallery');root.innerHTML='';L.CHOICES.forEach(choice=>{const b=document.createElement('button');b.type='button';b.className='template-option';b.dataset.t=choice.id;b.setAttribute('aria-pressed',String(activity.template===choice.id));b.innerHTML='<span class="mini-slide"><span class="mini-banner"></span><span class="mini-content"><span></span><span></span><span></span><span></span></span></span><span class="template-name"></span><span class="template-use"></span>';b.querySelector('.template-name').textContent=choice.name;b.querySelector('.template-use').textContent=choice.use;b.addEventListener('click',()=>{activity.template=choice.id;if(activity.editorialStatus==='approved'){activity.editorialStatus='review';$('editorialStatus').value='review'}renderGallery();drawPreview();renderPreflight();dirty()});root.append(b)});$('templateHelp').textContent=L.CHOICES.find(c=>c.id===activity.template)?.help||''}
+function renderForm(){for(const k of FIELDS){const el=$(k);if(el)el.value=activity[k]??''}renderRates();renderGallery();renderDynamic()}
+function renderRates(){const root=$('rateInputs');root.innerHTML='';activity.rates.forEach((r,i)=>{const lab=document.createElement('label');lab.textContent='T'+(i+1)+' · %';const input=document.createElement('input');input.type='number';input.min='0';input.max='100';input.step='0.5';input.value=r;input.setAttribute('aria-label','Subvention T'+(i+1));input.addEventListener('input',()=>{activity.rates[i]=P.boundedRate(input.value);renderPricing();drawPreview();dirty()});lab.append(input);root.append(lab)})}
+function renderDynamic(){const fixed=activity.pricingMode!=='tranches';$('fixedRow').classList.toggle('hidden',!fixed);$('trancheConfig').classList.toggle('hidden',fixed);$('fixedRateField').classList.toggle('hidden',activity.pricingMode==='fixedEuro');$('fixedEuroField').classList.toggle('hidden',activity.pricingMode!=='fixedEuro');$('fixedRateLabel').textContent=activity.pricingMode==='fixedEmployee'?'Participation salarié (%)':'Subvention CSE (%)';$('customLinkField').classList.toggle('hidden',activity.linkType!=='custom');const u=L.effectiveUrl(activity);$('effectiveLink').textContent=u?(L.safeUrl(u)?'↗ '+u:'Lien invalide : renseigner une adresse HTTP(S) complète'):'Aucun lien sur la diapositive';$('photoIndicator').textContent=activity.photoData?'Photo importée ✓':activity.photoUrl?'Photo distante : '+activity.photoUrl:demoPhoto(activity)?'Photo Sri Lanka de démonstration':'Aucune photo : un cadre neutre apparaîtra';$('photo2Indicator').textContent=activity.photo2Data?'Deuxième photo importée ✓':'Facultatif, principalement utilisé dans le modèle « En cartes ».'}
+function renderPricing(){const rows=P.compute(activity.outsidePrice,activity.pricingMode,activity.rates,activity.fixedRate,activity.fixedEuro);const el=$('pricingTable');el.innerHTML='';const table=document.createElement('table'),thead=document.createElement('thead'),head=document.createElement('tr');['Tranche','Subvention CSE','Prix bénéficiaire'].forEach(x=>{const th=document.createElement('th');th.textContent=x;head.append(th)});thead.append(head);table.append(thead);const body=document.createElement('tbody');rows.forEach(r=>{const tr=document.createElement('tr');[r.label,r.subsidy===null?'—':r.subsidy+' %',euro(r.price)].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});body.append(tr)});table.append(body);el.append(table)}
+let lastLayout=null;
+function drawPreview(){lastLayout=L.render(activity,P);const slide=$('slide');slide.innerHTML='';for(const el of lastLayout.elements){let dom;if(el.type==='image'){const url=photoSource(activity,el.which);if(!url){dom=document.createElement('div');dom.textContent=el.which==='banner'?'BANDEAU CSE':'PHOTO À AJOUTER';dom.style.background='#e9eff9';dom.style.color='#73809c';dom.style.display='grid';dom.style.placeItems='center';dom.style.fontSize='17px';dom.style.fontWeight='bold'}else{dom=document.createElement('img');dom.alt=el.which==='banner'?'Bandeau CSE':'Photo activité';dom.classList.add('slide-photo');dom.src=url;dom.onerror=()=>{dom.removeAttribute('src');dom.style.background='#edf1f8';dom.alt='Image indisponible';dom.title='Image inaccessible : choisissez un fichier local'}}}
+ else if(el.type==='box'){dom=document.createElement('div');dom.style.background=el.fill||'white';if(el.stroke)dom.style.border='1px solid '+el.stroke;dom.style.borderRadius=(el.radius||0)+'px'}
+ else {dom=document.createElement(el.type==='link'?'a':'div');dom.classList.add('slide-text');dom.textContent=el.text||'';dom.style.fontSize=(el.size||15)+'px';dom.style.fontWeight=el.bold?'800':'400';dom.style.color=el.color||'#152642';dom.style.textAlign=el.align||'left';dom.style.lineHeight=el.top?'1.23':'1.15';if(el.type==='link'){dom.classList.add('slide-cta');dom.href=el.url;dom.target='_blank';dom.rel='noopener noreferrer'}}
+ dom.classList.add('slide-el');dom.style.left=el.x+'px';dom.style.top=el.y+'px';dom.style.width=el.w+'px';dom.style.height=el.h+'px';slide.append(dom)}renderWarnings();fitSlide()}
+function fitSlide(){const w=$('slideMount').clientWidth;if(w)$('slide').style.transform='scale('+(w/1200)+')'}
+function renderWarnings(){const list=[];const a=activity;if(!a.title.trim())list.push('Le titre est obligatoire pour l’export.');if(a.outsidePrice==='')list.push('Prix extérieur non renseigné : vérifier les tarifs avant diffusion.');if(a.activityStart&&a.activityEnd&&a.activityStart>a.activityEnd)list.push('La fin de l’activité précède son début.');if(a.registrationStart&&a.registrationEnd&&a.registrationStart>a.registrationEnd)list.push('La clôture des inscriptions précède leur ouverture.');if(a.minimum&&a.maximum&&Number(a.minimum)>Number(a.maximum))list.push('Maximum de participants inférieur au minimum.');if(a.linkType==='custom'&&a.customUrl&&!L.safeUrl(a.customUrl))list.push('Le lien personnalisé n’est pas une URL valide.');if(a.pricingMode==='fixedEuro'&&P.finite(a.fixedEuro)>P.finite(a.outsidePrice))list.push('Tarif bénéficiaire supérieur au prix extérieur.');if(L.list(a.highlights).length>(a.template==='hero'?4:a.template==='cards'?5:7))list.push('Programme long pour ce modèle : vérifier l’aperçu et le PPTX.');if(a.template==='cards'&&L.list(a.highlights).some(s=>s.length>36))list.push('Le modèle En cartes raccourcit les temps forts trop longs : le texte intégral reste dans la fiche.');if(a.summary.length>380)list.push('Description longue : risque de manque de lisibilité.');if(!a.photoData&&!a.photoUrl&&!demoPhoto(a))list.push('Aucune image ajoutée : un emplacement photo neutre sera utilisé.');const box=$('warnings');box.innerHTML='';const e=document.createElement('div');e.className=list.length?'warn':'valid';e.textContent=list.length?'À vérifier : '+list.join(' · '):'✓ Aucune incohérence détectée. Relisez la slide avant publication.';box.append(e)}
+function render(){renderDynamic();renderPricing();drawPreview();renderPreflight()}
 
- const priceY=activity.template==='simple'?464:438;
- t(activity.priceLabel||'Tarif CSE',29,priceY,197,23,{fontSize:10.4,bold:true});
- const rows=pricing();if(activity.pricingMode==='tranches')rows.forEach((r,i)=>{const col=i%2,row=Math.floor(i/2);t(r.label+' : '+P.frMoney(r.price),29+col*101,priceY+25+row*17,98,17,{fontSize:8.8,bold:true,color:'14409C'})});else{t(P.frMoney(rows[0]?.price??0),29,priceY+25,190,26,{fontSize:17,bold:true,color:'15419A'});const rate=rows[0]?.subsidy;t(rate===null?'':('Subvention CSE : '+rate+' %'),29,priceY+55,190,21,{fontSize:9.3,color:'14409C'})}
- t(activity.outsidePrice!==''?'Ext. : '+P.frMoney(activity.outsidePrice):'',29,priceY+(activity.pricingMode==='tranches'?113:83),190,18,{fontSize:9.7,bold:true,color:'14409C'});
- t(activity.priceNotes,29,priceY+(activity.pricingMode==='tranches'?131:104),195,32,{fontSize:8.0,color:'164396',valign:'top'});
- t(activity.conditions,29,priceY+(activity.pricingMode==='tranches'?164:140),196,40,{fontSize:8.0,color:'164396',valign:'top'});
- t(activity.title.toUpperCase(),244,188,710,46,{fontSize:22,bold:true,align:'center',underline:{color:'111111'}});
- t(P.dateRange(activity.activityStart,activity.activityEnd),241,235,713,42,{fontSize:21.4,bold:true,align:'center',color:'6923E8'});
- let y=285;t(activity.summary,243,y,704,39,{fontSize:activity.template==='simple'?12:10.3,valign:'top'});y+=activity.template==='simple'?55:40;
- function listBlock(header,items,max,fontSz,lineH){if(!items.length)return;t(header,243,y,704,18,{fontSize:10.4,bold:true,underline:{color:'111111'}});y+=18;for(const item of items.slice(0,max)){t('• '+item,253,y,695,lineH,{fontSize:fontSz,valign:'mid'});y+=lineH}y+=4}
- listBlock('Temps forts :',lines(activity.highlights),activity.template==='simple'?5:7,activity.template==='simple'?11.2:9.5,activity.template==='simple'?21:17);
- listBlock('Prestations incluses :',lines(activity.included),activity.template==='simple'?3:5,activity.template==='simple'?10.8:9.3,activity.template==='simple'?20:17);
- if(y<574&&activity.administrative){t('Formalités : '+activity.administrative,243,y,704,27,{fontSize:9.2,bold:true,valign:'top'});y+=29}
- if(y<603&&activity.warning){t(activity.warning,243,y,704,28,{fontSize:9.7,color:'DE2633',bold:true,valign:'top'})}
- const footY=608;rect(450,footY-2,505,36,'FFFFFF');t('Date limite d’inscription : '+(P.toFrDate(activity.registrationEnd)||'À confirmer'),454,footY,500,12,{fontSize:9.3,bold:true});t('Valeur en points : '+(activity.points||'—')+'     Contact : '+(activity.contact||'CSE'),454,footY+16,500,16,{fontSize:9.3,bold:true,color:'6534B0'});
- const state=activity.status||'À venir';const color={'À venir':'5D85C0','Inscriptions ouvertes':'80B139','Complet':'C57932','Clôturé':'748093','Annulé':'B63B48'}[state]||'80B139';s.addShape(Sh.roundRect,{x:px(1010),y:px(211),w:px(156),h:px(60),rectRadius:.15,rotate:5,line:{color:'93A468',width:1},fill:{color}});t(state.toUpperCase(),1011,220,152,43,{fontSize:11.4,bold:true,color:'FFFFFF',align:'center'});
- if(activity.minimum||activity.maximum){t('Nombre de participants :',974,380,203,21,{fontSize:11.3,bold:true,align:'center'});t('Minimum '+(activity.minimum||'—')+'\nMaximum '+(activity.maximum||'—'),980,406,196,48,{fontSize:11.5,align:'center'})}
- if(activity.carbon){t('Bilan carbone estimé',979,470,194,20,{fontSize:10,color:'559B2C',align:'center'});t('🍃 '+activity.carbon,979,494,194,24,{fontSize:11.2,color:'4C8D27',bold:true,align:'center'})}
- const u=effectiveUrl();if(safeUrl(u)){
- s.addShape(Sh.roundRect,{x:px(971),y:px(580),w:px(203),h:px(42),rectRadius:.08,fill:{color:'EFF4FC'},line:{color:'B6CAE9'},hyperlink:{url:u}});
- t(activity.ctaLabel||'Plus d’infos',974,586,197,29,{fontSize:12.3,color:'174295',bold:true,align:'center',hyperlink:{url:u}});
- }
- await pptx.writeFile({fileName:'CSE_'+fileBase(activity.title)+'.pptx'});notify('PowerPoint généré'+(imageWarnings.length?' (attention : '+imageWarnings.join(' ; ')+')':'')+'. Vous pouvez l’importer dans Canva.',Boolean(imageWarnings.length));
- }catch(e){console.error(e);notify('Export PowerPoint impossible : '+e.message,true)}finally{button.disabled=false;$('exportPptxBottom').disabled=false;button.textContent='↓ Générer PPTX'}
+const editorialNames={draft:'Brouillon',review:'À relire',approved:'Validée'};
+function preflight(a=activity){
+ const title=String(a.title||'').trim(),outside=a.outsidePrice!==''&&Number.isFinite(Number(a.outsidePrice))&&Number(a.outsidePrice)>=0;
+ const hasDate=Boolean(a.activityStart),datesOk=!(a.activityStart&&a.activityEnd&&a.activityStart>a.activityEnd);
+ const regOk=!(a.registrationStart&&a.registrationEnd&&a.registrationStart>a.registrationEnd);
+ const participantsOk=!(a.minimum&&a.maximum&&Number(a.minimum)>Number(a.maximum));
+ const linkOk=a.linkType!=='custom'||!String(a.customUrl||'').trim()||L.safeUrl(a.customUrl);
+ const checks=[
+   {name:'Titre de l’activité',ok:!!title,severe:true},
+   {name:'Date de l’activité',ok:hasDate&&datesOk,severe:!datesOk},
+   {name:'Prix extérieur / tarif',ok:outside,severe:true},
+   {name:'Cohérence des inscriptions',ok:regOk,severe:true},
+   {name:'Participants min. / max.',ok:participantsOk,severe:true},
+   {name:'Lien personnalisé valide',ok:linkOk,severe:true},
+   {name:'Photo de l’activité',ok:!!(a.photoData||a.photoUrl||demoPhoto(a)),severe:false},
+   {name:'Description à relire',ok:!!String(a.summary||'').trim(),severe:false},
+ ];
+ return {checks,blocking:checks.filter(c=>!c.ok&&c.severe),complete:checks.filter(c=>c.ok).length};
 }
-// Events
-for(const key of FORM_FIELDS){$(key).addEventListener('input',()=>{activity[key]=$(key).value;if(key==='photoUrl'&&activity.photoUrl)activity.photoData='';render();setDirty()})}
-$('photoFile').addEventListener('change',e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>4*1024*1024){notify('Image trop lourde (> 4 Mo) : compressez-la avant import.',true);return}if(!/^image\/(png|jpeg|webp)$/.test(f.type)){notify('Format non pris en charge : utilisez PNG, JPEG ou WebP.',true);return}const fr=new FileReader();fr.onload=()=>{activity.photoData=fr.result;activity.photoUrl='';$('photoUrl').value='';render();setDirty();notify('Photo ajoutée à la fiche')};fr.readAsDataURL(f)});
-$('pPhoto').addEventListener('error',()=>{$('pPhoto').src='assets/sri-lanka.jpg'});
-$('saveActivity').addEventListener('click',saveActivity);
-$('newActivity').addEventListener('click',()=>{activity=makeBlank();activeId=null;renderForm();render();setDirty();notify('Nouvelle activité créée')});
-$('duplicateActivity').addEventListener('click',()=>{activity={...activity,title:activity.title+' (copie)',rates:[...activity.rates]};activeId=null;renderForm();render();setDirty();notify('Activité dupliquée')});
-$('saveRates').addEventListener('click',()=>{defaultRates=[...activity.rates];try{localStorage.setItem(STORAGE_RATES,JSON.stringify(defaultRates));notify('Nouveau barème enregistré pour les prochaines activités.')}catch{notify('Stockage local indisponible',true)}});
-$('exportProject').addEventListener('click',exportProject);
-$('importProject').addEventListener('change',e=>{const f=e.target.files?.[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{const d=JSON.parse(reader.result);const v=d.activity||d;if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Fiche invalide');activity=clean(v);activeId=null;renderForm();render();setDirty();notify('Fiche importée depuis JSON')}catch(err){notify('Fichier JSON invalide : '+err.message,true)}};reader.readAsText(f)});
-$('exportCSV').addEventListener('click',exportCSV);
-$('exportPptx').addEventListener('click',exportPPTX);$('exportPptxBottom').addEventListener('click',exportPPTX);
-$('printSlide').addEventListener('click',()=>window.print());
-$('activityForm').addEventListener('submit',e=>e.preventDefault());
-window.addEventListener('resize',fitSlide);if(window.ResizeObserver)new ResizeObserver(fitSlide).observe($('slideMount'));
-renderForm();renderLibrary();render();
-window.CSEStudio={getActivity:()=>structuredClone(activity),getPricing:pricing,getPortalUrl:()=>PORTAL_URL,getCanvaUrl:()=>CANVA_URL};
+function renderPreflight(){const target=$('preflightChecks');if(!target)return;const p=preflight(activity);target.innerHTML='';p.checks.forEach(check=>{const row=document.createElement('div');row.className='check-item '+(check.ok?'ok':check.severe?'bad':'warn');row.textContent=(check.ok?'✓ ':check.severe?'✕ ':'! ')+check.name;target.append(row)});const status=activity.editorialStatus||'draft';const badge=$('reviewBadge');badge.textContent=editorialNames[status]||'Brouillon';badge.className='review-badge '+status;$('markApproved').disabled=!!p.blocking.length;$('markApproved').title=p.blocking.length?'Renseigner les éléments obligatoires avant validation':''}
+function setEditorial(status){if(status==='approved'&&preflight().blocking.length){notify('Corrige les points bloquants avant de valider cette activité.',true);$('preflightChecks').scrollIntoView({behavior:'smooth',block:'center'});return}activity.editorialStatus=status;$('editorialStatus').value=status;renderPreflight();dirty();saveActivity()}
+
+function saveActivity(){if(!activity.title.trim()){notify('Le titre de l’activité est obligatoire.',true);$('title').focus();return}activeId ||= 'act-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);activities[activeId]={...activity,updatedAt:new Date().toISOString()};if(store(KEYS.activities,activities)){$('saveState').textContent='● Activité enregistrée';renderLibrary();notify('Activité enregistrée sur ce navigateur.')}}
+function renderLibrary(){
+ const root=$('activityLibrary');root.innerHTML='';const filter=$('librarySearch').value.toLocaleLowerCase('fr');const statusFilter=$('libraryFilter')?.value||'all';
+ const keys=Object.keys(activities).filter(k=>{
+  const a=activities[k];return String(a?.title||'').toLocaleLowerCase('fr').includes(filter)&&(statusFilter==='all'||(a.editorialStatus||'draft')===statusFilter)
+ }).sort((x,y)=>String(activities[y]?.updatedAt||'').localeCompare(String(activities[x]?.updatedAt||'')));
+ $('libraryCount').textContent=Object.keys(activities).length;
+ if(!keys.length){const e=document.createElement('p');e.className='library-empty';e.textContent='Aucune activité correspondante.';root.append(e);return}
+ keys.forEach(id=>{
+  const row=document.createElement('div');row.className='library-row';
+  const title=document.createElement('strong');title.textContent=activities[id].title||'Activité';title.title=title.textContent;row.append(title);
+  const tag=document.createElement('span');tag.className='editorial-label '+(activities[id].editorialStatus||'draft');tag.textContent=editorialNames[activities[id].editorialStatus]||'Brouillon';row.append(tag);
+  const open=document.createElement('button');open.type='button';open.textContent='Ouvrir';open.onclick=()=>{activity=normalize(activities[id]);activeId=id;renderForm();render();dirty();$('saveState').textContent='● Activité enregistrée'};
+  const del=document.createElement('button');del.type='button';del.textContent='Suppr.';del.className='delete';del.onclick=()=>{if(confirm('Supprimer « '+activities[id].title+' » de ce navigateur ?')){delete activities[id];if(activeId===id)activeId=null;store(KEYS.activities,activities);renderLibrary()}};
+  row.append(open,del);root.append(row);
+ });
+}
+function exportJSON(){download(JSON.stringify({schema:'cse-studio:2',date:new Date().toISOString(),activity},null,2),'application/json','CSE_'+fileName(activity.title)+'.json');notify('Fiche JSON téléchargée.')}
+function csvEscape(s){return '"'+String(s??'').replaceAll('"','""')+'"'}
+function exportCSV(){const vals={TEMPLATE:activity.template,TITRE:activity.title,CATEGORIE:activity.category,SOUS_TITRE:activity.subtitle,VILLE:activity.location,LIEU:activity.venue,DATE:P.dateRange(activity.activityStart,activity.activityEnd),DESCRIPTION:activity.summary,TEMPS_FORTS:L.list(activity.highlights).join(' • '),PRESTATIONS:L.list(activity.included).join(' • '),FORMALITES:activity.administrative,AVERTISSEMENT:activity.warning,STATUT:L.statusLabel(activity),FIN_INSCRIPTIONS:P.toFrDate(activity.registrationEnd),PRIX_EXTERIEUR:euro(activity.outsidePrice),CONDITIONS:activity.conditions,CONTACT:activity.contact,POINTS:activity.points,MINIMUM:activity.minimum,MAXIMUM:activity.maximum,LIEN:L.effectiveUrl(activity),CTA:activity.ctaLabel};const rows=P.compute(activity.outsidePrice,activity.pricingMode,activity.rates,activity.fixedRate,activity.fixedEuro);for(let i=0;i<10;i++)vals['T'+(i+1)]=activity.pricingMode==='tranches'?euro(rows[i].price):'';vals.PRIX_UNIQUE=activity.pricingMode!=='tranches'?euro(rows[0].price):'';const keys=Object.keys(vals);download('\ufeff'+keys.map(csvEscape).join(';')+'\r\n'+keys.map(k=>csvEscape(vals[k])).join(';')+'\r\n','text/csv;charset=utf-8','CSE_'+fileName(activity.title)+'.csv');notify('CSV généré.')}
+function readPhoto(file,which){if(!file)return;if(file.size>4*1024*1024)return notify('La photo dépasse 4 Mo. Réduisez sa taille avant import.',true);if(!/^image\/(png|jpeg|webp)$/.test(file.type))return notify('Utilisez une image JPG, PNG ou WebP.',true);const r=new FileReader();r.onload=()=>{activity[which]=r.result;if(activity.editorialStatus==='approved'){activity.editorialStatus='review';$('editorialStatus').value='review'}if(which==='photoData'){activity.photoUrl='';$('photoUrl').value=''}render();dirty();notify('Photo importée avec succès')};r.onerror=()=>notify('Impossible de lire la photo',true);r.readAsDataURL(file)}
+async function fetchImage(src){if(!src)return null;if(/^data:image\//.test(src))return src;const resp=await fetch(src,{cache:'no-store'});if(!resp.ok)throw Error('HTTP '+resp.status+' : '+src);const blob=await resp.blob();if(!blob.type.startsWith('image/'))throw Error('Format non image');return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob)})}
+async function imageCropPng(data,targetW,targetH){return await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{try{const c=document.createElement('canvas');c.width=Math.ceil(targetW*2);c.height=Math.ceil(targetH*2);const ctx=c.getContext('2d');const scale=Math.max(c.width/im.naturalWidth,c.height/im.naturalHeight);const w=im.naturalWidth*scale,h=im.naturalHeight*scale;ctx.drawImage(im,(c.width-w)/2,(c.height-h)/2,w,h);resolve(c.toDataURL('image/png'))}catch(e){reject(e)}};im.onerror=()=>reject(Error('Décodage image impossible'));im.src=data})}
+async function imageContainPng(data,targetW,targetH){return await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{try{const c=document.createElement('canvas');c.width=Math.ceil(targetW*2);c.height=Math.ceil(targetH*2);const ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.drawImage(im,0,0,w,h);resolve(c.toDataURL('image/png'))}catch(e){reject(e)}};im.onerror=()=>reject(Error('Décodage impossible'));im.src=data})}
+async function loadPicture(which,cache,warnings,a=activity){if(which in cache)return cache[which];const source=photoSource(a,which);const options=which==='banner'?[source,'bandeau-cse.jpg']:which==='primary'?[source]:which==='secondary'?[source,photoSource(a,'primary')]:[];for(const item of [...new Set(options.filter(Boolean))]){try{const data=await fetchImage(item);return cache[which]=data}catch(err){console.warn('[CSE Studio V3]',err);warnings.push('Image inaccessible : '+which)}}return cache[which]=null}
+function pptColor(v){const s=String(v||'FFFFFF').replace(/^#/,'');const c=/^[0-9a-f]{3}$/i.test(s)?s.split('').map(x=>x+x).join(''):s;return /^[0-9a-f]{6}$/i.test(c)?c.toUpperCase():'FFFFFF'}
+async function appendPowerPointSlide(pptx,a,warnings){
+ const slide=pptx.addSlide();slide.background={color:'FFFFFF'};
+ const Sh=pptx.ShapeType,inch=n=>n/90,cache={};const layout=L.render(a,P);
+ const needed=[...new Set(layout.elements.filter(x=>x.type==='image').map(x=>x.which))];
+ await Promise.all(needed.map(which=>loadPicture(which,cache,warnings,a)));
+ for(const item of layout.elements){
+  const g={x:inch(item.x),y:inch(item.y),w:inch(item.w),h:inch(item.h)};
+  if(item.type==='box'){
+   const sh=item.radius?Sh.roundRect:Sh.rect;
+   slide.addShape(sh,{...g,rectRadius:item.radius?0.12:undefined,line:{color:pptColor(item.stroke||item.fill||'#fff'),transparency:item.stroke?0:100,width:item.stroke?.8:0},fill:{color:pptColor(item.fill||'#fff')}});continue;
+  }
+  if(item.type==='image'){
+   if(cache[item.which]){try{
+    const data=item.which==='banner'?await imageContainPng(cache[item.which],item.w,item.h):await imageCropPng(cache[item.which],item.w,item.h);
+    slide.addImage({data,...g})
+   }catch(err){warnings.push('Image non décodable : '+item.which);slide.addShape(Sh.rect,{...g,line:{color:'E0E8F5'},fill:{color:'EDF2FA'}})}}
+   else{slide.addShape(Sh.rect,{...g,line:{color:'E0E8F5'},fill:{color:'EDF2FA'}});slide.addText(item.which==='banner'?'BANDEAU CSE':'PHOTO À AJOUTER',{...g,fontFace:'Arial',fontSize:12,color:'6A7D99',bold:true,align:'center',valign:'mid',margin:0})}
+   continue;
+  }
+  const options={...g,margin:0,fontFace:'Arial',fontSize:Math.max(6,(item.size||15)*0.75),bold:!!item.bold,color:pptColor(item.color||'#172948'),align:item.align||'left',valign:item.top?'top':'mid',fit:'shrink',breakLine:false};
+  if(item.type==='link')options.hyperlink={url:item.url};
+  slide.addText(String(item.text||''),options);
+ }
+ return layout;
+}
+async function exportPPTX(){
+ if(!activity.title.trim()){notify('Renseignez le titre avant l’export.',true);$('title').focus();return}
+ const buttons=[$('exportPptx'),$('exportPptxBottom')];buttons.forEach(b=>b.disabled=true);$('exportPptx').textContent='Export en cours…';
+ try{
+  const Ctor=window.PptxGenJS;if(!Ctor)throw Error('Module PowerPoint non chargé : vérifier le dossier vendor.');
+  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Activité CSE Studio V3';pptx.title=activity.title;pptx.lang='fr-FR';
+  const warnings=[];const lay=await appendPowerPointSlide(pptx,activity,warnings);
+  await pptx.writeFile({fileName:'CSE_V3_'+fileName(activity.title)+'_'+lay.type+'.pptx'});
+  notify('PowerPoint généré · '+(L.CHOICES.find(x=>x.id===lay.type)?.name||lay.type)+(warnings.length?' (images à contrôler)':''));
+ }catch(err){console.error(err);notify('Export PowerPoint impossible : '+err.message,true)}
+ finally{buttons.forEach(b=>b.disabled=false);$('exportPptx').textContent='↓ Exporter PowerPoint'}
+}
+async function exportAllPptx(){
+ const candidates=Object.values(activities).filter(a=>a?.editorialStatus==='approved'&&a.title&&preflight(a).blocking.length===0).sort((a,b)=>(a.title||'').localeCompare(b.title||'','fr'));
+ if(!candidates.length){notify('Aucune activité validée dans la bibliothèque. Enregistre et valide au moins une fiche.',true);return}
+ if(candidates.length>25){notify('Export groupé limité à 25 activités. Exporte les activités supplémentaires individuellement ou répartis-les dans plusieurs bibliothèques.',true);return}
+ const btn=$('exportAllPptx');btn.disabled=true;btn.textContent='Création du dossier…';
+ try{
+  const Ctor=window.PptxGenJS;if(!Ctor)throw Error('Module PowerPoint non chargé.');
+  const pptx=new Ctor();pptx.layout='LAYOUT_WIDE';pptx.author='CSE Thales LAS Massy';pptx.subject='Activités validées CSE Studio V3';pptx.title='Activités du CSE';pptx.lang='fr-FR';
+  const warnings=[];for(const a of candidates)await appendPowerPointSlide(pptx,normalize(a),warnings);
+  await pptx.writeFile({fileName:'CSE_V3_Lot_'+candidates.length+'_activites.pptx'});
+  notify(candidates.length+' diapositives réunies dans un PowerPoint'+(warnings.length?' · vérifier les images':''));
+ }catch(err){console.error(err);notify('Export groupé impossible : '+err.message,true)}
+ finally{btn.disabled=false;btn.textContent='↓ PPTX groupé · Activités validées'}
+}
+function exportLibraryJSON(){
+ const rows=Object.values(activities);if(!rows.length){notify('Enregistre d’abord une activité.',true);return}
+ download(JSON.stringify({schema:'cse-studio:3-library',exportedAt:new Date().toISOString(),activities:rows},null,2),'application/json','CSE_Studio_Bibliotheque_'+new Date().toISOString().slice(0,10)+'.json');
+ notify(rows.length+' fiches sauvegardées au format JSON.');
+}
+function importLibraryJSON(file){if(!file)return;if(file.size>15*1024*1024){notify('Fichier trop volumineux (max. 15 Mo).',true);return}
+ const reader=new FileReader();reader.onload=()=>{try{
+  const obj=JSON.parse(reader.result);if(obj.schema!=='cse-studio:3-library'||!Array.isArray(obj.activities)||obj.activities.length>200)throw Error('Format de bibliothèque invalide.');
+  const next={...activities};for(const row of obj.activities){if(!row||typeof row!=='object'||Array.isArray(row))continue;const a=normalize(row);if(!a.title)continue;const id='act-import-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);next[id]={...a,updatedAt:new Date().toISOString()}}
+  if(store(KEYS.activities,next)){activities=next;renderLibrary();notify('Bibliothèque importée : '+obj.activities.length+' entrées proposées.')}else notify('Import annulé : espace de stockage insuffisant.',true)
+ }catch(err){notify('Import impossible : '+err.message,true)}};
+ reader.onerror=()=>notify('Fichier illisible.',true);reader.readAsText(file);
+}
+function copyImagePrompt(){
+ const a=activity;const prompt=['Créer une photographie professionnelle pour une diapositive de communication du CSE Thales LAS Massy.','Sujet : '+(a.title||'activité du CSE')+'.','Catégorie : '+(a.category||'loisirs')+'.','Lieu : '+(a.location||a.venue||'à préciser')+'.','Ambiance : lumineuse, réaliste, accueillante et de qualité éditoriale.','Format paysage 16:9. Aucun texte, logo, badge, encadrement ni filigrane dans l’image.','Description de l’activité : '+String(a.summary||'').slice(0,450)].join('\n');
+ if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>notify('Brief d’image copié. À coller dans l’outil IA de ton choix.')).catch(()=>fallbackCopy(prompt))}
+ else fallbackCopy(prompt);
+}
+function fallbackCopy(value){const area=document.createElement('textarea');area.value=value;document.body.append(area);area.select();const ok=document.execCommand('copy');area.remove();notify(ok?'Brief d’image copié.':'Impossible de copier le brief automatiquement.',!ok)}
+
+for(const k of FIELDS){const el=$(k);el.addEventListener('input',()=>{activity[k]=el.value;if(k==='editorialStatus'&&el.value==='approved'&&preflight().blocking.length){activity.editorialStatus='review';el.value='review';notify('Complète les points obligatoires avant validation.',true)}if(k!=='editorialStatus'&&activity.editorialStatus==='approved'){activity.editorialStatus='review';$('editorialStatus').value='review'}if(k==='photoUrl'&&el.value)activity.photoData='';render();dirty()})}
+$('newActivity').addEventListener('click',()=>{activity=blank();activeId=null;renderForm();render();dirty();notify('Nouvelle fiche créée')});$('saveActivity').addEventListener('click',saveActivity);$('duplicateActivity').addEventListener('click',()=>{activity={...activity,title:(activity.title||'Activité')+' (copie)',rates:[...activity.rates]};activeId=null;renderForm();render();dirty();notify('Activité dupliquée')});$('saveRates').addEventListener('click',()=>{defaultRates=[...activity.rates];store(KEYS.rates,defaultRates);notify('Barème enregistré comme valeur par défaut')});$('librarySearch').addEventListener('input',renderLibrary);$('exportProject').addEventListener('click',exportJSON);$('importProject').addEventListener('change',e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);const a=o.activity||o;if(!a||typeof a!=='object'||Array.isArray(a))throw Error('Fiche invalide');activity=normalize(a);activeId=null;renderForm();render();dirty();notify('Fiche importée')}catch(err){notify('JSON invalide : '+err.message,true)}};r.readAsText(f);e.target.value=''});$('photoFile').addEventListener('change',e=>readPhoto(e.target.files?.[0],'photoData'));$('photo2File').addEventListener('change',e=>readPhoto(e.target.files?.[0],'photo2Data'));$('exportCSV').addEventListener('click',exportCSV);$('exportPptx').addEventListener('click',exportPPTX);$('exportPptxBottom').addEventListener('click',exportPPTX);$('printSlide').addEventListener('click',()=>window.print());$('activityForm').addEventListener('submit',e=>e.preventDefault());window.addEventListener('resize',fitSlide);if(window.ResizeObserver)new ResizeObserver(fitSlide).observe($('slideMount'));
+$('markReview').addEventListener('click',()=>setEditorial('review'));
+$('markApproved').addEventListener('click',()=>setEditorial('approved'));
+$('libraryFilter').addEventListener('change',renderLibrary);
+$('exportLibraryJSON').addEventListener('click',exportLibraryJSON);
+$('importLibraryJSON').addEventListener('change',e=>{importLibraryJSON(e.target.files?.[0]);e.target.value=''});
+$('exportAllPptx').addEventListener('click',exportAllPptx);
+$('copyImagePrompt').addEventListener('click',copyImagePrompt);
+
+renderForm();renderLibrary();render();window.CSEStudioV3={getActivity:()=>JSON.parse(JSON.stringify(activity)),getPrices:()=>P.compute(activity.outsidePrice,activity.pricingMode,activity.rates,activity.fixedRate,activity.fixedEuro),getLayout:()=>L.render(activity,P),getPreflight:()=>preflight(),getLibrary:()=>JSON.parse(JSON.stringify(activities)),exportPPTX,exportAllPptx};window.CSEStudioV2=window.CSEStudioV3;
 })();
