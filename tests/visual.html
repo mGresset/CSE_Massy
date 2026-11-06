@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CSE Studio V9 · Planche de contrôle visuel</title>
+<base href="../">
+<link rel="stylesheet" href="css/slide.css">
+<style>
+  body{margin:0;padding:16px;background:#eef1f6;font:14px/1.4 Arial,sans-serif;color:#1f2937}
+  h1{font-size:18px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--w,560px),1fr));gap:18px}
+  figure{margin:0}
+  figcaption{font-size:12px;color:#56657c;margin-top:6px}
+  figcaption b{color:#1c3474}
+  .warn{color:#b42318}
+  .controls{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+<h1>Planche de contrôle visuel — MEL de démonstration fictif</h1>
+<div class="controls">
+  <label>Date de référence <input type="date" id="ref"></label>
+  <label>Largeur <select id="w"><option>420px</option><option selected>560px</option><option>800px</option><option>1200px</option></select></label>
+  <span id="count"></span>
+</div>
+<div class="grid" id="grid"></div>
+<script src="js/core/dates.js"></script>
+<script src="js/pricing.js"></script>
+<script src="js/engine/metrics.js"></script>
+<script src="js/core/model.js"></script>
+<script src="js/core/compose.js"></script>
+<script src="js/engine/layout.js"></script>
+<script src="js/engine/templates.js"></script>
+<script src="js/engine/render-html.js"></script>
+<script src="js/core/images.js"></script>
+<script src="js/core/demo-art.js"></script>
+<script src="js/core/demo.js"></script>
+<script>
+(function () {
+  var C = window.CSE, params = new URLSearchParams(location.search);
+  var ref = params.get('ref') || C.dates.todayParis();
+  document.getElementById('ref').value = ref;
+  function photo(theme) { return params.get('nophoto') ? '' : 'img:demo-' + theme; }
+  function draw() {
+    var map = {};
+    C.demoArt.themes.forEach(function (t) { map['img:demo-' + t] = C.demoArt.paint(t, 900, 600); });
+    return C.images.importMap(map).then(function () {
+      var p = C.demo.build(ref, photo);
+      var issue = p.issues[0];
+      if (params.get('split')) issue.pages.forEach(function (pg) { pg.split = true; });
+      if (params.get('numbers')) issue.numbering = true;
+      var out = C.templates.renderIssue(p, issue);
+      var only = Number(params.get('only') || 0);
+      if (only) {
+        // Mode capture : une seule diapositive en 1200 × 675, sans légende (comparaison avec PowerPoint).
+        var all = []; out.forEach(function (r) { r.slides.forEach(function (s) { all.push(s); }); });
+        document.body.style.cssText = 'margin:0;padding:0;background:#fff';
+        document.body.replaceChildren();
+        var host = document.createElement('div'); host.style.cssText = 'position:relative;width:1200px;height:675px;overflow:hidden';
+        document.body.appendChild(host);
+        C.renderHTML.render(all[only - 1], host, { checkOverflow: false });
+        host.querySelector('.cse-slide').classList.add('cse-print');
+        window.__ready = true;
+        return;
+      }
+      var grid = document.getElementById('grid'); grid.replaceChildren();
+      var n = 0;
+      out.forEach(function (r) {
+        r.slides.forEach(function (s) {
+          n++;
+          var fig = document.createElement('figure');
+          var frame = document.createElement('div'); frame.className = 'cse-frame';
+          fig.appendChild(frame);
+          var cap = document.createElement('figcaption');
+          grid.appendChild(fig);
+          var res = C.renderHTML.render(s, frame, {});
+          C.renderHTML.fit(frame);
+          var warn = s.warnings.filter(function (w) { return w.level !== 'info'; }).map(function (w) { return w.msg; });
+          if (res.domOverflow.length) warn.push('Débordement DOM : ' + res.domOverflow.join(', '));
+          cap.innerHTML = '<b>' + n + '. ' + s.templateId + '</b> · police min ' + (s.minBody || '—') + (warn.length ? ' · <span class="warn">' + warn.join(' | ') + '</span>' : '');
+          fig.appendChild(cap);
+        });
+      });
+      document.getElementById('count').textContent = n + ' diapositives';
+      window.__ready = true;
+    });
+  }
+  document.getElementById('ref').onchange = function (e) { params.set('ref', e.target.value); location.search = params.toString(); };
+  document.getElementById('w').onchange = function (e) { document.getElementById('grid').style.setProperty('--w', e.target.value); document.querySelectorAll('.cse-frame').forEach(C.renderHTML.fit); };
+  addEventListener('resize', function () { document.querySelectorAll('.cse-frame').forEach(C.renderHTML.fit); });
+  C.images.init().then(draw);
+})();
+</script>
+</body>
+</html>

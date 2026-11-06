@@ -1,0 +1,20 @@
+/* CSE Studio V9 · Rendu des diapositives (géométrie partagée avec l'export PowerPoint).
+ * Arial, interligne 1,2, aucune marge interne, pas de crénage : mêmes règles que le PPTX. */
+.cse-frame{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#fff;border-radius:6px;box-shadow:0 1px 3px rgba(20,35,70,.18),0 8px 24px rgba(20,35,70,.08)}
+.cse-slide{position:absolute;left:0;top:0;width:1200px;height:675px;transform-origin:0 0;background:#fff;overflow:hidden;
+  font-family:Arial,"Liberation Sans",Helvetica,sans-serif;font-kerning:none;font-variant-ligatures:none;letter-spacing:0;-webkit-font-smoothing:antialiased}
+.cse-slide>*{position:absolute;box-sizing:border-box;margin:0}
+.cse-shape{pointer-events:none}
+.cse-shape.cse-act,.cse-text.cse-act{pointer-events:auto;cursor:pointer}
+.cse-shape.cse-act:hover{outline:3px solid rgba(47,93,168,.65);outline-offset:-3px}
+.cse-img{display:block;pointer-events:none}
+.cse-img-broken,.cse-img-missing{background:repeating-linear-gradient(45deg,#eef2f8 0 10px,#e3e9f3 10px 20px)}
+.cse-img-missing{display:flex;align-items:center;justify-content:center;color:#6b7a92;font:700 14px Arial,sans-serif}
+.cse-text{overflow:visible;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;display:flex;flex-direction:column;justify-content:flex-start;padding:0}
+.cse-text.mid{justify-content:center}
+.cse-text-inner{width:100%}
+.cse-p{min-height:1em}
+.cse-text a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.cse-overflow::after,.cse-dom-overflow::after{content:"";position:absolute;inset:-3px;border:2px dashed #e03131;border-radius:4px;pointer-events:none}
+.cse-num{right:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;font:700 18px Arial;padding:2px 8px;border-radius:6px}
+.cse-print .cse-overflow::after,.cse-print .cse-dom-overflow::after{display:none}
