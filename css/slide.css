@@ -14,6 +14,7 @@
 .cse-text.mid{justify-content:center}
 .cse-text-inner{width:100%}
 .cse-p{min-height:1em}
+.cse-p.cse-gap{min-height:0}
 .cse-text a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .cse-text a.cse-mail{text-decoration:none;border-radius:3px}
 .cse-text a.cse-mail:hover,.cse-text a.cse-mail:focus-visible{text-decoration:underline;outline:2px solid currentColor;outline-offset:1px}

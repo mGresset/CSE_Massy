@@ -27,7 +27,7 @@ test('10 tranches : petit rectangle en bas à gauche, trois rangées et aucune t
   assert.equal(b.x, 40, 'alignement à gauche');
   assert.ok(b.w <= 470, 'rectangle ≤ 40 % de la largeur');
   assert.ok(b.y >= 450, 'ancré en bas');
-  assert.ok(b.h <= 67, 'hauteur compacte sans notes');
+  assert.ok(b.h <= 92, 'hauteur compacte sans notes (V10 : 3 rangées en 10,8 pt)');
   assert.ok(b.y + b.h <= 590, 'la grille ne touche pas le pied de page');
   const rows = tiers(s, C.metrics);
   assert.equal(rows.length, 10, '10 tarifs affichés');
@@ -38,7 +38,7 @@ test('10 tranches : petit rectangle en bas à gauche, trois rangées et aucune t
 test('notes de tarifs, prix extérieur : toutes les informations sont préservées', () => {
   const s = render({ enabled: true, mode: 'tranches', outside: '3000', label: 'Chambre double', notes: 'Supplément individuel : 150 €' })[0];
   const b = priceBox(s);
-  assert.ok(b.h <= 81, 'cartouche avec note reste compact');
+  assert.ok(b.h <= 92, 'note courte intégrée sans hauteur supplémentaire');
   assert.ok(priceText(s).some(x => C.metrics.plain(x.paras).includes('Extérieur')));
   assert.ok(s.items.some(x => x.field === 'notes tarifs' && !x.overflow), 'supplément lisible');
   assert.ok(!s.overflow);

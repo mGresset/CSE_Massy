@@ -28,8 +28,17 @@
   /* Seuils de lisibilité, en px de diapositive (1 px = 0,8 pt dans PowerPoint) :
    *   corps de texte : 15 px = 12 pt minimum, cible 17,5–20 px = 14–16 pt ;
    *   titres : 22 px = 17,6 pt minimum ; petites métadonnées (libellés, mentions) : 11 px = 8,8 pt. */
-  var MIN = { body: 15, compactBody: 15, small: 11, title: 22 };
+  var MIN = { body: 15, compactBody: 13.75, small: 12.5, title: 28 };
   var PT = 0.8;
+  /* Jetons de conception V10 (px de diapositive ; 1 px = 0,8 pt) : marges, espacements, rayons et tailles
+   * communs à tous les modèles, pour des alignements identiques d'une diapositive à l'autre. */
+  var T = {
+    margin: 40, right: 1160, contentW: 1120, top: 186, headerTitleY: 220, bodyBottom: 590, footerY: 645, actionY: 600,
+    gap: { xs: 6, s: 10, m: 14, l: 22, col: 30 },
+    radius: { s: 6, m: 10, l: 14 },
+    font: { title: 34, titleMin: 28, sub: 19, body: 19, bodyTarget: 17.5, bodyMin: 15, label: 12.5, info: 15.5 },
+    lh: 1.2
+  };
   var M = function () { return CSE.metrics; };
 
   function Builder(ctx) {
@@ -60,10 +69,30 @@
   B.image = function (src, x, y, w, h, o) {
     o = o || {};
     if (!src || w <= 0 || h <= 0) return null;
-    var it = { t: 'image', x: x, y: y, w: w, h: h, src: src, fit: o.fit || 'cover', role: o.role || 'photo' };
+    var meta = o.meta || photoMeta(this.ctx, src);
+    var it = { t: 'image', x: x, y: y, w: w, h: h, src: src, fit: o.fit || meta.fit || 'cover', role: o.role || 'photo' };
+    if (meta.fx !== undefined || meta.fy !== undefined) { it.fx = clampPct(meta.fx); it.fy = clampPct(meta.fy); }
+    if (meta.alt) it.alt = String(meta.alt).slice(0, 200);
     this.items.push(it);
     return it;
   };
+  /** État d'une image : prête (octets locaux), distante non importée (CORS possible) ou introuvable. */
+  function imageStatus(src) {
+    if (!src) return 'missing';
+    if (/^assets\//.test(src) || /^data:image\//.test(src)) return 'ready';
+    var I = CSE.images;
+    if (I && typeof I.status === 'function') return I.status(src);
+    return 'ready';
+  }
+  /** Cadrage choisi pour une photo (point focal, cover/contain) : fiche affichée puis bibliothèque. */
+  function photoMeta(ctx, src) {
+    var it = ctx && ctx.item;
+    if (it && it.photoMeta && it.photoMeta[src]) return it.photoMeta[src];
+    var items = ctx && ctx.project && ctx.project.items || [];
+    for (var i = 0; i < items.length; i++) if (items[i].photoMeta && items[i].photoMeta[src]) return items[i].photoMeta[src];
+    return {};
+  }
+  function clampPct(v) { var n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50; }
   /** Mesure sans dessiner. */
   B.measure = function (value, w, size, o) {
     o = o || {};
@@ -114,7 +143,7 @@
     if (ctx.pageNumber) {
       this.text(String(ctx.pageNumber), 1100, 649, 60, 22, { size: 14, min: 11, color: C.white, bold: true, align: 'right', role: 'label', noScale: true, maxLines: 1 });
     }
-    if (o.note) this.text(o.note, 40, 649, 900, 22, { size: 12, min: 10, color: '#E6EBFA', role: 'label', noScale: true, maxLines: 1, field: 'note de bas de page', important: false });
+    if (o.note) this.text(o.note, 40, 649, 900, 22, { size: 12.5, min: 11, color: '#E6EBFA', role: 'label', noScale: true, maxLines: 1, field: 'note de bas de page', important: false });
     var link = o.link || '';
     if (link && o.cta !== false) {
       var label = String(o.ctaLabel || 'Plus d’infos').trim() || 'Plus d’infos';
@@ -187,7 +216,7 @@
     var w = o.w || Math.min(o.maxW || 500, M().width(text, size, o.bold !== false) * 1.06 + 26);
     var px = o.align === 'right' ? x - w : o.align === 'center' ? x - w / 2 : x;
     this.rect(px, y, w, h, { fill: o.fill || C.navy, stroke: o.stroke, r: o.r !== undefined ? o.r : h / 2 });
-    this.text(text, px + 8, y, w - 16, h, { size: size, min: 9, bold: o.bold !== false, color: o.color || C.white, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, link: o.link });
+    this.text(text, px + 8, y, w - 16, h, { size: size, min: Math.min(size, 11), bold: o.bold !== false, color: o.color || C.white, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, link: o.link });
     return w;
   };
   /** Pictogramme dessiné (aucune police d'icônes : rendu identique dans PowerPoint). */
@@ -211,7 +240,17 @@
   /** Image ou panneau décoratif aux couleurs de la catégorie (jamais de texte « ajouter une image » exporté). */
   B.photo = function (src, x, y, w, h, o) {
     o = o || {};
-    if (src) { this.image(src, x, y, w, h, { fit: o.fit || 'cover' }); return true; }
+    if (src) {
+      var st = imageStatus(src);
+      if (st === 'ready') { this.image(src, x, y, w, h, { fit: o.fit }); return true; }
+      // Image non intégrable : erreur visible et bloquante à l'export (jamais un cadre gris silencieux).
+      this.rect(x, y, w, h, { fill: '#FFF4F2', stroke: '#E5484D', sw: 2, r: 4, role: 'image-error' });
+      var msg = st === 'remote' ? 'Image Web non importée' : 'Image introuvable';
+      if (w > 90 && h > 50) this.text(h > 90 ? [{ runs: [{ text: msg, bold: true }] }, { runs: [{ text: 'Réimporter le fichier ou coller l’image', bold: false }] }] : msg, x + 8, y + 8, w - 16, h - 16, { size: 13, min: 11, bold: true, color: '#B42318', align: 'center', valign: 'middle', role: 'label', noScale: true, field: 'photo' });
+      this.warnings.push({ level: 'block', code: 'image', src: src, status: st,
+        msg: st === 'remote' ? 'Photo liée à une adresse Web non importée : elle ne peut pas être intégrée au PowerPoint (CORS). Importer le fichier ou coller l’image.' : 'Photo introuvable dans le stockage local : la réimporter ou la retirer.' });
+      return false;
+    }
     if (o.placeholder === false) return false;
     var color = o.color || C.blue;
     this.rect(x, y, w, h, { fill: tint(color, 0.18) });
@@ -250,132 +289,172 @@
     });
     return cy - gap - y;
   };
-  /** Cartouche tarifaire 4 / 4 / (2 + extérieur) sur trois lignes resserrées.
-   *  Sa géométrie est identique dans l'aperçu HTML et l'export PPTX. */
-  /** Mesure réellement la place nécessaire au cartouche, y compris les compléments.
-   *  Les notes courtes sont intégrées en haut à droite, jamais isolées sous les dix tarifs. */
+  /* ---------- Cartouche tarifaire V10 : géométrie déterministe ----------
+   * Grille 4 / 4 / 2 : chaque colonne c commence au même x (T1, T5, T9 alignés à gauche) et
+   * les montants sont alignés à droite sur le même bord (symbole € aligné). « Extérieur » occupe
+   * les colonnes libres de la dernière ligne, aligné sur le bord droit des montants. Le supplément
+   * court est intégré en haut à droite ; un supplément long passe dans un encart interne, renvoyé
+   * à la ligne sans troncature. Les largeurs viennent des métriques Arial (metrics.js) et servent
+   * à l'aperçu comme au PowerPoint : aucun espace de calage, uniquement des x / largeurs calculés. */
+  var PG = { fs: 13.5, head: 13, out: 14, note: 12.5, rowH: 19, headH: 20, padT: 7, padB: 7, barX: 8, barW: 3, padL: 20, padR: 12, cellGap: 8, colGap: 16, noteLh: 1.2 };
+  function ceilHalf(v) { return Math.ceil(v * 2) / 2; }
   B.priceGridSize = function (pr, w) {
-    if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0, rows: 0 };
-    var P = CSE.pricing, n = pr.rows.length;
-    var cols = w >= 425 ? Math.min(4, n) : w >= 295 ? Math.min(3, n) : Math.min(2, n);
-    var rows = Math.ceil(n / cols);
-    var labelW = pr.rows.reduce(function (maxW, r) { return Math.max(maxW, M().width(String(r.label || ''), 12.1, true)); }, 0) + 4;
-    var amountW = pr.rows.reduce(function (maxW, r) { return Math.max(maxW, M().width(P.money(r.price), 12.1, true)); }, 0) + 4;
-    var cellGap = 6, cellW = Math.max(103, labelW + amountW + cellGap + 14);
+    if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, w: 0, actualW: 0, cols: 0, rows: 0 };
+    var P = CSE.pricing, n = pr.rows.length, S = M().SAFETY;
+    var labelW = ceilHalf(pr.rows.reduce(function (m, r) { return Math.max(m, M().width(String(r.label || ''), PG.fs, true)); }, 0) * S + 1);
+    var amountW = ceilHalf(pr.rows.reduce(function (m, r) { return Math.max(m, M().width(P.money(r.price), PG.fs, true)); }, 0) * S + 1);
+    var cellW = labelW + PG.cellGap + amountW;
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var lastCount = Math.min(cols, n - (rows - 1) * cols);
-    var outsideOnLastRow = !!outside && cols === 4 && lastCount === 2;
-    if (outsideOnLastRow) cellW = Math.max(cellW, (M().width(outside, 12.4, true) * 1.03 + 12) / 2);
-    var actualW = Math.min(w, 28 + cellW * cols);
+    var outW = outside ? ceilHalf(M().width(outside, PG.out, true) * S + 2) : 0;
+    var maxW = w || 1120;
+    var cols = Math.min(4, n);
+    function gridWidth(c, cw) { return c * cw + (c - 1) * PG.colGap; }
+    while (cols > 2 && PG.padL + gridWidth(cols, cellW) + PG.padR > maxW) cols--;
+    var rows = Math.ceil(n / cols), lastCount = n - (rows - 1) * cols;
+    // « Extérieur » sur la dernière ligne quand elle laisse au moins deux colonnes libres (cas 4 / 4 / 2).
+    var outsideOnLastRow = !!outside && rows > 1 && cols - lastCount >= 2;
+    if (outsideOnLastRow) {
+      var free = cols - lastCount, room = free * cellW + (free - 1) * PG.colGap;
+      if (outW > room - 6) cellW = Math.max(cellW, (outW + 6 - (free - 1) * PG.colGap) / free);
+    }
+    var gridW = gridWidth(cols, cellW);
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
+    var headW = ceilHalf(M().width(head, PG.head, true) * S + 2);
     var notes = String(pr.notes || '').trim();
-    var headW = M().width(head, 11, true) * 1.06;
-    var noteW = notes ? M().width(notes, 10.7, true) * 1.06 + 5 : 0;
-    var noteInline = !!notes && headW + noteW + 54 < actualW;
-    var h = 17 + rows * 14.6 + (notes && !noteInline ? 16 : 0);
-    return { h: h, cols: cols, rows: rows, labelW: labelW, amountW: amountW,
-      cellW: cellW, actualW: actualW, outsideOnLastRow: outsideOnLastRow,
-      noteInline: noteInline, noteW: noteW, headW: headW };
+    var noteW = notes ? ceilHalf(M().width(notes, PG.note, true) * S + 2) : 0;
+    var headRight = !outsideOnLastRow && outside ? outW : 0; // « Extérieur » en tête quand la dernière ligne est pleine
+    var innerW = Math.max(gridW, headW + (headRight ? headRight + 18 : 0));
+    var limit = maxW - PG.padL - PG.padR;
+    var colGap = PG.colGap, need = headW + 18 + noteW;
+    var noteInline = !!notes && !headRight && need <= Math.min(limit, Math.max(innerW, gridW * 1.35));
+    if (noteInline && need > gridW && cols > 1) {
+      // La grille s'élargit (espaces entre colonnes) pour que le supplément tienne sur la ligne de titre :
+      // son bord droit et celui des montants restent alignés.
+      colGap = (need - cols * cellW) / (cols - 1);
+      gridW = need;
+    }
+    if (noteInline) innerW = Math.max(innerW, need, gridW);
+    innerW = Math.min(innerW, limit);
+    var noteLines = 0, noteH = 0;
+    if (notes && !noteInline) {
+      noteLines = M().countLines(M().toParas(notes), innerW - 4, PG.note);
+      noteH = noteLines * PG.note * PG.noteLh + 14;
+    }
+    var h = PG.padT + PG.headH + rows * PG.rowH + PG.padB + noteH;
+    return { h: h, w: PG.padL + innerW + PG.padR, actualW: PG.padL + innerW + PG.padR, cols: cols, rows: rows, labelW: labelW, amountW: amountW, cellW: cellW,
+      gridW: gridW, innerW: innerW, colGap: colGap, outside: outside, outW: outW, outsideOnLastRow: outsideOnLastRow, headRight: headRight,
+      head: head, headW: headW, notes: notes, noteInline: noteInline, noteW: noteW, noteLines: noteLines, noteH: noteH, lastCount: lastCount };
   };
-  /** Cartouche 4 / 4 / (2 + extérieur), avec supplément intégré au bandeau de titre.
-   *  Une géométrie partagée garantit les mêmes alignements dans HTML et PPTX. */
+  /** Dessine le cartouche ; mémorise la géométrie (x des colonnes, bords droits des montants) pour les contrôles. */
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
-    w = g.actualW;
-    var padL = 14, padR = 14, top = y + 16.5, rowH = 14.6, self = this;
-    var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
-    var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var notes = String(pr.notes || '').trim();
-    var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols;
-    this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
-    // La barre d'accent reste à distance égale des deux extrémités du cartouche.
-    this.rect(x + 1, y + 11, 4, Math.max(8, g.h - 22), { fill: C.purple, r: 1.5 });
-    var titleW = g.noteInline ? Math.max(100, w - padL - padR - g.noteW - 24) : w - (padL + padR + 18);
-    this.text(head, x + padL + 18, y + 2, titleW, 13,
-      { size: 11, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    if (g.noteInline) {
-      this.text(notes, x + w - padR - g.noteW, y + 2, g.noteW, 13,
-        { size: 10.7, min: 9.5, bold: true, color: C.muted, align: 'right', maxLines: 1,
-          role: 'label', noScale: true, field: 'notes tarifs' });
-    }
-    var gridX = x + padL;
-    function drawCell(r, cx, cy) {
-      self.text([{ runs: [{ text: String(r.label || ''), bold: true, color: C.purple }] }], cx, cy, g.labelW, rowH,
-        { size: 12.1, min: 11, color: C.purple, valign: 'middle', align: 'left', maxLines: 1,
-          role: 'label', noScale: true, field: 'tarifs' });
-      self.text(P.money(r.price), cx + g.labelW + 6, cy, g.cellW - g.labelW - 6 - 14, rowH,
-        { size: 12.1, min: 11, color: C.dark, bold: true, valign: 'middle', align: 'right', maxLines: 1,
-          role: 'label', noScale: true, field: 'tarifs' });
-    }
+    var self = this, bw = g.w, gx = x + PG.padL, top = y + PG.padT + PG.headH;
+    this.rect(x, y, bw, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
+    // Filet violet intérieur : marges haute et basse identiques (8 px), sans toucher la bordure.
+    this.rect(x + PG.barX, y + 8, PG.barW, g.h - 16, { fill: C.purple, r: 1.5 });
+    var headRoom = g.innerW - (g.headRight ? g.headRight + 18 : g.noteInline ? g.noteW + 18 : 0);
+    this.text(g.head, gx, y + PG.padT, Math.min(g.headW, headRoom), PG.headH - 2,
+      { size: PG.head, min: 11, bold: true, color: C.purple, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    var right = gx + g.innerW;
+    if (g.headRight) this.text(g.outside, right - g.outW, y + PG.padT, g.outW, PG.headH - 2,
+      { size: PG.out, min: 12, bold: true, color: C.dark, align: 'right', valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    if (g.noteInline) this.text(g.notes, right - g.noteW, y + PG.padT, g.noteW, PG.headH - 2,
+      { size: PG.note, min: 11, bold: true, color: C.muted, align: 'right', valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'notes tarifs' });
+    var colX = [], amountRight = [];
+    for (var c = 0; c < g.cols; c++) { colX.push(gx + c * (g.cellW + g.colGap)); amountRight.push(gx + c * (g.cellW + g.colGap) + g.cellW); }
     pr.rows.forEach(function (r, i) {
-      var row = Math.floor(i / g.cols), col = i % g.cols;
-      var cy = top + row * rowH;
-      var cx;
-      if (row === lastRow && g.outsideOnLastRow) cx = gridX + col * g.cellW;
-      else {
-        var nLast = Math.min(g.cols, pr.rows.length - row * g.cols);
-        cx = gridX + (g.cols - nLast) * g.cellW / 2 + col * g.cellW;
-      }
-      drawCell(r, cx, cy);
+      var row = Math.floor(i / g.cols), col = i % g.cols, cy = top + row * PG.rowH;
+      self.text(String(r.label || ''), colX[col], cy, g.labelW, PG.rowH, { size: PG.fs, min: 11, bold: true, color: C.purple, valign: 'middle', align: 'left', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      self.text(P.money(r.price), amountRight[col] - g.amountW, cy, g.amountW, PG.rowH, { size: PG.fs, min: 11, bold: true, color: C.dark, valign: 'middle', align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
     });
-    if (outside) {
-      if (g.outsideOnLastRow) {
-        this.text(outside, gridX + 2 * g.cellW, top + lastRow * rowH, 2 * g.cellW - 14, rowH,
-          { size: 12.4, min: 11.2, bold: true, color: C.muted, valign: 'middle', align: 'right', maxLines: 1,
-            role: 'label', noScale: true, field: 'tarifs' });
-      } else {
-        var ow = Math.min(w - padL - padR, M().width(outside, 12.4, true) * 1.06 + 8);
-        this.text(outside, x + w - padR - ow, y + 2, ow, 13,
-          { size: 12.4, min: 11.2, bold: true, color: C.muted, align: 'right', maxLines: 1,
-            role: 'label', noScale: true, field: 'tarifs' });
-      }
+    if (g.outsideOnLastRow) {
+      var oy = top + (g.rows - 1) * PG.rowH, ox = colX[g.lastCount];
+      this.text(g.outside, ox, oy, amountRight[g.cols - 1] - ox, PG.rowH,
+        { size: PG.out, min: 12, bold: true, color: C.dark, align: 'right', valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
     }
-    if (notes && !g.noteInline) {
-      this.rect(x + padL + 14, y + g.h - 15, w - padL - padR - 14, 14,
-        { fill: C.lilac, r: 3 });
-      this.text(notes, x + padL + 20, y + g.h - 14.5, w - padL - padR - 25, 13,
-        { size: 10.7, min: 9.5, color: C.muted, maxLines: 1, align: 'left',
-          field: 'notes tarifs', noScale: true, role: 'label', important: false });
+    if (g.noteH) {
+      var ny = top + g.rows * PG.rowH + 4;
+      this.rect(gx - 6, ny, g.innerW + 10, g.noteH - 6, { fill: C.lilac, r: 4 });
+      this.text(g.notes, gx, ny + 4, g.innerW, g.noteH - 14,
+        { size: PG.note, min: 11, color: C.dark, maxLines: g.noteLines, role: 'label', noScale: true, field: 'notes tarifs' });
     }
+    this.priceGeometry = { x: x, y: y, w: bw, h: g.h, colX: colX, amountRight: amountRight, rows: g.rows, cols: g.cols, barY: y + 8, barH: g.h - 16 };
     return g.h;
   };
 
+  /* ---------- Informations pratiques ---------- */
+  var INFO = { label: 12.5, value: 15.5, padX: 12, padY: 7, gap: 10, maxCard: 300 };
   /** Informations pratiques : liste compacte (libellé + valeur), hauteur ajustée au contenu. */
   B.infoRowHeight = function (r, w) {
-    var lines = Math.min(3, M().countLines(M().toParas(r.value, { bold: true }), w - 24, 15.5));
-    return 8 + 14 + 2 + lines * 15.5 * 1.2 + 8;
+    var lines = Math.min(3, M().countLines(M().toParas(r.value, { bold: true }), w - 2 * INFO.padX, INFO.value));
+    return INFO.padY + 15 + 2 + lines * INFO.value * 1.2 + INFO.padY;
   };
   B.infoPanelSize = function (rows, w) {
     var self = this;
-    return rows.reduce(function (h, r) { return h + self.infoRowHeight(r, w); }, 0) + 12;
+    return rows.reduce(function (h, r) { return h + self.infoRowHeight(r, w); }, 0) + 8;
   };
-  B.infoPanel = function (rows, x, y, w) {
+  /** Panneau vertical ; hFill étire légèrement les lignes pour occuper la hauteur disponible. */
+  B.infoPanel = function (rows, x, y, w, hFill) {
     if (!rows.length) return 0;
-    var self = this, h = this.infoPanelSize(rows, w), cy = y + 6;
+    var self = this, h = this.infoPanelSize(rows, w), extra = hFill && hFill > h ? Math.min(14, (hFill - h) / rows.length) : 0, cy = y + 4;
+    h += extra * rows.length;
     this.rect(x, y, w, h, { fill: C.lighter, stroke: C.border, r: 10 });
     rows.forEach(function (r, i) {
-      var rh = self.infoRowHeight(r, w);
-      if (i) self.rect(x + 12, cy, w - 24, 1, { fill: C.border });
-      self.text(r.label, x + 12, cy + 8, w - 24, 14, { size: 11, min: 9, bold: true, color: C.muted, upper: true, maxLines: 1, role: 'label', noScale: true });
-      self.text(r.value, x + 12, cy + 24, w - 24, rh - 30, { size: 15.5, min: 12, bold: true, color: r.color || C.navy, maxLines: 3, field: r.label, noScale: true, role: 'label', important: false });
+      var base = self.infoRowHeight(r, w), rh = base + extra;
+      if (i) self.rect(x + INFO.padX, cy, w - 2 * INFO.padX, 1, { fill: C.border });
+      self.text(r.label, x + INFO.padX, cy + INFO.padY + extra / 2, w - 2 * INFO.padX, 15, { size: INFO.label, min: 11, bold: true, color: C.muted, upper: true, maxLines: 1, role: 'label', noScale: true });
+      self.text(r.value, x + INFO.padX, cy + INFO.padY + 17 + extra / 2, w - 2 * INFO.padX, base - INFO.padY * 2 - 17, { size: INFO.value, min: 13, bold: true, color: r.color || C.navy, maxLines: 3, field: r.label, noScale: true, role: 'label', important: false });
       cy += rh;
     });
     return h;
   };
-  /** Variante horizontale (1 ou 2 informations) : bande basse, sans colonne réservée. */
+  /** Cartes d'informations en grille : à côté du cartouche tarifaire ou en bande basse. */
+  /** Valeur d'une carte : forme courte (ex. date sans le jour) si la forme complète ne tient pas sur une ligne. */
+  function cardValue(r, cw) {
+    if (!r.short) return r.value;
+    return M().countLines(M().toParas(r.value, { bold: true }), cw - 2 * INFO.padX, INFO.value) > 1 ? r.short : r.value;
+  }
+  B.infoGridSize = function (rows, w, maxCols) {
+    if (!rows || !rows.length) return { h: 0, cols: 0, rowH: [] };
+    var n = rows.length, best = null;
+    for (var cols = Math.min(maxCols || 5, n); cols >= 1; cols--) {
+      var cw = Math.min(INFO.maxCard, (w - INFO.gap * (cols - 1)) / cols);
+      if (cw < 150 && cols > 1) continue;
+      var lines = rows.map(function (r) { return M().countLines(M().toParas(cardValue(r, cw), { bold: true }), cw - 2 * INFO.padX, INFO.value); });
+      var fits = lines.every(function (l) { return l <= 2; });
+      var nr = Math.ceil(n / cols), rowH = [];
+      for (var k = 0; k < nr; k++) rowH.push(INFO.padY * 2 + 17 + Math.min(2, Math.max.apply(null, lines.slice(k * cols, k * cols + cols))) * INFO.value * 1.2);
+      var h = rowH.reduce(function (a, b) { return a + b; }, 0) + INFO.gap * (nr - 1);
+      var cand = { h: h, cols: cols, cw: cw, rowH: rowH, fits: fits };
+      if (!best || (fits && !best.fits) || (fits === best.fits && h < best.h - 0.5)) best = cand;
+    }
+    return best;
+  };
+  B.infoGrid = function (rows, x, y, w, maxCols, hFill) {
+    var g = this.infoGridSize(rows, w, maxCols);
+    if (!g.h) return 0;
+    var self = this, cy = y, nr = g.rowH.length;
+    var extra = hFill && hFill > g.h ? (hFill - g.h) / nr : 0;
+    for (var k = 0; k < nr; k++) {
+      var base = g.rowH[k], rh = base + extra;
+      rows.slice(k * g.cols, k * g.cols + g.cols).forEach(function (r, i) {
+        var cx = x + i * (g.cw + INFO.gap);
+        self.rect(cx, cy, g.cw, rh, { fill: C.lighter, stroke: C.border, r: 9 });
+        self.text(r.label, cx + INFO.padX, cy + INFO.padY + extra / 2, g.cw - 2 * INFO.padX, 15, { size: INFO.label, min: 11, bold: true, color: C.muted, upper: true, maxLines: 1, role: 'label', noScale: true });
+        self.text(cardValue(r, g.cw), cx + INFO.padX, cy + INFO.padY + 17 + extra / 2, g.cw - 2 * INFO.padX, base - INFO.padY * 2 - 17, { size: INFO.value, min: 13, bold: true, color: r.color || C.navy, maxLines: 2, field: r.label, noScale: true, role: 'label', important: false });
+      });
+      cy += rh + INFO.gap;
+    }
+    return g.h + extra * nr;
+  };
+  /** Variante horizontale historique (1 ou 2 informations), conservée pour compatibilité. */
   B.infoStrip = function (rows, x, y, w, opts) {
     if (!rows.length) return 0;
     opts = opts || {};
-    var self = this, gap = 12, cw = opts.stretch ? (w - gap * (rows.length - 1)) / rows.length
-      : Math.min(rows.length === 1 ? 360 : 420, (w - gap * (rows.length - 1)) / rows.length);
-    rows.forEach(function (r, i) {
-      var cx = x + i * (cw + gap);
-      self.rect(cx, y, cw, 46, { fill: C.lighter, stroke: C.border, r: 10 });
-      self.text(r.label, cx + 12, y + 6, cw - 24, 14, { size: 11, min: 9, bold: true, color: C.muted, upper: true, maxLines: 1, role: 'label', noScale: true });
-      self.text(r.value, cx + 12, y + 22, cw - 24, 20, { size: 15.5, min: 12, bold: true, color: r.color || C.navy, maxLines: 1, field: r.label, noScale: true, role: 'label', important: false });
-    });
-    return 46;
+    var cols = rows.length;
+    var cw = opts.stretch ? w : Math.min(w, cols * (cols === 1 ? 360 : 420) + (cols - 1) * INFO.gap);
+    return this.infoGrid(rows, x, y, cw, cols);
   };
   /** Ligne de prix compacte (modèles immersif, affiche, animation). */
   B.priceLine = function (pr) {
@@ -387,8 +466,36 @@
   };
   B.result = function (extra) {
     var out = { width: W, height: H, items: this.items, warnings: dedupe(this.warnings), overflow: this.overflows.length > 0, minBody: this.minBody === Infinity ? null : this.minBody };
+    if (this.priceGeometry) out.priceGeometry = this.priceGeometry;
     return Object.assign(out, extra || {});
   };
+
+  /* ---------- Contrôles géométriques (V10) ----------
+   * Vérifie une diapositive calculée : éléments hors du cadre 16:9, textes qui se chevauchent,
+   * police du corps sous le seuil, images non intégrables. Renvoie une liste d'alertes. */
+  function inkBox(it) {
+    var Mx = M(), paras = it.paras || [];
+    var lines = Mx.countLines(paras, it.w, it.size), ih = Math.min(it.h, lines * it.size * (it.lh || Mx.LINE_HEIGHT));
+    var iw = Math.min(it.w, Mx.maxLineWidth(paras, it.size));
+    var x = it.align === 'right' ? it.x + it.w - iw : it.align === 'center' ? it.x + (it.w - iw) / 2 : it.x;
+    var y = it.valign === 'middle' ? it.y + (it.h - ih) / 2 : it.y;
+    return { x: x, y: y, w: iw, h: ih };
+  }
+  function auditSlide(slide) {
+    var out = [], texts = [];
+    (slide.items || []).forEach(function (it) {
+      if (it.role === 'banner') return;
+      if (it.x < -0.5 || it.y < -0.5 || it.x + it.w > W + 0.5 || it.y + it.h > H + 0.5) out.push({ level: 'warn', code: 'bounds', msg: 'Élément hors du cadre de la diapositive (' + (it.field || it.t) + ').' });
+      if (it.t === 'text' && it.paras && it.paras.length && !it.layer) texts.push({ it: it, box: inkBox(it) });
+    });
+    for (var i = 0; i < texts.length; i++) for (var j = i + 1; j < texts.length; j++) {
+      var a = texts[i].box, b = texts[j].box;
+      var ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      if (ox > 2 && oy > 2) out.push({ level: 'warn', code: 'overlap', msg: 'Textes superposés : « ' + (texts[i].it.field || 'texte') + ' » et « ' + (texts[j].it.field || 'texte') + ' ».' });
+    }
+    return out;
+  }
+  B.audit = function () { return auditSlide({ items: this.items }); };
   function dedupe(list) {
     var seen = {};
     return list.filter(function (w) { var k = w.level + w.msg; if (seen[k]) return false; seen[k] = 1; return true; });
@@ -401,5 +508,5 @@
   function tint(h, k) { var c = hexToRgb(h); return rgbToHex(c.map(function (v) { return 255 - (255 - v) * k; })); }
   function shade(h, k) { var c = hexToRgb(h); return rgbToHex(c.map(function (v) { return v * (1 - k); })); }
 
-  return { W: W, H: H, BANNER_H: BANNER_H, C: C, MIN: MIN, PT: PT, Builder: Builder, tint: tint, shade: shade };
+  return { W: W, H: H, BANNER_H: BANNER_H, C: C, MIN: MIN, PT: PT, T: T, PG: PG, Builder: Builder, tint: tint, shade: shade, auditSlide: auditSlide, inkBox: inkBox, imageStatus: imageStatus, photoMeta: photoMeta };
 });

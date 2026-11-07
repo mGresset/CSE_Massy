@@ -36,7 +36,7 @@ test('Règlement : le sous-titre est visible et survit à une normalisation',()=
 test('Tarifs plus compacts : 10 tranches en 3 rangées',()=>{
   const s=page({id:'a1',type:'activity',title:'Séjour',dateStart:'2027-01-01',description:'Voyage de découverte.',pricing:{enabled:true,mode:'tranches',outside:'3000'}})[0];
   const band=s.items.find(x=>x.t==='rect'&&x.fill==='#F8F6FE');
-  assert.ok(band&&band.h<=67,'grille <= 67 px sans notes');
+  assert.ok(band&&band.h<=92,'cartouche V10 <= 92 px sans notes');
   assert.equal(page({id:'a2',type:'activity',title:'Séjour',description:'Voyage de découverte.',pricing:{enabled:false}}).length,1);
 });
 test('Couverture : notes supplémentaires modifiables sont rendues et normalisées',()=>{

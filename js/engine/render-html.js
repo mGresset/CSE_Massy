@@ -66,8 +66,9 @@
         it.paras.forEach(function (p) {
           var pd = el('div', 'cse-p');
           if (p.align) pd.style.textAlign = p.align;
-          var empty = !p.runs.some(function (r) { return String(r.text).length; });
-          if (empty) { pd.textContent = ' '; inner.appendChild(pd); return; }
+          var empty = !p.runs.some(function (r) { return String(r.text).trim().length; });
+          // Séparation entre blocs : une demi-ligne, comme dans le PowerPoint (metrics.PARA_GAP).
+          if (empty) { pd.className = 'cse-p cse-gap'; pd.style.height = ((it.lh || 1.2) * (CSE.metrics ? CSE.metrics.PARA_GAP : 1)) + 'em'; inner.appendChild(pd); return; }
           if (p.bullet) pd.appendChild(document.createTextNode('• '));
           p.runs.forEach(function (r) {
             var link = r.link || it.link;

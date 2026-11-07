@@ -86,7 +86,12 @@
     it.paras.forEach(function (p, pi) {
       var last = pi === it.paras.length - 1;
       var list = p.runs.filter(function (r) { return String(r.text).length; });
-      if (!list.length) { runs.push({ text: ' ', options: { breakLine: !last } }); return; }
+      if (!list.some(function (r) { return String(r.text).trim().length; })) {
+        // Séparation entre blocs : demi-ligne (interligne exact du paragraphe), identique à l'aperçu.
+        var gap = CSE.metrics ? CSE.metrics.PARA_GAP : 1;
+        runs.push({ text: ' ', options: { breakLine: !last, lineSpacing: Math.round(it.size * (it.lh || 1.2) * gap * PT * 10) / 10 } });
+        return;
+      }
       list.forEach(function (r, ri) {
         var o = { bold: r.bold === undefined ? !!it.bold : !!(r.bold || it.bold) };
         if (r.color) o.color = hex(r.color);

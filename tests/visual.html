@@ -38,6 +38,7 @@
 <script src="js/core/demo-art.js"></script>
 <script src="js/core/demo.js"></script>
 <script src="tests/fixtures/v91-cases.js"></script>
+<script src="tests/fixtures/v10-cases.js"></script>
 <script>
 (function () {
   var C = window.CSE, params = new URLSearchParams(location.search);
@@ -50,6 +51,7 @@
     return C.images.importMap(map).then(function () {
       var p, issue;
       if (params.get('set') === 'cases') { var cs = window.CSE_CASES.build(C, ref, photo); p = cs.project; issue = cs.issue; }
+      else if (params.get('set') === 'v10') { var c10 = window.CSE_V10_CASES.build(C, params.get('ref') || '2026-11-09', photo); p = c10.project; issue = c10.issue; }
       else { p = C.demo.build(ref, photo); issue = p.issues[0]; }
       if (params.get('split')) issue.pages.forEach(function (pg) { pg.split = true; });
       if (params.get('numbers')) issue.numbering = true;

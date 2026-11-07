@@ -32,7 +32,7 @@ test('supplément single : intégré en haut du cartouche, aucun texte orphelin 
   assert.ok(note.y===title.y && note.y<ext.y,'supplément sur la ligne de titre');
   assert.ok(title.x+title.w<=note.x,'titre et supplément ne se superposent pas');
   assert.ok(note.x+note.w<=price.x+price.w+0.1);
-  assert.ok(price.h<65,'la note courte n’allonge pas le cartouche');
+  assert.ok(price.h<92,'la note courte n’allonge pas le cartouche');
   assert.ok(!note.overflow&&!title.overflow&&!s.overflow);
   assert.ok(!s.warnings.some(x=>x.level==='block'));
 });
@@ -53,7 +53,8 @@ test('fiche peu chargée : panneau discret derrière le descriptif, sans recouvr
   const price=s.items.find(i=>i.t==='rect'&&i.fill==='#F8F6FE');
   assert.ok(panel&&photo&&price);
   assert.ok(panel.x>=photo.x+photo.w-0.1,'panneau à côté, pas sur la photo');
-  assert.ok(panel.y+panel.h<price.y,'panneau distinct des prix');
+  // V10 : le cartouche peut être sous la photo (colonne gauche) ou en bande basse ; il ne chevauche jamais le panneau.
+  assert.ok(panel.y+panel.h<price.y || panel.x>=price.x+price.w || price.x>=panel.x+panel.w,'panneau distinct des prix');
   assert.ok(!s.overflow);
 });
 test('période saisie deux fois : conserve un seul exemplaire et le complément du sous-titre',()=>{
@@ -70,10 +71,11 @@ test('tarifs et informations pratiques : une même rangée sans chevauchement ni
     pricing:{enabled:true,mode:'tranches',outside:'3000',notes:'Supplément single : 150 €'}})];
   const out=C.templates.renderPage(M.blankPage('item',{itemId:'side',template:'classic'}),p,M.blankIssue('2026-11-09'));
   const slide=out[0], price=slide.items.find(i=>i.t==='rect'&&i.fill==='#F8F6FE');
-  const infos=slide.items.filter(i=>i.t==='rect'&&i.fill==='#F6F8FC'&&i.h===46);
+  // V10 : les cartes d'informations forment la bande basse avec le cartouche (même haut, même bas).
+  const infos=slide.items.filter(i=>i.t==='rect'&&i.fill==='#F6F8FC'&&price&&i.y>=price.y-0.5);
   assert.equal(out.length,1);
   assert.ok(price && infos.length===2);
-  assert.ok(infos.every(i=>Math.abs(i.y-price.y)<0.1),'cartes à hauteur des prix');
+  assert.ok(infos.every(i=>Math.abs(i.y-price.y)<0.1 && Math.abs(i.y+i.h-(price.y+price.h))<0.6),'cartes à hauteur des prix');
   assert.ok(infos.every(i=>i.x>=price.x+price.w+10),'aucun recouvrement des tarifs');
   assert.ok(infos[1].x+infos[1].w <= 1160+0.1,'les cartes restent sur la diapositive');
   assert.ok(!slide.overflow);

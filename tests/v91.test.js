@@ -40,7 +40,7 @@ test('1. Tarifs : bandeau compact, absent ou prix unique ; le texte reprend la p
   assert.ok(!n.items.some((i) => i.fill === '#F8F6FE'), 'aucune zone tarifs réservée');
   const boxArea = (s) => body(s).reduce((a, t) => a + t.w * t.h, 0);
   assert.ok(boxArea(n) > boxArea(g) * 1.035, 'sans tarifs, la zone de texte récupère la place même avec bandeau réduit');
-  assert.ok(g.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 67), 'nouvelle grille réduite à 67 px maximum hors notes');
+  assert.ok(g.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 92), "cartouche V10 ≤ 92 px hors notes (3 rangées en 10,8 pt)");
   assert.ok(!u.items.some((i) => i.fill === '#F8F6FE') && /45 €/.test(texts(u)), 'prix unique : petit bloc, pas de grille');
 });
 test('2–3. Texte de 120, 400 et 900 mots : colonnes adaptées, sans recouvrement, corps ≥ 12 pt, jamais tronqué', () => {
