@@ -250,19 +250,19 @@
     });
     return cy - gap - y;
   };
-  /** Cartouche tarifs inférieur gauche : toujours deux rangées de cinq au maximum,
-   *  pour garder une largeur inférieure à 55 % de la diapositive et une police lisible. */
+  /** Grille T1–T10 ultra-compacte : 4 colonnes, 3 rangées pour 10 tranches.
+   *  Le cartouche reste bas-gauche. La même géométrie est partagée entre HTML et PPTX. */
   B.priceGridSize = function (pr, w) {
-    if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0 };
+    if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0, rows: 0 };
     var n = pr.rows.length;
-    // La largeur du cartouche est volontairement plafonnée par le modèle Classique.
-    // Cinq tarifs par rangée restent lisibles au-delà de 560 px.
-    var cols = w >= 540 ? Math.min(5, n) : w >= 350 ? Math.min(3, n) : Math.min(2, n);
+    var cols = w >= 425 ? Math.min(4, n) : w >= 295 ? Math.min(3, n) : Math.min(2, n);
     var rows = Math.ceil(n / cols);
-    var h = 17 + rows * 16 + (pr.notes ? 14 : 0);
+    // Intitulé + 3 lignes de prix (4 / 4 / 2) + éventuel supplément.
+    var h = 18 + rows * 15.5 + (pr.notes ? 14 : 0);
     return { h: h, cols: cols, rows: rows };
   };
-  /** Petit rectangle horizontal de tarifs : 5 colonnes × 2 lignes, en bas à gauche. */
+  /** Tarifs en petit rectangle latéral (env. 39 % de la diapo).
+   *  La dernière rangée incomplète est centrée pour éviter l'effet « tableau troué ». */
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
@@ -270,18 +270,20 @@
     this.rect(x, y + 5, 3, g.h - 10, { fill: C.purple });
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var ow = outside ? M().width(outside, 11, false) * 1.07 + 4 : 0;
-    this.text(head, x + 12, y + 2, Math.max(70, w - 25 - ow), 13,
-      { size: 11.5, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    var ow = outside ? M().width(outside, 11, false) * 1.08 + 5 : 0;
+    this.text(head, x + 12, y + 2, Math.max(70, w - 24 - ow), 13,
+      { size: 11, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
     if (outside) this.text(outside, x + w - 10 - ow, y + 2, ow, 13,
       { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    var cw = (w - 24) / g.cols, top = y + 16, self = this;
+    var cw = (w - 24) / g.cols, top = y + 17, self = this;
     pr.rows.forEach(function (r, i) {
-      var col = i % g.cols, row = Math.floor(i / g.cols);
-      var cx = x + 12 + col * cw, cy = top + row * 16;
+      var row = Math.floor(i / g.cols), col = i % g.cols;
+      var nLast = Math.min(g.cols, pr.rows.length - row * g.cols);
+      var rowOffset = (g.cols - nLast) * cw / 2;
+      var cx = x + 12 + rowOffset + col * cw, cy = top + row * 15.5;
       self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple },
-        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 7, 16,
-        { size: 12.6, min: 11.2, color: C.dark, valign: 'middle', maxLines: 1,
+        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 4, 15.5,
+        { size: 12.2, min: 11, color: C.dark, valign: 'middle', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
     });
     if (pr.notes) this.text(pr.notes, x + 12, y + g.h - 14, w - 24, 13,

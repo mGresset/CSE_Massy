@@ -1,3 +1,7 @@
+# CSE Studio V9.4.2 — Tarifs encore plus discrets (3 lignes)
+
+Le cartouche de la fiche Classique ne mesure plus que **465 px de largeur** sur les 1 200 px de la slide. Les dix tarifs s’affichent sur trois rangées (4/4/2). Voir `MISE_A_JOUR_V9_4_2.md`.
+
 
 ## V9.4.1 — Cartouche des tarifs T1–T10
 

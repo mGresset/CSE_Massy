@@ -286,7 +286,7 @@
       var panelH = asideW ? probe.infoPanelSize(rows, asideW) : 0;
       // Le rectangle T1–T10 reste en bas à gauche, pas sur toute la largeur.
       // Le moteur réserve uniquement sa hauteur pour ne pas masquer le contenu.
-      var compactPriceW = Math.min(610, right - x0);
+      var compactPriceW = Math.min(465, right - x0);
       var g = probe.priceGridSize(pr, compactPriceW);
       var priceH = g.h ? g.h + 8 : 0;
       var bodyBottom = bottom - stripH - priceH;

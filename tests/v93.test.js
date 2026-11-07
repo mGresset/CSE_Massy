@@ -33,10 +33,10 @@ test('Règlement : le sous-titre est visible et survit à une normalisation',()=
   const s=page({id:'r1',type:'rules',title:'Règlement',subtitle:'Information importante',description:'Les inscriptions sont ouvertes à tous les salariés.'})[0];
   assert.ok(strings(s).includes('Information importante'));
 });
-test('Tarifs plus compacts : 10 tranches en 2 rangées maximum',()=>{
+test('Tarifs plus compacts : 10 tranches en 3 rangées',()=>{
   const s=page({id:'a1',type:'activity',title:'Séjour',dateStart:'2027-01-01',description:'Voyage de découverte.',pricing:{enabled:true,mode:'tranches',outside:'3000'}})[0];
   const band=s.items.find(x=>x.t==='rect'&&x.fill==='#F8F6FE');
-  assert.ok(band&&band.h<=55,'grille <= 55 px sans notes');
+  assert.ok(band&&band.h<=67,'grille <= 67 px sans notes');
   assert.equal(page({id:'a2',type:'activity',title:'Séjour',description:'Voyage de découverte.',pricing:{enabled:false}}).length,1);
 });
 test('Couverture : notes supplémentaires modifiables sont rendues et normalisées',()=>{
