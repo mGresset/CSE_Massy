@@ -1,3 +1,6 @@
+
+## V9.5.2
+- Affinage visuel du cartouche Tarifs CSE : alignement colonne par colonne et barre violette corrigée.
 n## V9.5.1
 - Cartouche tarifs plus compact et alignement amélioré des montants.
 
