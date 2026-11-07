@@ -41,8 +41,8 @@ test('sans tarifs, le texte récupère la place ; avec T1–T10, tarifs lisibles
   const noP = T.renderPage(M.blankPage('item', { itemId: 'b', template: 'classic' }), p, issue)[0];
   const area = (s) => { const t = textItem(s, 'description'); return t.w * t.h; };
   assert.ok(area(noP) > area(withP) * 1.3, 'zone de texte plus grande sans tarifs');
-  assert.ok(/T1  720 €/.test(texts(withP)) && /T10  1 800 €/.test(texts(withP)), 'T1 et T10 affichés');
-  assert.ok(!/TARIFS CSE/.test(texts(noP)), 'aucun bloc tarif');
+  assert.ok(/T1 720 €/.test(texts(withP)) && /T10 1 800 €/.test(texts(withP)), 'T1 et T10 affichés');
+  assert.ok(!/Tarifs CSE/i.test(texts(noP)), 'aucun bloc tarif');
   const priceTexts = withP.items.filter((i) => i.t === 'text' && i.field === 'tarifs');
   assert.ok(priceTexts.every((i) => i.size >= 11), 'tarifs ≥ 11 px (8,8 pt)');
 });
@@ -50,24 +50,30 @@ test('description longue : avertissement explicite, puis scission sans perte', (
   const long = ('Paragraphe détaillé du programme avec de nombreuses informations pratiques. '.repeat(8) + '\n\n').repeat(4);
   const p = project([{ id: 'l', type: 'activity', title: 'Fiche très longue', dateStart: '2027-01-10', description: long, highlights: 'Un\nDeux\nTrois', pricing: { enabled: true, mode: 'tranches', outside: '500' }, photos: ['assets/sri-lanka.jpg'], contacts: [{ name: 'Référent' }] }]);
   const issue = M.blankIssue(REF);
-  const one = T.renderPage(M.blankPage('item', { itemId: 'l' }), p, issue);
-  assert.ok(one[0].overflow, 'débordement détecté');
-  assert.ok(one[0].warnings.some((w) => w.code === 'overflow' && /scinder/i.test(w.msg)), 'avertissement proposant de scinder');
-  assert.ok(one[0].warnings.some((w) => w.code === 'suggest-split'));
-  assert.ok(/…/.test(texts(one[0])), 'troncature visible (jamais silencieuse)');
-  const pg = M.blankPage('item', { itemId: 'l', split: true });
-  const two = T.renderPage(pg, p, issue);
-  assert.equal(two.length, 2, 'deux diapositives');
-  assert.ok(/\(suite\)/.test(texts(two[1])));
-  // Le texte complet est réparti entre les deux pages à une taille lisible.
   const words = (s) => s.replace(/[•…]/g, ' ').split(/\s+/).filter(Boolean).length;
-  const all = texts(two[0]) + '\n' + texts(two[1]);
-  assert.ok(words(all) >= words(long), 'aucun mot perdu après scission');
-  two.forEach((s) => { assert.ok(!s.minBody || s.minBody >= 12.5); assert.ok(!s.overflow); });
-  // Encore plus long : la seconde page signale à son tour le débordement (jamais de coupe silencieuse).
-  p.items[0].description = long + long;
-  const tooLong = T.renderPage(pg, p, issue);
-  assert.ok(tooLong[1].warnings.some((w) => w.code === 'overflow'));
+  // Mode automatique (V9.1) : suite générée sur une autre diapositive, sans troncature ni police < 12 pt.
+  const auto = T.renderPage(M.blankPage('item', { itemId: 'l' }), p, issue);
+  assert.ok(auto.length >= 2, 'diapositive de suite générée automatiquement');
+  assert.ok(auto[0].warnings.some((w) => w.code === 'auto-split'), 'message « Contenu trop long »');
+  auto.forEach((s) => { assert.ok(!s.overflow, 'aucune troncature'); assert.ok(!s.minBody || s.minBody >= 15, 'corps ≥ 12 pt'); });
+  assert.ok(/\(suite\)/.test(texts(auto[1])));
+  const allText = auto.map(texts).join(' ');
+  assert.ok(!/…/.test(allText), 'pas de points de suspension dans la description');
+  assert.ok(words(allText) >= words(long), 'aucun mot perdu');
+  // Scission forcée : toujours deux diapositives.
+  const two = T.renderPage(M.blankPage('item', { itemId: 'l', split: true }), p, issue);
+  assert.ok(two.length >= 2);
+  two.forEach((s) => { assert.ok(!s.minBody || s.minBody >= 15); assert.ok(!s.overflow); });
+  // Scission désactivée explicitement : débordement visible et signalé (jamais silencieux).
+  const off = T.renderPage(M.blankPage('item', { itemId: 'l', split: 'off' }), p, issue);
+  assert.equal(off.length, 1);
+  assert.ok(off[0].overflow && /…/.test(texts(off[0])), 'troncature visible');
+  assert.ok(off[0].warnings.some((w) => w.code === 'suggest-split'));
+  // Texte démesuré : plusieurs diapositives de suite, toujours lisibles.
+  p.items[0].description = long + long + long;
+  const many = T.renderPage(M.blankPage('item', { itemId: 'l' }), p, issue);
+  assert.ok(many.length >= 3);
+  many.forEach((s) => assert.ok(!s.overflow));
 });
 function mosaicCase(kind, n) {
   const items = [];
@@ -106,7 +112,8 @@ test('contacts multiples et points : affichés seulement s’ils sont saisis', (
   const issue = M.blankIssue(REF);
   const a = texts(T.renderPage(M.blankPage('item', { itemId: 'x', template: 'classic' }), p, issue)[0]);
   const b = texts(T.renderPage(M.blankPage('item', { itemId: 'y', template: 'classic' }), p, issue)[0]);
-  assert.ok(/Alice/.test(a) && /Bruno/.test(a) && /a@exemple\.org/.test(a));
+  assert.ok(/Alice/.test(a) && /Bruno/.test(a), 'noms affichés');
+  assert.ok(!/a@exemple\.org/.test(a), 'e-mail non imprimé (V9.1 : lien mailto sur le nom)');
   assert.ok(/24 points · Séjour long/.test(a));
   assert.ok(!/Contact/.test(b) && !/POINTS|points/.test(b), 'aucun bloc vide');
   assert.ok(/Séjour court/.test(texts(T.renderPage(M.blankPage('item', { itemId: 'z', template: 'classic' }), p, issue)[0])));

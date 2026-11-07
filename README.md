@@ -1,4 +1,4 @@
-# CSE Studio V9 — fiches d’activités et MEL hebdomadaire du CSE Thales LAS Massy
+# CSE Studio V9.1 — fiches d’activités et MEL hebdomadaire du CSE Thales LAS Massy
 
 Application web statique (aucun serveur requis) publiée sur **GitHub Pages** :
 
@@ -10,11 +10,13 @@ Application web statique (aucun serveur requis) publiée sur **GitHub Pages** :
 
 Up Expert / Kalidea reste l’outil des activités et des inscriptions. CSE Studio ne fait que préparer les supports de communication et ne collecte aucune donnée personnelle des bénéficiaires.
 
+> **Nouveau en V9.1** : diapositives plus lisibles (corps ≥ 12 pt, suite automatique sur une autre diapositive plutôt qu’un texte minuscule), tarifs en bandeau compact, statuts « Nouveauté » / « Dernière chance » sobres en pastel, pictogrammes de catégorie, contacts cliquables (`mailto:`) sans e-mail affiché, permanences avec horaires particuliers par jour et légende automatique. Détails et captures avant/après : [NOTES-VERSION.md](NOTES-VERSION.md).
+
 ![Tableau de bord](docs/v9-tableau-de-bord.jpg)
 
 ## Sommaire
 
-1. [Ce qui change en V9](#ce-qui-change-en-v9)
+1. [Ce qui change en V9 et V9.1](#ce-qui-change-en-v9)
 2. [Utilisation pas à pas](#utilisation-pas-à-pas)
 3. [Les 13 modèles et l’auto-layout](#les-13-modèles-et-lauto-layout)
 4. [Règles automatiques du MEL](#règles-automatiques-du-mel)
@@ -29,13 +31,12 @@ Up Expert / Kalidea reste l’outil des activités et des inscriptions. CSE Stud
 ## Ce qui change en V9
 
 - **Un seul modèle de données et un seul moteur de mise en page.** La V8 contenait deux applications (éditeur V6 et compositeur V8) avec deux formats de fiche : les activités étaient recopiées dans le MEL. En V9, une page du MEL **référence** une fiche. Une fiche corrigée l’est donc dans tous les MEL.
-- **Aperçu identique au PowerPoint.** L’aperçu et le .pptx utilisent les mêmes calculs, la même police (Arial), la même taille (1 px = 0,8 pt), le même interligne exact et des marges nulles. Le texte est mesuré avec les vraies largeurs de caractères d’Arial. Le contrôle par PowerPoint donne les mêmes coupures de lignes, avec un écart moyen de 5/255 entre les deux rendus (voir [docs/v9-comparaison-apercu-pptx.jpg](docs/v9-comparaison-apercu-pptx.jpg)).
-- **Auto-layout réel.** Les blocs absents (photos, tarifs, points, contacts, informations pratiques) libèrent leur place : les colonnes s’élargissent, la police grandit, etc. Modes **Automatique / Aéré / Compact**. Les seuils de lisibilité sont de **11,2 pt** pour le texte courant et **10 pt** en mode compact. Si le texte ne tient pas, il n’est **jamais coupé en silence** :
-  - « … » visible ;
-  - cadre rouge dans l’aperçu ;
-  - avertissement avec bouton **« Scinder en 2 pages »** ;
-  - confirmation demandée à l’export.
-- **13 modèles** : couverture, calendrier, information, activité classique, immersif, essentiel/affiche, animation, nouveautés (mosaïque 1 à 6), dernières chances (flash J−x), partenaire, programme liste, programme tableau, règlement multi-pages.
+- **Aperçu identique au PowerPoint.** L’aperçu et le .pptx utilisent les mêmes calculs, la même police (Arial), la même taille (1 px = 0,8 pt), le même interligne exact et des marges nulles. Le texte est mesuré avec les vraies largeurs de caractères d’Arial. Le contrôle par PowerPoint donne les mêmes coupures de lignes (voir [docs/v9.1-parite-apercu-pptx.jpg](docs/v9.1-parite-apercu-pptx.jpg)).
+- **Auto-layout réel.** Les blocs absents (photos, tarifs, points, contacts, informations pratiques) libèrent leur place : les colonnes s’élargissent, la police grandit, etc. Modes **Automatique / Aéré / Compact**.
+  - **V9.1** : le corps de texte ne descend jamais sous **12 pt** (15 px de diapositive), même en mode compact ; la cible est de 14 à 16 pt.
+  - Le moteur compare plusieurs compositions (largeur de photo, 1 ou 2 colonnes équilibrées, position des infos et des tarifs) et garde la plus lisible.
+  - Si le texte ne tient pas, il continue sur une diapositive « (suite) » (réglage par page : automatique, toujours 2 diapositives, ou jamais). Il n’est **jamais coupé en silence** : en mode « jamais », on voit le « … », un cadre rouge dans l’aperçu, un avertissement, et une confirmation est demandée à l’export.
+- **13 modèles** : couverture, calendrier, information, activité classique, immersif, essentiel/affiche, animation, nouveautés (mosaïque 1 à 6), dernières chances (J−x, accent orange pastel), partenaire, programme liste, programme tableau, règlement multi-pages.
 - **Navigation simple** : Tableau de bord, Bibliothèque, Fiche (formulaire par étapes et aperçu en direct), Composer le MEL (glisser-déposer, inclure/exclure, plein écran), Modèles, Paramètres, Sauvegardes & exports.
 - **Catégories éditables** :
   - « Informations » toujours en premier ;
@@ -47,7 +48,7 @@ Up Expert / Kalidea reste l’outil des activités et des inscriptions. CSE Stud
   - arrondi paramétrable ;
   - réduction ou participation communes en %, prix fixe, tarif unique, saisie manuelle, prix forcé par tranche ;
   - contrôles de cohérence.
-- **Points** (Séjour long / court / FRANCE), **contacts multiples** avec e-mail, téléphone et fonction, **référents enregistrés**. Rien n’apparaît si rien n’est saisi.
+- **Points** (Séjour long / court / FRANCE), **contacts multiples** (nom + e-mail ; sur la diapositive, le nom seul, cliquable en `mailto:`), **référents enregistrés**. Rien n’apparaît si rien n’est saisi.
 - **Lien de destination** : Portail CSE (par défaut), lien personnalisé ou aucun lien. Le lien est cliquable dans le PowerPoint.
 - **Images dans IndexedDB** : elles sont compressées et ne saturent plus le localStorage, limité à environ 5 Mo.
 - **Sécurité des données** :
@@ -79,14 +80,14 @@ Up Expert / Kalidea reste l’outil des activités et des inscriptions. CSE Stud
 | Modèle | Usage |
 |---|---|
 | Couverture | Semaine, message important, « À ne pas manquer » (dernières chances automatiques), nouveautés (jusqu’à 4) ; les blocs absents disparaissent et les autres s’agrandissent |
-| Calendrier de permanences | Mois en jours ouvrés, n° de semaine, statuts et couleurs éditables, légende, horaires, contacts, catalogue |
+| Calendrier de permanences | Mois en jours ouvrés, n° de semaine ; Ouvert (horaire standard), Horaire particulier (horaire libre par jour), Fermé ; légende générée et dédoublonnée ; contacts, catalogue |
 | Information | Pictogramme, titre, chapeau, texte structuré, encadré d’alerte, image facultative |
 | Activité classique | Photos, description, temps forts, programme, infos pratiques, tarifs T1–T10, encarts (date limite + J−x, participants, points, âge, bilan carbone) |
 | Immersif | Grande photo, message court, informations synthétiques |
 | Essentiel / affiche | Titre, date, lieu, visuel large, pastilles (date limite, tarif, places) |
 | Animation | Visuels, temps forts, programme horaire, infos pratiques |
-| Nouveautés | Mosaïque de 1 à 6 cartes (au-delà : diapositive supplémentaire), badges « NEW ! » |
-| Dernières chances | Bandeau orange/rouge, date limite et compteur J−x calculé depuis la date du MEL |
+| Nouveautés | Mosaïque de 1 à 6 cartes (au-delà : diapositive supplémentaire), étiquette « Nouveauté » miniature |
+| Dernières chances | Bandeau orange pastel, date limite et compteur J−x calculé depuis la date du MEL |
 | Offre partenaire | Logo, offre, remise en pastille, code, échéance, conditions, lien |
 | Programme · liste / tableau | Activités futures de la bibliothèque (filtres par catégorie et par période) ou lignes saisies ; pagination automatique |
 | Règlement / modalités | Titres « # », deux colonnes, pagination automatique, toujours en fin de MEL |
@@ -149,7 +150,7 @@ puis ouvrir `http://localhost:8765/CSE_Massy/`.
 node tests/run.js
 ```
 
-Huit fichiers de tests en Node, sans dépendance à installer :
+Neuf fichiers de tests en Node, sans dépendance à installer :
 
 - `pricing` : barème (2 400 € → T1 720 €, T10 1 800 €), arrondis, modes, prix forcés, contrôles.
 - `dates` : semaines ISO, formats français, absence de J−1 sous UTC, Los Angeles, Kiritimati et Paris.
@@ -174,6 +175,7 @@ Huit fichiers de tests en Node, sans dépendance à installer :
   - textes Arial modifiables ;
   - liens cliquables, numéros, formes natives.
 - `cloud` : synchronisation Supabase contre un faux serveur (conflits entre deux bénévoles, rôles, suppression en ligne).
+- `v91` : critères d’acceptation V9.1 (tarifs compacts ou absents, textes de 120/400/900 mots, corps ≥ 12 pt, titres, contacts `mailto:`, pictogrammes, statuts pastel, permanences, mosaïques, export d’un MEL de 65 diapositives).
 - `security` :
   - aucun secret ;
   - aucun nom ni e-mail du MEL original (vérifiés par empreinte SHA-256) ;
@@ -183,14 +185,15 @@ Huit fichiers de tests en Node, sans dépendance à installer :
 
 Outils complémentaires :
 
-- `tests/visual.html` affiche une **planche visuelle** de toutes les diapositives de démonstration. Le paramètre `?only=n` affiche une seule diapositive en 1200 × 675, pour les captures automatiques.
-- `node tests/export-demo-pptx.js sortie.pptx [date] [chemin @napi-rs/canvas]` génère le PPTX de démonstration hors navigateur.
+- `tests/visual.html` affiche une **planche visuelle** des diapositives de démonstration. Paramètres : `?set=cases` pour les 5 cas de référence V9.1, `?only=n` pour une seule diapositive en 1200 × 675 (captures automatiques).
+- `node tests/export-demo-pptx.js sortie.pptx [date] [chemin @napi-rs/canvas]` et `node tests/export-cases-pptx.js sortie.pptx [chemin @napi-rs/canvas]` génèrent les PPTX correspondants hors navigateur.
 
-Comparaison réalisée pour cette version :
+Comparaison réalisée pour la V9.1 :
 
-1. le PPTX exporté a été converti en images par Microsoft PowerPoint ;
-2. il a été comparé à l’aperçu Edge pixel par pixel ;
-3. résultat : 2,7 % de pixels nettement différents (anticrénelage), coupures de lignes identiques.
+1. les mêmes données ont été rendues par l’aperçu (Edge) et par Microsoft PowerPoint (fichier .pptx exporté) ;
+2. résultat : coupures de lignes identiques et écart moyen de 6/255 (anticrénelage, soulignement des liens ajouté par PowerPoint).
+
+Voir [docs/v9.1-parite-apercu-pptx.jpg](docs/v9.1-parite-apercu-pptx.jpg) et [docs/v9.1-avant-apres.jpg](docs/v9.1-avant-apres.jpg).
 
 Un MEL fictif de 64 pages (71 diapositives) se met en page en 85 ms et s’exporte en 0,6 s (3,5 Mo).
 
@@ -252,13 +255,15 @@ js/core/images.js         Images (IndexedDB, compression)
 js/core/cloud-sync.js     Synchronisation Supabase (logique pure)
 js/core/demo.js, demo-art.js  Démonstration fictive et illustrations dessinées
 js/engine/metrics.js      Mesure du texte (largeurs Arial), coupures, ajustement, troncature signalée
-js/engine/layout.js       Bibliothèque de blocs (bandeau, pied, pastilles, encarts, tarifs, pictogrammes)
+js/engine/layout.js       Bibliothèque de blocs (bandeau, pied, statuts pastel, encarts, tarifs compacts, infos pratiques)
+js/engine/icons.js        Pictogrammes de catégorie vectoriels (SVG / forme libre PowerPoint)
 js/engine/templates.js    13 modèles, auto-layout, pagination, recommandation de modèle
 js/engine/render-html.js  Rendu HTML de l’aperçu
 js/export/pptx.js         Export PowerPoint (PptxGenJS 4, MIT ; JSZip, MIT/GPLv3)
 js/app/*.js               Interface : navigation, vues, éditeur de fiche, compositeur, espace partagé
 supabase/                 schema.sql (V6), v6_migration.sql, v9_migration.sql, fonction Canva expérimentale
-tests/                    Tests Node (node tests/run.js), planche visuelle, export de démonstration
+tests/                    Tests Node (node tests/run.js), planche visuelle (?set=cases), cas de référence V9.1, exports de démonstration
+NOTES-VERSION.md          Notes de version (V9.1, V9)
 ```
 
 ## Limites connues

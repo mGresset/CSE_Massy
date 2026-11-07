@@ -19,14 +19,14 @@
 
   var TEMPLATES = [
     { id: 'cover', name: 'Couverture du MEL', family: 'Numéro', for: ['cover'], desc: 'Semaine, message important, dernières chances et nouveautés, alimentés automatiquement.' },
-    { id: 'calendar', name: 'Calendrier de permanences', family: 'Pages fixes', for: ['calendar'], desc: 'Calendrier mensuel coloré, légende, horaires, contacts et catalogue.' },
+    { id: 'calendar', name: 'Calendrier de permanences', family: 'Pages fixes', for: ['calendar'], desc: 'Ouvert / horaire particulier / fermé, horaires par jour et légende générée automatiquement.' },
     { id: 'info', name: 'Information', family: 'Informations', for: ['info', 'page', 'activity'], desc: 'Message administratif hiérarchisé, pictogramme et encadré d’alerte.' },
-    { id: 'classic', name: 'Activité classique', family: 'Activités', for: ['activity', 'info', 'page'], desc: 'Photos, description, programme, infos pratiques ; tarifs et points facultatifs.' },
+    { id: 'classic', name: 'Activité classique', family: 'Activités', for: ['activity', 'info', 'page'], desc: 'Composition adaptative (1 ou 2 colonnes), bandeau tarifs compact facultatif, infos pratiques ; suite automatique si le texte est long.' },
     { id: 'immersive', name: 'Immersif', family: 'Activités', for: ['activity', 'partner', 'page'], desc: 'Grande photo, message court et informations synthétiques.' },
     { id: 'poster', name: 'Essentiel / affiche', family: 'Activités', for: ['activity', 'info', 'partner', 'page'], desc: 'Titre, date, lieu, visuel et appel à l’action très visibles.' },
     { id: 'animation', name: 'Animation', family: 'Activités', for: ['activity'], desc: 'Affiche attractive, temps forts, programme horaire et infos pratiques.' },
-    { id: 'news', name: 'Nouveautés (mosaïque)', family: 'Numéro', for: ['news'], desc: 'Mosaïque visuelle de 1 à 6 activités avec badges NEW et dates.' },
-    { id: 'last', name: 'Dernières chances', family: 'Numéro', for: ['last'], desc: 'Présentation flash orange/rouge, date limite et compteur J−x.' },
+    { id: 'news', name: 'Nouveautés (mosaïque)', family: 'Numéro', for: ['news'], desc: 'Mosaïque photographique de 1 à 6 activités, étiquette « Nouveauté » discrète et dates.' },
+    { id: 'last', name: 'Dernières chances', family: 'Numéro', for: ['last'], desc: 'Cartes sobres à l’accent orange pastel : date limite et compteur J−x.' },
     { id: 'partner', name: 'Offre partenaire', family: 'Partenaires', for: ['partner'], desc: 'Logo, offre, remise, code, conditions, échéance et lien.' },
     { id: 'upcoming-list', name: 'Programme à venir · liste', family: 'Programmes', for: ['upcoming'], desc: 'Liste chronologique, regroupée par catégorie.' },
     { id: 'upcoming-table', name: 'Programme à venir · tableau', family: 'Programmes', for: ['upcoming'], desc: 'Tableau : activité, lieu, type, date.' },
@@ -67,36 +67,39 @@
     if (hasText(it.subtitle)) line = line ? line + ' — ' + it.subtitle.trim() : it.subtitle.trim();
     return line;
   }
+  var EMAIL_RE = /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[A-Za-z]{2,}$/;
+  function validEmail(e) { return EMAIL_RE.test(String(e || '').trim()); }
+  function mailto(e) { e = String(e || '').trim(); return validEmail(e) ? 'mailto:' + e : ''; }
+  function shownContacts(it) { return (it.contacts || []).filter(function (c) { return hasText(c.name) || validEmail(c.email); }); }
+  /** Contacts : seuls les noms sont affichés ; chaque nom ayant un e-mail valide est un lien mailto distinct. */
   function contactRuns(it) {
     var runs = [];
-    (it.contacts || []).forEach(function (c, i) {
+    shownContacts(it).forEach(function (c, i) {
       if (i) runs.push({ text: ' · ', bold: false });
-      runs.push({ text: c.name || c.email || c.phone, bold: true });
-      var extra = [c.name ? c.email : '', c.phone].filter(hasText).join(', ');
-      if (extra) runs.push({ text: ' (' + extra + ')', bold: false });
+      var name = hasText(c.name) ? c.name.trim() : String(c.email).trim().split('@')[0];
+      var link = mailto(c.email);
+      runs.push(link ? { text: name, bold: true, link: link } : { text: name, bold: true });
     });
     return runs;
   }
   function contactText(it) { return contactRuns(it).map(function (r) { return r.text; }).join(''); }
   function counterLabel(c) { return { long: 'Séjour long', short: 'Séjour court', france: 'Séjour FRANCE' }[c] || ''; }
   function ageText(v) { v = String(v || '').trim(); return /^\d+$/.test(v) ? 'Dès ' + v + ' ans' : v; }
+  function showLastBox(ctx) { return !!(ctx.cls && ctx.cls.isLast); }
 
-  /** Informations latérales : seuls les champs saisis produisent un bloc. */
-  function asideChips(ctx, opts) {
+  /** Informations pratiques : seules les données saisies produisent une ligne (ordre logique conservé). */
+  function practicalRows(ctx, opts) {
     opts = opts || {};
-    var it = ctx.item, cls = ctx.cls, pr = ctx.prices, C = L().C, d = D(), chips = [];
-    if (it.regEnd && it.type !== 'partner') {
-      chips.push({ label: 'Inscriptions jusqu’au', value: d.capital(d.fmtDay(it.regEnd)), color: C.red, accent: C.red, fill: '#FFF6F6', stroke: '#F4C7CC',
-        badge: cls.isLast && cls.daysLeft !== null && cls.daysLeft >= 0 ? d.countdown(it.regEnd, ctx.ref) : '' });
-    } else if (cls.regLabel && it.regStatus !== 'auto') chips.push({ label: 'Inscriptions', value: cls.regLabel });
-    if (it.regEnd && it.regStatus !== 'auto' && it.regStatus !== 'open' && cls.regLabel) chips.push({ label: 'Statut', value: cls.regLabel, color: C.orange });
-    if (!opts.noPrice && pr.kind === 'single') chips.push({ label: pr.rows[0].label, value: P().money(pr.rows[0].price), sub: pr.outside !== null ? 'Extérieur : ' + P().money(pr.outside) : '', color: C.purple, accent: C.purple });
-    if (it.minPart || it.maxPart) chips.push({ label: 'Participants', value: [it.minPart ? 'Min. ' + it.minPart : '', it.maxPart ? 'Max. ' + it.maxPart : ''].filter(Boolean).join(' · ') });
-    if (it.points && it.points.value) chips.push({ label: 'Points', value: it.points.value + ' point' + (parseFloat(String(it.points.value).replace(',', '.')) > 1 ? 's' : '') + (it.points.counter ? ' · ' + counterLabel(it.points.counter) : ''), color: C.purple });
-    if (hasText(it.audience) || hasText(it.minAge)) chips.push({ label: 'Public', value: [it.audience, ageText(it.minAge)].filter(hasText).join(' · ') });
-    if (hasText(it.address)) chips.push({ label: 'Adresse', value: it.address, maxLines: 3 });
-    if (hasText(it.carbon)) chips.push({ label: 'Bilan carbone', value: it.carbon, color: C.green });
-    return chips;
+    var it = ctx.item, cls = ctx.cls || {}, pr = ctx.prices, C = L().C, d = D(), rows = [];
+    if (it.regEnd && it.type !== 'partner' && !showLastBox(ctx)) rows.push({ label: 'Inscriptions jusqu’au', value: d.capital(d.fmtDay(it.regEnd)) });
+    if (cls.regLabel && it.regStatus !== 'auto' && it.regStatus !== 'open') rows.push({ label: 'Inscriptions', value: cls.regLabel, color: C.lastText });
+    if (!opts.noPrice && pr && pr.kind === 'single') rows.push({ label: pr.rows[0].label + (pr.outside !== null ? ' · ext. ' + P().money(pr.outside) : ''), value: P().money(pr.rows[0].price), color: C.purple });
+    if (it.minPart || it.maxPart) rows.push({ label: 'Participants', value: [it.minPart ? 'Min. ' + it.minPart : '', it.maxPart ? 'Max. ' + it.maxPart : ''].filter(Boolean).join(' · ') });
+    if (it.points && it.points.value) rows.push({ label: 'Points', value: it.points.value + ' point' + (parseFloat(String(it.points.value).replace(',', '.')) > 1 ? 's' : '') + (it.points.counter ? ' · ' + counterLabel(it.points.counter) : ''), color: C.purple });
+    if (hasText(it.audience) || hasText(it.minAge)) rows.push({ label: 'Public', value: [it.audience, ageText(it.minAge)].filter(hasText).join(' · ') });
+    if (hasText(it.address)) rows.push({ label: 'Adresse', value: it.address });
+    if (hasText(it.carbon)) rows.push({ label: 'Bilan carbone', value: it.carbon, color: C.green });
+    return rows;
   }
   /** Paragraphes du corps de fiche, par ordre d'importance. */
   function bodyParas(ctx, o) {
@@ -131,7 +134,9 @@
       if (p.heading && used + n >= cap && q.length) { bi++; used = 0; q.unshift(p); continue; }
       if (used + n <= cap) { chunks[bi].push(p); used += n; continue; }
       var room = cap - used;
-      if (!empty && room >= 2 && n - room >= 1) {
+      // Pas de ligne isolée : au moins 2 lignes de chaque côté d'une coupure.
+      var minPart = 2;
+      if (!empty && room >= minPart && n - room >= minPart) {
         var parts = M.splitPara(p, box.w, size, room);
         if (parts) { chunks[bi].push(parts[0]); q.unshift(parts[1]); }
         else q.unshift(p);
@@ -165,178 +170,284 @@
   function natural(paras, w, size) { return Mx().textHeight(paras, w, size); }
 
   /* ---------- En-tête commun des fiches ---------- */
+  /** Catégorie + pictogramme à gauche, statuts sobres à droite (urgence prioritaire), titre et date sur toute la largeur. */
   function itemHeader(b, ctx, o) {
     o = o || {};
-    var it = ctx.item, C = L().C, cat = ctx.cat, cls = ctx.cls;
+    var it = ctx.item, C = L().C, cat = ctx.cat, cls = ctx.cls || {}, d = D();
     b.banner();
-    var badges = [];
-    if (cls.isLast && !o.noLastBadge) badges.push('last');
-    if (cls.isNew) badges.push('new');
-    badges.forEach(function (k, i) { b.badge(k, 1078 - i * 104, 150, 96); });
-    var reserve = badges.length ? badges.length * 104 + 10 : 0;
-    var x = 40, y = 186;
-    var label = o.tag || (cat ? cat.name : '');
-    if (label) b.tag(label, x, y, o.tagColor || (cat ? cat.color : C.blue), { size: 13 });
-    y = 218;
-    var title = it.title || 'Titre à renseigner';
-    var tr = b.text(title + (ctx.part === 2 ? ' (suite)' : ''), x, y, 1120 - reserve, 92, { size: o.titleSize || 34, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.12 });
-    y += tr.height + 4;
+    var x = 40, right = 1160, boxW = 0;
+    if (!o.noStatus && showLastBox(ctx)) { var lb = b.lastChanceBox(it.regEnd ? d.fmtLong(it.regEnd) : '', right, 186, { align: 'right' }); right = lb.x - 12; boxW = lb.w + 12; }
+    if (!o.noStatus && cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', right, 188, { align: 'right' }); right = nl.x - 10; }
+    if (cat) b.catTag(cat, x, 188, { maxW: Math.max(120, right - x - 50) });
+    else if (o.tag) b.tag(o.tag, x, 188, C.blue, { size: 13 });
+    var y = 222;
+    var suffix = ctx.part >= 2 ? ' (suite)' : '';
+    var titleW = 1120 - boxW;
+    var tr = b.text((it.title || 'Titre à renseigner') + suffix, x, y, titleW, 88, { size: o.titleSize || 34, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.12 });
+    y += tr.height + 2;
     var dl = o.dateLine !== undefined ? o.dateLine : dateLine(it);
-    if (dl) { var dr = b.text(dl, x, y, 1120 - reserve, 52, { size: 20, min: 14, bold: true, color: C.purple, maxLines: 2, field: 'date', noScale: true }); y += dr.height; }
-    return y + 12;
+    if (dl) { var dr = b.text(dl, x, y, y < 238 ? titleW : 1120, 50, { size: 19, min: 14, bold: true, color: C.purple, maxLines: 2, field: 'date', noScale: true }); y += dr.height; }
+    return Math.max(y + 10, boxW ? 246 : 0);
   }
   function itemFooter(b, ctx, o) {
     o = o || {};
     var it = ctx.item, s = ctx.settings;
-    b.footer({ contact: o.noContact ? '' : contactText(it), contactRuns: contactRuns(it), link: CO().linkOf(it, s), ctaLabel: it.link && it.link.label, note: s.footerNote });
+    b.footer({ contactRuns: o.noContact ? [] : contactRuns(it), contactCount: shownContacts(it).length, link: CO().linkOf(it, s), ctaLabel: it.link && it.link.label, note: s.footerNote });
   }
   /** Colonne de photos (1, 2 ou 3+ photos) ou rien. */
   function photoStack(b, photos, x, y, w, h, color) {
     photos = (photos || []).filter(Boolean);
     if (!photos.length) return;
     if (photos.length === 1 || h < 200) { b.photo(photos[0], x, y, w, h); }
-    else if (photos.length === 2) { var h1 = (h - 10) * 0.55; b.photo(photos[0], x, y, w, h1); b.photo(photos[1], x, y + h1 + 10, w, h - h1 - 10); }
+    else if (photos.length === 2) { var h1 = (h - 10) * 0.56; b.photo(photos[0], x, y, w, h1); b.photo(photos[1], x, y + h1 + 10, w, h - h1 - 10); }
     else { var hb = (h - 10) * 0.6, hs = h - hb - 10, ws = (w - 10) / 2; b.photo(photos[0], x, y, w, hb); b.photo(photos[1], x, y + hb + 10, ws, hs); b.photo(photos[2], x + ws + 10, y + hb + 10, ws, hs); }
     b.rect(x, y + h - 4, w, 4, { fill: color || L().C.blue });
   }
+  function decoPanel(b, ctx, x, y, w, h) {
+    var C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue;
+    b.rect(x, y, w, h, { fill: L().tint(color, 0.14), r: 10 });
+    var s = Math.min(96, w * 0.42, h * 0.5);
+    b.glyph(CSE.icons ? CSE.icons.iconFor(cat) : 'star', x + (w - s) / 2, y + h / 2 - s / 2 - (cat ? 16 : 0), s, L().shade(color, 0.05));
+    if (cat) b.text(cat.name, x + 12, y + h / 2 + s / 2 - 6, w - 24, 30, { size: 17, min: 11, bold: true, color: L().shade(color, 0.2), align: 'center', upper: true, maxLines: 1, role: 'deco', noScale: true });
+    b.rect(x, y + h - 4, w, 4, { fill: color });
+  }
+
+  /* ---------- Moteur de composition adaptatif ---------- */
+  /** Plus grande taille (≥ minimum lisible) pour laquelle tout le texte tient dans les zones ; null sinon. */
+  function bestSize(paras, boxes, max, min) {
+    for (var s = max; s >= min - 0.001; s -= 0.5) { if (!flow(paras, boxes, s).rest.length) return Math.round(s * 10) / 10; }
+    return null;
+  }
+  function usedHeight(paras, boxes, s) {
+    var f = flow(paras, boxes, s);
+    return f.chunks.reduce(function (h, ch, i) { return h + Mx().textHeight(ch, boxes[i].w, s); }, 0);
+  }
+  /** Colonnes équilibrées : plus petite hauteur commune pour laquelle tout le texte tient encore. */
+  function balance(paras, boxes, s) {
+    if (boxes.length < 2) return boxes;
+    if (flow(paras, boxes, s).rest.length) return boxes;
+    var lo = s * 1.2, hi = boxes[0].h;
+    for (var i = 0; i < 12; i++) {
+      var mid = (lo + hi) / 2;
+      var test = boxes.map(function (bx) { return Object.assign({}, bx, { h: mid }); });
+      if (flow(paras, test, s).rest.length) lo = mid; else hi = mid;
+    }
+    return boxes.map(function (bx) { return Object.assign({}, bx, { h: Math.ceil(hi) + 2 }); });
+  }
+  function drawFlow(b, paras, boxes, s, field) {
+    if (boxes.length > 1) boxes = balance(paras, boxes, s);
+    var f = flow(paras, boxes, s);
+    f.chunks.forEach(function (ch, i) { if (ch.length) b.text(ch, boxes[i].x, boxes[i].y, boxes[i].w, boxes[i].h, { size: s, min: s, noScale: true, field: field || 'description' }); });
+    return f.rest;
+  }
+  function columns(x, y, w, h, n, gutter) {
+    if (n === 1) return [{ x: x, y: y, w: w, h: h }];
+    var cw = (w - gutter) / 2;
+    return [{ x: x, y: y, w: cw, h: h }, { x: x + cw + gutter, y: y, w: cw, h: h }];
+  }
+  function sizeRange(b) { var L_ = L(); return { max: b.density === 'airy' ? 22 : b.density === 'compact' ? 17.5 : 20, min: L_.MIN.body }; }
+
+  /** Diapositives de suite : en-tête allégé, texte sur deux colonnes, même taille de corps. */
+  function continuation(ctx, rest, size, firstIndex) {
+    var out = [], guard = 0;
+    while (rest.length && guard++ < 6) {
+      var cctx = nth(ctx, firstIndex + out.length, { part: firstIndex + out.length + 1 });
+      var b = new (L().Builder)(cctx);
+      var top = itemHeader(b, cctx, { dateLine: '', noStatus: true });
+      var boxes = columns(40, top, 1120, 590 - top, 2, 32);
+      var s = bestSize(rest, boxes, Math.min(sizeRange(b).max, size + 3), L().MIN.body) || Math.max(L().MIN.body, size);
+      rest = drawFlow(b, rest, boxes, s, 'suite de la description');
+      if (rest.length) b.text('Suite page suivante →', 760, 572, 400, 18, { size: 13, color: L().C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+      itemFooter(b, cctx);
+      out.push(b.result({ part: firstIndex + out.length + 1 }));
+    }
+    if (rest.length) out[out.length - 1].warnings.push({ level: 'block', code: 'overflow', field: 'description', msg: 'Texte beaucoup trop long : plus de 6 diapositives de suite. Raccourcir la fiche.' });
+    return out;
+  }
+  function splitMode(ctx) { var s = ctx.page && ctx.page.split; return s === true || s === 'force' ? 'force' : s === 'off' ? 'off' : 'auto'; }
 
   /* ================= MODÈLES DE FICHE ================= */
 
-  /** Activité classique : photos | texte (+ tarifs) | informations. */
+  /** Activité classique : compare plusieurs compositions (largeur photo, 1 ou 2 colonnes, position des infos et
+   * des tarifs) et retient la plus lisible ; si rien ne tient à 12 pt, la suite passe sur une autre diapositive. */
   function classic(ctx) {
-    if (ctx.page && ctx.page.split) return classicSplit(ctx);
-    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue;
-    var top = itemHeader(b, ctx), bottom = 590;
-    var chips = asideChips(ctx), pr = ctx.prices;
-    var paras = bodyParas(ctx);
-    var photos = it.photos || [];
-    var asideW = chips.length ? 236 : 0, gap = 22;
-    // La colonne photo s'élargit lorsque le texte est court.
-    var textDemand = natural(paras, 560, 17);
-    var deco = !photos.length && textDemand < 230 && !b.priceGridSize(pr, 600).h;
-    var photoW = photos.length ? (textDemand < 140 ? 400 : textDemand < 260 ? 340 : 300) : deco ? 300 : 0;
-    var x0 = 40, right = 1160 - (asideW ? asideW + gap : 0);
-    var mainX = x0 + (photoW ? photoW + gap : 0), mainW = right - mainX;
-    var g = b.priceGridSize(pr, right - x0);
-    var gridY = bottom - g.h;
-    var bodyBottom = g.h ? gridY - 14 : bottom;
-    if (photoW && photos.length) photoStack(b, photos, x0, top, photoW, bodyBottom - top, color);
-    else if (photoW) { b.photo('', x0, top, photoW, bodyBottom - top, { color: color, label: cat ? cat.name : '' }); b.rect(x0, bodyBottom - 4, photoW, 4, { fill: color }); }
-    if (asideW) b.chips(chips, right + gap, top, asideW, bottom - top, { stretch: false });
-    if (g.h) b.priceGrid(pr, x0, gridY, right - x0);
-    var boxes;
-    if (mainW > 720 && paras.length > 3 && natural(paras, mainW, 18) > bodyBottom - top - 10) {
-      var cw = (mainW - 30) / 2;
-      boxes = [{ x: mainX, y: top, w: cw, h: bodyBottom - top }, { x: mainX + cw + 30, y: top, w: cw, h: bodyBottom - top }];
-    } else boxes = [{ x: mainX, y: top, w: mainW, h: bodyBottom - top }];
+    var it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue;
+    var probe = new (L().Builder)(ctx);
+    var top = itemHeader(probe, ctx), bottom = 590;
+    var paras = bodyParas(ctx), rows = practicalRows(ctx), pr = ctx.prices, photos = it.photos || [];
+    var R = sizeRange(probe), gap = 22;
+    var asideMode = rows.length >= 3 ? 'column' : rows.length ? 'strip' : 'none';
+    var asideW = asideMode === 'column' ? 240 : 0;
     var plainLen = Mx().plain(paras).length;
-    if (paras.length) placeFlow(b, paras, boxes, { size: plainLen < 260 ? 24 : plainLen < 520 ? 21 : photoW || asideW ? 19 : 20, field: 'description' });
-    else if (!photos.length && !chips.length && !g.h) b.text('Renseigner une description, un programme ou des informations pratiques.', mainX, top, mainW, 60, { size: 18, color: C.muted, field: 'description', important: false });
+    var photoOpts = photos.length ? [200, 250, 300, 360, 420] : (plainLen < 420 && pr.kind !== 'grid' ? [-300, 0] : [0]);
+    function geometry(pw, cols) {
+      var x0 = 40, right = 1160 - (asideW ? asideW + gap : 0);
+      var stripH = asideMode === 'strip' ? 46 + 12 : 0;
+      var panelH = asideW ? probe.infoPanelSize(rows, asideW) : 0;
+      var fullG = probe.priceGridSize(pr, 1120);
+      var priceFull = !!fullG.h && (!asideW || top + panelH + 12 <= bottom - stripH - fullG.h - 12);
+      var g = priceFull ? fullG : probe.priceGridSize(pr, right - x0);
+      var priceH = g.h ? g.h + 12 : 0;
+      var bodyBottom = bottom - stripH - priceH;
+      var tx = x0 + (pw ? Math.abs(pw) + gap : 0), tw = right - tx;
+      if (cols === 2 && tw < 620) return null;
+      var bh = bodyBottom - top;
+      if (bh < 80) return null;
+      return { pw: pw, cols: cols, top: top, bodyBottom: bodyBottom, right: right, priceFull: priceFull, priceW: priceFull ? 1120 : right - x0, priceY: bodyBottom + 12, stripY: bottom - 46,
+        panel: asideW ? { x: right + gap, y: top, w: asideW } : null, boxes: columns(tx, top, tw, bh, cols, 30) };
+    }
+    var best = null;
+    photoOpts.forEach(function (pw) {
+      [1, 2].forEach(function (cols) {
+        var gm = geometry(pw, cols);
+        if (!gm) return;
+        if (!paras.length) { var sc0 = (pw ? Math.abs(pw) / 100 : 0) - cols; if (!best || sc0 > best.score) best = { gm: gm, s: R.max, score: sc0 }; return; }
+        var s = bestSize(paras, gm.boxes, R.max, R.min);
+        if (s === null) return;
+        var bw = gm.boxes[0].w, cpl = bw / (s * 0.5);
+        var fill = usedHeight(paras, gm.boxes, s) / gm.boxes.reduce(function (a, x) { return a + x.h; }, 0);
+        var score = s * 10;
+        if (cols === 1 && cpl > 95) score -= (cpl - 95) * 0.4;
+        if (cols === 2 && fill < 0.45) score -= 12;
+        if (cols === 2 && cpl < 38) score -= 8;
+        score += fill * 6 + (pw ? Math.abs(pw) / 120 : 0);
+        if (!best || score > best.score) best = { gm: gm, s: s, score: score };
+      });
+    });
+    var mode = splitMode(ctx);
+    var b = new (L().Builder)(ctx);
+    itemHeader(b, ctx);
+    var rest = [], s = best ? best.s : R.min, gm = best ? best.gm : null;
+    if (!gm || mode === 'force') {
+      // Contenu trop long (ou scission demandée) : la page 1 retient la composition qui y place le plus de texte,
+      // à une taille confortable ; la suite passe sur la diapositive suivante.
+      s = Math.max(R.min, Math.min(R.max, 17));
+      var bestSplit = null;
+      (photos.length ? [220, 260, 300] : [0]).forEach(function (pw) {
+        [1, 2].forEach(function (cols) {
+          var g0 = geometry(pw, cols);
+          if (!g0) return;
+          var bx = g0.boxes.map(function (x) { return Object.assign({}, x); });
+          bx[bx.length - 1].h -= 22;
+          var placed = flow(paras, bx, s).chunks.reduce(function (n, ch) { return n + Mx().plain(ch).length; }, 0);
+          var sc = placed + pw / 50;
+          if (!bestSplit || sc > bestSplit.sc) bestSplit = { gm: g0, sc: sc };
+        });
+      });
+      gm = bestSplit ? bestSplit.gm : geometry(0, 1);
+    }
+    if (gm.pw > 0) photoStack(b, photos, 40, gm.top, gm.pw, gm.bodyBottom - gm.top, color);
+    else if (gm.pw < 0) decoPanel(b, ctx, 40, gm.top, -gm.pw, gm.bodyBottom - gm.top);
+    if (paras.length) {
+      if (mode === 'off' && (!best)) {
+        var f0 = flow(paras, gm.boxes, R.min);
+        f0.chunks[f0.chunks.length - 1] = f0.chunks[f0.chunks.length - 1].concat(f0.rest);
+        f0.chunks.forEach(function (ch, i) { if (ch.length) b.text(ch, gm.boxes[i].x, gm.boxes[i].y, gm.boxes[i].w, gm.boxes[i].h, { size: R.min, min: R.min, noScale: true, field: 'description' }); });
+        b.warn('Contenu trop long pour une seule diapositive : activer « 2 diapositives » (scission automatique) pour tout publier lisiblement.', 'warn', 'suggest-split');
+      } else {
+        var lastBox = gm.boxes[gm.boxes.length - 1];
+        if (!best || mode === 'force') lastBox.h -= 24;
+        rest = drawFlow(b, paras, gm.boxes, s, 'description');
+        if (rest.length) b.text('Suite page suivante →', lastBox.x, lastBox.y + lastBox.h + 4, lastBox.w, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+      }
+    } else if (!photos.length && !rows.length && pr.kind !== 'grid') {
+      b.text('Renseigner une description, un programme ou des informations pratiques.', gm.boxes[0].x, gm.top, gm.boxes[0].w, 60, { size: 18, color: C.muted, field: 'description', important: false });
+    }
+    if (pr.kind === 'grid') b.priceGrid(pr, 40, gm.priceY, gm.priceW);
+    if (gm.panel) b.infoPanel(rows, gm.panel.x, gm.panel.y, gm.panel.w);
+    else if (asideMode === 'strip') b.infoStrip(rows, 40, gm.stripY, 1120);
     itemFooter(b, ctx);
-    return [b.result()];
-  }
-  /** Fiche scindée : page 1 = essentiel + tarifs ; page 2 = suite du texte sur deux colonnes. */
-  function classicSplit(ctx) {
-    var C = L().C, it = ctx.item, cat = ctx.cat, color = cat ? cat.color : C.blue;
-    var paras = bodyParas(ctx);
-    // Page 1
-    var b1 = new (L().Builder)(Object.assign({}, ctx, { part: 1 }));
-    var top = itemHeader(b1, Object.assign({}, ctx, { part: 1 })), bottom = 590;
-    var chips = asideChips(ctx), pr = ctx.prices, photos = it.photos || [];
-    var asideW = chips.length ? 236 : 0, gap = 22, photoW = photos.length ? 340 : 0;
-    var right = 1160 - (asideW ? asideW + gap : 0), mainX = 40 + (photoW ? photoW + gap : 0), mainW = right - mainX;
-    var g = b1.priceGridSize(pr, right - 40), bodyBottom = g.h ? bottom - g.h - 14 : bottom;
-    if (photoW) photoStack(b1, photos, 40, top, photoW, bodyBottom - top, color);
-    if (asideW) b1.chips(chips, right + gap, top, asideW, bottom - top);
-    if (g.h) b1.priceGrid(pr, 40, bottom - g.h, right - 40);
-    var size = 18 * b1.scale;
-    var f = flow(paras, [{ w: mainW, h: bodyBottom - top - 30 }], size);
-    b1.text(f.chunks[0], mainX, top, mainW, bodyBottom - top - 30, { size: size, min: size, noScale: true, field: 'description' });
-    b1.text('Suite page suivante →', mainX, bodyBottom - 26, mainW, 24, { size: 14, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
-    itemFooter(b1, ctx);
-    // Page 2
-    var ctx2 = nth(ctx, 1, { part: 2 });
-    var b2 = new (L().Builder)(ctx2);
-    var top2 = itemHeader(b2, ctx2, { dateLine: '' });
-    var cw = (1120 - 30) / 2;
-    placeFlow(b2, f.rest.length ? f.rest : [rich('Toutes les informations figurent sur la page précédente.')[0]], [{ x: 40, y: top2, w: cw, h: 590 - top2 }, { x: 40 + cw + 30, y: top2, w: cw, h: 590 - top2 }], { size: 18, field: 'suite de la description' });
-    itemFooter(b2, ctx2);
-    return [b1.result(), b2.result()];
+    var slides = [b.result()];
+    if (rest.length) {
+      slides = slides.concat(continuation(ctx, rest, s, 1));
+      slides[0].warnings.push({ level: 'info', code: 'auto-split', msg: 'Contenu trop long pour une diapositive lisible : ' + slides.length + ' diapositives générées (corps de texte ≥ 12 pt).' });
+    }
+    return slides;
   }
 
-  /** Immersif : grande photo à gauche, message court et infos synthétiques. */
+  /** Immersif : grande photo à gauche, message court et informations synthétiques ; la suite éventuelle passe sur une autre diapositive. */
   function immersive(ctx) {
-    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue, cls = ctx.cls, d = D();
+    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue, cls = ctx.cls || {}, d = D();
     b.banner();
     var photo = (it.photos || [])[0];
     var pw = 560, y0 = L().BANNER_H + 2.5, h = 645 - y0;
-    b.photo(photo, 0, y0, pw, h, { color: color, label: cat ? cat.name : it.title });
-    if (cls.isNew) b.badge('new', 18, y0 + 14, 92);
-    if (cls.isLast) b.badge('last', cls.isNew ? 118 : 18, y0 + 14, 96);
-    b.rect(pw, y0, 8, h, { fill: color });
-    var x = pw + 40, w = 1160 - x, y = y0 + 16;
-    if (cat) { b.tag(cat.name, x, y, color, { size: 13 }); y += 36; }
-    var tr = b.text(it.title || 'Titre à renseigner', x, y, w, 110, { size: 38, min: L().MIN.title, bold: true, color: C.navy, maxLines: 3, field: 'titre', noScale: true, lh: 1.1 });
-    y += tr.height + 6;
+    if (photo) b.photo(photo, 0, y0, pw, h); else decoPanel(b, ctx, 0, y0, pw, h);
+    b.rect(pw, y0, 6, h, { fill: color });
+    var x = pw + 36, w = 1160 - x, y = y0 + 14, rx = 1160;
+    if (showLastBox(ctx)) { var lb = b.lastChanceBox(it.regEnd ? d.fmtLong(it.regEnd) : '', rx, y, { align: 'right' }); rx = lb.x - 10; }
+    if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, y + 2, { align: 'right' }); rx = nl.x - 10; }
+    if (cat) b.catTag(cat, x, y + 2, { maxW: Math.max(100, rx - x - 40) });
+    y += showLastBox(ctx) ? 60 : 40;
+    var tr = b.text(it.title || 'Titre à renseigner', x, y, w, 110, { size: 36, min: L().MIN.title, bold: true, color: C.navy, maxLines: 3, field: 'titre', noScale: true, lh: 1.1 });
+    y += tr.height + 4;
     var dl = dateLine(it);
-    if (dl) { var dr = b.text(dl, x, y, w, 56, { size: 21, min: 15, bold: true, color: C.purple, maxLines: 2, field: 'date', noScale: true }); y += dr.height + 10; }
-    var chips = asideChips(ctx, { noPrice: false });
-    var priceLine = ctx.prices.kind === 'grid' ? b.priceLine(ctx.prices) : '';
-    var chipH = chips.length ? Math.min(2, Math.ceil(chips.length / 2)) * 72 + 8 : 0;
-    var plH = priceLine ? 34 : 0;
-    var textBottom = 590 - chipH - plH - 6;
+    if (dl) { var dr = b.text(dl, x, y, w, 52, { size: 19, min: 14, bold: true, color: C.purple, maxLines: 2, field: 'date', noScale: true }); y += dr.height + 8; }
+    var rows = practicalRows(ctx);
+    var pl = ctx.prices.kind === 'grid' ? b.priceLine(ctx.prices) : '';
+    var shown = rows.slice(0, 4), gridRows = Math.ceil(shown.length / 2);
+    var infoH = gridRows ? gridRows * 54 + 4 : 0, plH = pl ? 28 : 0;
+    var textBottom = 590 - infoH - plH - (infoH || plH ? 6 : 0);
     var paras = joinParas([hasText(it.summary) ? rich(it.summary, { bold: true }) : [], hasText(it.description) ? rich(it.description) : [], hasText(it.highlights) ? programParas(it.highlights).map(function (p) { p.bullet = true; return p; }) : []]);
-    if (paras.length) b.text(paras, x, y, w, textBottom - y, { size: 20, field: 'description' });
-    var cy = textBottom + 8;
-    if (priceLine) { b.text(priceLine, x, cy, w, 28, { size: 16, min: 12, bold: true, color: C.purple, maxLines: 1, field: 'tarifs', noScale: true }); cy += plH; }
-    if (chips.length) {
-      var shown = chips.slice(0, 4), cw = (w - 12) / 2;
-      shown.forEach(function (c, i) {
-        var cx = x + (i % 2) * (cw + 12), yy = cy + Math.floor(i / 2) * 72;
-        b.chips([c], cx, yy, cw, 64, {});
-      });
-      if (chips.length > 4) b.warn('Immersif : ' + (chips.length - 4) + ' information(s) secondaire(s) masquée(s) ; utiliser le modèle classique pour tout afficher.', 'info');
+    var rest = [], R = sizeRange(b), s = R.min;
+    if (paras.length) {
+      var box = [{ x: x, y: y, w: w, h: textBottom - y }];
+      var fit = bestSize(paras, box, R.max, R.min);
+      s = fit || 17;
+      if (!fit) box[0].h -= 22;
+      rest = drawFlow(b, paras, box, s, 'description');
+      if (rest.length) b.text('Suite page suivante →', x, box[0].y + box[0].h + 2, w, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
     }
-    b.footer({ contact: '', link: CO().linkOf(it, ctx.settings), ctaLabel: it.link && it.link.label, note: ctx.settings.footerNote });
-    var ct = contactText(it);
-    if (ct) b.text([{ runs: [{ text: 'Contact : ', bold: true }].concat(contactRuns(it)) }], x, 604, 1160 - x - 280, 34, { size: 14, min: 11, color: C.purple, valign: 'middle', maxLines: 2, role: 'label', noScale: true, field: 'contacts', important: false });
-    return [b.result()];
+    var cy = textBottom + 6;
+    if (pl) { b.text(pl, x, cy, w, 24, { size: 15, min: 12, bold: true, color: C.purple, maxLines: 1, field: 'tarifs', noScale: true }); cy += plH; }
+    if (shown.length) {
+      var cw = (w - 12) / 2;
+      shown.forEach(function (r, i) { b.infoStrip([r], x + (i % 2) * (cw + 12), cy + Math.floor(i / 2) * 54, cw); });
+      if (rows.length > 4) b.warn('Immersif : ' + (rows.length - 4) + ' information(s) secondaire(s) masquée(s) ; le modèle classique les affiche toutes.', 'info');
+    }
+    b.footer({ link: CO().linkOf(it, ctx.settings), ctaLabel: it.link && it.link.label, note: ctx.settings.footerNote });
+    var runs = contactRuns(it);
+    if (runs.length) b.text([{ runs: [{ text: shownContacts(it).length > 1 ? 'Contacts : ' : 'Contact : ', bold: true }].concat(runs) }], x, 604, 1160 - x - 280, 34, { size: 14, min: 12, color: C.purple, valign: 'middle', maxLines: 2, role: 'label', noScale: true, field: 'contacts', important: false });
+    var slides = [b.result()];
+    if (rest.length) {
+      slides = slides.concat(continuation(ctx, rest, s, 1));
+      slides[0].warnings.push({ level: 'info', code: 'auto-split', msg: 'Texte trop long pour le modèle immersif : suite générée sur une autre diapositive (ou choisir le modèle classique).' });
+    }
+    return slides;
   }
 
   /** Essentiel / affiche : titre, date, lieu, visuel, appel à l'action. */
   function poster(ctx) {
-    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue, cls = ctx.cls, d = D();
+    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue, cls = ctx.cls || {}, d = D();
     b.banner();
-    if (cls.isNew) b.badge('new', 1078, 150, 96);
-    if (cls.isLast) b.badge('last', cls.isNew ? 974 : 1078, 150, 96);
-    var y = 186;
-    if (cat) { var tw = Mx().width(cat.name.toLocaleUpperCase('fr'), 13, true) * 1.06 + 24; b.tag(cat.name, 600 - tw / 2, y, color, { size: 13 }); }
-    y = 216;
-    var tr = b.text(String(it.title || 'Titre à renseigner').toLocaleUpperCase('fr'), 120, y, 960, 104, { size: 44, min: 26, bold: true, color: C.navy, align: 'center', maxLines: 2, field: 'titre', noScale: true, lh: 1.08 });
-    y += tr.height + 6;
+    var rx = 1160;
+    if (showLastBox(ctx)) { var lb = b.lastChanceBox(it.regEnd ? d.fmtLong(it.regEnd) : '', rx, 186, { align: 'right' }); rx = lb.x - 12; }
+    if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, 188, { align: 'right' }); rx = nl.x - 10; }
+    if (cat) b.catTag(cat, 40, 188, { maxW: Math.max(100, rx - 90) });
+    var y = showLastBox(ctx) ? 244 : 222;
+    var tr = b.text(String(it.title || 'Titre à renseigner').toLocaleUpperCase('fr'), 80, y, 1040, 100, { size: 42, min: 26, bold: true, color: C.navy, align: 'center', maxLines: 2, field: 'titre', noScale: true, lh: 1.08 });
+    y += tr.height + 4;
     var dr = d.fmtRange(it.dateStart, it.dateEnd, { day: true });
     var times = [it.timeStart, it.timeEnd].filter(hasText).map(d.fmtTime);
     var dline = [dr, times.length === 2 ? times[0] + ' – ' + times[1] : times[0] ? 'à ' + times[0] : ''].filter(Boolean).join(' · ') || it.subtitle;
-    if (dline) { var r1 = b.text(dline, 60, y, 1080, 40, { size: 28, min: 18, bold: true, color: C.purple, align: 'center', maxLines: 1, field: 'date', noScale: true }); y += r1.height + 2; }
-    if (hasText(it.location)) { var r2 = b.text(it.location + (hasText(it.address) ? ' — ' + it.address : ''), 60, y, 1080, 30, { size: 19, min: 14, bold: true, color: C.muted, align: 'center', maxLines: 1, field: 'lieu', noScale: true }); y += r2.height + 4; }
+    if (dline) { var r1 = b.text(dline, 60, y, 1080, 38, { size: 26, min: 18, bold: true, color: C.purple, align: 'center', maxLines: 1, field: 'date', noScale: true }); y += r1.height + 2; }
+    if (hasText(it.location)) { var r2 = b.text(it.location + (hasText(it.address) ? ' — ' + it.address : ''), 60, y, 1080, 28, { size: 19, min: 14, bold: true, color: C.muted, align: 'center', maxLines: 1, field: 'lieu', noScale: true }); y += r2.height + 4; }
     y += 6;
-    // Pastilles : date limite, tarif, places.
     var pills = [];
-    if (it.regEnd) pills.push({ t: 'Inscriptions jusqu’au ' + d.fmtShort(it.regEnd, true) + (cls.isLast ? ' · ' + d.countdown(it.regEnd, ctx.ref) : ''), fill: C.red });
+    if (it.regEnd && !showLastBox(ctx)) pills.push({ t: 'Inscriptions jusqu’au ' + d.fmtShort(it.regEnd, true), fill: C.navy });
     if (ctx.prices.rows.length) pills.push({ t: ctx.prices.kind === 'single' ? ctx.prices.rows[0].label + ' : ' + P().money(ctx.prices.rows[0].price) : 'Dès ' + P().money(ctx.prices.rows[0].price) + ' (T1)', fill: C.purple });
     if (it.maxPart) pills.push({ t: it.maxPart + ' places', fill: C.blue });
-    if (ageText(it.minAge)) pills.push({ t: ageText(it.minAge), fill: C.orange });
+    if (ageText(it.minAge)) pills.push({ t: ageText(it.minAge), fill: L().shade(color, 0.1) });
     var pillsH = pills.length ? 40 : 0;
-    var summaryH = hasText(it.summary) ? 56 : 0;
+    var summaryH = hasText(it.summary) ? 54 : 0;
     var visualH = 590 - y - pillsH - summaryH - (pillsH ? 12 : 0) - (summaryH ? 8 : 0);
     var photo = (it.photos || [])[0];
     if (visualH >= 90) {
       if (photo) b.photo(photo, 40, y, 1120, visualH);
       else if (!summaryH && hasText(it.description)) { b.rect(40, y, 1120, visualH, { fill: L().tint(color, 0.14), r: 14 }); b.text(it.description, 80, y + 14, 1040, visualH - 28, { size: 22, color: C.dark, align: 'center', valign: 'middle', field: 'description' }); }
-      else b.photo('', 40, y, 1120, visualH, { color: color, label: cat ? cat.name : '' });
+      else decoPanel(b, ctx, 40, y, 1120, visualH);
       y += visualH + 8;
     }
-    if (summaryH) { b.text(it.summary, 60, y, 1080, 50, { size: 19, min: 14, bold: true, color: C.dark, align: 'center', maxLines: 2, field: 'résumé', noScale: true }); y += summaryH; }
+    if (summaryH) { b.text(it.summary, 60, y, 1080, 48, { size: 19, min: 15, bold: true, color: C.dark, align: 'center', maxLines: 2, field: 'résumé', noScale: true }); y += summaryH; }
     if (pills.length) {
       var sizes = pills.map(function (p) { return Math.min(420, Mx().width(p.t, 16, true) * 1.06 + 30); });
       var total = sizes.reduce(function (a, c) { return a + c; }, 0) + 12 * (pills.length - 1);
@@ -351,161 +462,171 @@
   /** Animation : visuel, temps forts, programme horaire, infos pratiques. */
   function animation(ctx) {
     var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.purple;
-    var top = itemHeader(b, ctx, { titleSize: 38 }), bottom = 590;
+    var top = itemHeader(b, ctx, { titleSize: 36 }), bottom = 590;
     var photos = it.photos || [];
     var hasHl = hasText(it.highlights), hasPg = hasText(it.program);
-    var chips = asideChips(ctx);
+    var rows = practicalRows(ctx);
     var pr = ctx.prices, pl = pr.kind === 'grid' ? b.priceLine(pr) : '';
-    var photoW = photos.length ? 330 : 0, x = 40 + (photoW ? photoW + 22 : 0), w = 1160 - x;
-    var chipRowH = chips.length ? 74 : 0;
-    var plH = pl ? 30 : 0;
-    var bodyBottom = bottom - chipRowH - plH - (chipRowH || plH ? 8 : 0);
+    var photoW = photos.length ? 320 : 0, x = 40 + (photoW ? photoW + 22 : 0), w = 1160 - x;
+    var shown = rows.slice(0, w > 700 ? 4 : 3);
+    var rowH = shown.length ? 58 : 0, plH = pl ? 28 : 0;
+    var bodyBottom = bottom - rowH - plH;
     if (photoW) photoStack(b, photos, 40, top, photoW, bottom - top, color);
     var y = top;
     var lead = joinParas([hasText(it.summary) ? rich(it.summary, { bold: true }) : [], hasText(it.description) ? rich(it.description) : []]);
     var boxesH = (hasHl || hasPg) ? Math.max(150, (bodyBottom - y) * (lead.length ? 0.62 : 1)) : 0;
     if (lead.length) {
       var leadH = bodyBottom - y - boxesH - (boxesH ? 12 : 0);
-      var lr = b.text(lead, x, y, w, leadH, { size: 20, field: 'description' });
+      var lr = b.text(lead, x, y, w, leadH, { size: 20, min: L().MIN.body, field: 'description' });
       y += (boxesH ? Math.min(leadH, lr.height) + 12 : leadH);
       boxesH = bodyBottom - y;
     }
     if (hasHl || hasPg) {
       var both = hasHl && hasPg, bw = both ? (w - 16) / 2 : w;
       if (hasHl) {
-        b.rect(x, y, bw, boxesH, { fill: L().tint(color, 0.1), stroke: L().tint(color, 0.35), r: 12 });
-        b.text('Temps forts', x + 16, y + 10, bw - 32, 26, { size: 18, bold: true, color: L().shade(color, 0.1), maxLines: 1, role: 'label', noScale: true, upper: true });
-        b.text(programParas(it.highlights).map(function (p) { p.bullet = true; return p; }), x + 16, y + 42, bw - 32, boxesH - 52, { size: 22, field: 'temps forts', color: C.dark });
+        b.rect(x, y, bw, boxesH, { fill: L().tint(color, 0.08), stroke: L().tint(color, 0.3), r: 12 });
+        b.text('Temps forts', x + 16, y + 10, bw - 32, 24, { size: 16, bold: true, color: L().shade(color, 0.1), maxLines: 1, role: 'label', noScale: true, upper: true });
+        b.text(programParas(it.highlights).map(function (p) { p.bullet = true; return p; }), x + 16, y + 40, bw - 32, boxesH - 50, { size: 21, min: L().MIN.body, field: 'temps forts', color: C.dark });
       }
       if (hasPg) {
         var px = hasHl ? x + bw + 16 : x;
         b.rect(px, y, bw, boxesH, { fill: C.lighter, stroke: C.border, r: 12 });
-        b.text('Programme', px + 16, y + 10, bw - 32, 26, { size: 18, bold: true, color: C.navy, maxLines: 1, role: 'label', noScale: true, upper: true });
-        b.text(programParas(it.program), px + 16, y + 42, bw - 32, boxesH - 52, { size: 21, field: 'programme', color: C.dark });
+        b.text('Programme', px + 16, y + 10, bw - 32, 24, { size: 16, bold: true, color: C.navy, maxLines: 1, role: 'label', noScale: true, upper: true });
+        b.text(programParas(it.program), px + 16, y + 40, bw - 32, boxesH - 50, { size: 20, min: L().MIN.body, field: 'programme', color: C.dark });
       }
     }
-    var cy = bodyBottom + 8;
-    if (pl) { b.text(pl, x, cy, w, 26, { size: 16, min: 12, bold: true, color: C.purple, maxLines: 1, noScale: true, field: 'tarifs' }); cy += plH; }
-    if (chips.length) {
-      var n = Math.min(chips.length, w > 700 ? 4 : 3), cw = (w - (n - 1) * 10) / n;
-      chips.slice(0, n).forEach(function (c, i) { b.chips([c], x + i * (cw + 10), cy, cw, 66, {}); });
-      if (chips.length > n) b.warn('Animation : ' + (chips.length - n) + ' information(s) secondaire(s) non affichée(s).', 'info');
-    }
+    var cy = bodyBottom + 6;
+    if (pl) { b.text(pl, x, cy, w, 22, { size: 15, min: 12, bold: true, color: C.purple, maxLines: 1, noScale: true, field: 'tarifs' }); cy += plH; }
+    if (shown.length) b.infoStrip(shown, x, cy + 4, w);
+    if (rows.length > shown.length) b.warn('Animation : ' + (rows.length - shown.length) + ' information(s) secondaire(s) non affichée(s).', 'info');
     itemFooter(b, ctx);
     return [b.result()];
   }
 
-  /** Information : pictogramme, message hiérarchisé, encadré d'alerte. */
+  /** Information : pictogramme, message hiérarchisé, encadré d'alerte ; texte long → diapositive de suite. */
   function info(ctx) {
-    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cls = ctx.cls;
+    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cls = ctx.cls || {};
     b.banner();
-    if (cls.isNew) b.badge('new', 1078, 150, 96);
-    var reserve = cls.isNew ? 110 : 0;
-    b.icon('info', 40, 194, 58, C.blue);
-    var x = 116, y = 190;
-    b.text((ctx.cat && ctx.cat.name !== 'Informations' ? ctx.cat.name : 'Information CSE'), x, y, 600, 20, { size: 13, bold: true, color: C.blue, upper: true, maxLines: 1, role: 'label', noScale: true });
+    var rx = 1160;
+    if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, 192, { align: 'right' }); rx = nl.x - 10; }
+    var cat = ctx.cat;
+    b.rect(40, 192, 52, 52, { fill: cat && cat.name !== 'Informations' ? cat.color : C.blue, r: 12 });
+    b.glyph(CSE.icons ? CSE.icons.iconFor(cat || { name: 'Informations' }) : 'info', 50, 202, 32, C.white);
+    var x = 108, y = 188;
+    b.text((cat && cat.name !== 'Informations' ? cat.name : 'Information CSE'), x, y, rx - x, 20, { size: 13, bold: true, color: C.blue, upper: true, maxLines: 1, role: 'label', noScale: true });
     y += 22;
-    var tr = b.text(it.title || 'Titre de l’information', x, y, 1160 - x - reserve, 84, { size: 32, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.12 });
+    var tr = b.text(it.title || 'Titre de l’information', x, y, 1160 - x - (cls.isNew ? 1160 - rx : 0), 80, { size: 32, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.12 });
     y += tr.height + 2;
     var dl = [it.subtitle, it.dateStart && !it.dateEnd ? D().fmtLong(it.dateStart) : ''].filter(hasText).join(' · ');
-    if (dl) { var sr = b.text(dl, x, y, 1160 - x - reserve, 30, { size: 19, min: 14, bold: true, color: C.purple, maxLines: 1, field: 'sous-titre', noScale: true }); y += sr.height; }
-    y = Math.max(y + 14, 268);
+    if (dl) { var sr = b.text(dl, x, y, 1160 - x, 28, { size: 19, min: 14, bold: true, color: C.purple, maxLines: 1, field: 'sous-titre', noScale: true }); y += sr.height; }
+    y = Math.max(y + 12, 262);
     var photo = (it.photos || [])[0];
-    var alert = hasText(it.notes);
-    var bottom = 592;
-    var alertH = 0;
-    var textX = 40, textW = 1120;
+    var bottom = 592, alertH = 0, textX = 40, textW = 1120;
     if (photo) { var pw = 340; b.photo(photo, 1160 - pw, y, pw, bottom - y); b.rect(1160 - pw, bottom - 4, pw, 4, { fill: C.blue }); textW = 1120 - pw - 24; }
-    if (alert) {
+    if (hasText(it.notes)) {
       var ap = rich(it.notes, { bold: true });
-      var ah = Math.min(130, Math.max(58, b.measure(ap, textW - 90, 18) + 26));
+      var ah = Math.min(130, Math.max(56, b.measure(ap, textW - 90, 17) + 24));
       alertH = ah;
-      b.rect(textX, bottom - ah, textW, ah, { fill: '#FFF1F0', stroke: '#F3C1BE', r: 12 });
-      b.icon('alert', textX + 16, bottom - ah / 2 - 18, 36, C.red);
-      b.text(ap, textX + 66, bottom - ah + 12, textW - 84, ah - 24, { size: 18, min: 13, bold: true, color: '#A1142A', valign: 'middle', field: 'encadré d’alerte' });
+      b.rect(textX, bottom - ah, textW, ah, { fill: '#FFF4F2', stroke: '#F3C9C4', r: 12 });
+      b.icon('alert', textX + 16, bottom - ah / 2 - 17, 34, '#C2453B');
+      b.text(ap, textX + 64, bottom - ah + 12, textW - 82, ah - 24, { size: 17, min: L().MIN.body, bold: true, color: '#8F2A22', valign: 'middle', field: 'encadré d’alerte' });
     }
     var bodyBottom = bottom - (alertH ? alertH + 14 : 0);
     var paras = bodyParas(ctx, { notesElsewhere: true });
     b.rect(textX, y, textW, bodyBottom - y, { fill: C.lighter, r: 14 });
-    b.rect(textX, y, 6, bodyBottom - y, { fill: C.blue });
+    b.rect(textX, y, 5, bodyBottom - y, { fill: C.blue });
+    var rest = [], s = 18;
     if (paras.length) {
-      var boxes = textW > 900 && natural(paras, textW - 50, 20) > bodyBottom - y - 30 ? [{ x: textX + 24, y: y + 16, w: (textW - 74) / 2, h: bodyBottom - y - 30 }, { x: textX + 50 + (textW - 74) / 2, y: y + 16, w: (textW - 74) / 2, h: bodyBottom - y - 30 }] : [{ x: textX + 24, y: y + 16, w: textW - 48, h: bodyBottom - y - 30 }];
-      placeFlow(b, paras, boxes, { size: 24, field: 'texte de l’information' });
+      var R = sizeRange(b), inner = { x: textX + 24, y: y + 16, w: textW - 48, h: bodyBottom - y - 30 };
+      var one = [inner], two = textW > 900 ? columns(inner.x, inner.y, inner.w, inner.h, 2, 30) : null;
+      var s1 = bestSize(paras, one, Math.max(R.max, 23), R.min), s2 = two ? bestSize(paras, two, Math.max(R.max, 23), R.min) : null;
+      var useTwo = s2 !== null && (s1 === null || (s2 > s1 + 1.5 && inner.w / (s1 * 0.5) > 95));
+      var boxes = useTwo ? two : one;
+      s = useTwo ? s2 : s1;
+      if (s === null) { s = 17; boxes = two || one; boxes[boxes.length - 1].h -= 22; }
+      rest = drawFlow(b, paras, boxes, s, 'texte de l’information');
+      if (rest.length) { var lbx = boxes[boxes.length - 1]; b.text('Suite page suivante →', lbx.x, lbx.y + lbx.h + 2, lbx.w, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true }); }
     }
     itemFooter(b, ctx);
-    return [b.result()];
+    var slides = [b.result()];
+    if (rest.length) slides = slides.concat(continuation(ctx, rest, s, 1));
+    return slides;
   }
 
   /** Offre partenaire. */
   function partner(ctx) {
-    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cls = ctx.cls, pa = it.partner || {}, d = D();
+    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cls = ctx.cls || {}, pa = it.partner || {}, d = D();
     b.banner();
-    if (cls.isNew) b.badge('new', 1078, 150, 96);
     var photos = it.photos || [];
     var lx = 40, lw = 390, top = 196, bottom = 592;
-    // Logo / visuel principal sur fond blanc encadré.
     b.rect(lx, top, lw, photos[1] ? 250 : bottom - top - 50, { fill: C.white, stroke: C.border, r: 14 });
     if (photos[0]) b.image(photos[0], lx + 14, top + 14, lw - 28, (photos[1] ? 250 : bottom - top - 50) - 28, { fit: 'contain' });
     else b.text(it.title || 'Partenaire', lx + 20, top + 20, lw - 40, (photos[1] ? 250 : bottom - top - 50) - 40, { size: 36, min: 16, bold: true, color: C.purple, align: 'center', valign: 'middle', role: 'deco', noScale: true, maxLines: 3 });
     if (photos[1]) b.photo(photos[1], lx, top + 262, lw, bottom - top - 262 - 50);
     b.pill('Offre partenaire', lx, bottom - 38, { size: 14, h: 32, fill: C.purple });
-    var x = lx + lw + 30, w = 1160 - x - (cls.isNew ? 70 : 0), y = top - 4;
-    var tr = b.text(it.title || 'Nom du partenaire', x, y, w, 80, { size: 36, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.1 });
+    var rx = 1160;
+    if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, 192, { align: 'right' }); rx = nl.x - 10; }
+    var x = lx + lw + 30, y = top - 4;
+    var tr = b.text(it.title || 'Nom du partenaire', x, y, rx - x, 80, { size: 36, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.1 });
     y += tr.height + 2;
-    if (hasText(it.subtitle)) { var sr = b.text(it.subtitle, x, y, w, 30, { size: 19, min: 14, bold: true, color: C.muted, maxLines: 1, field: 'sous-titre', noScale: true }); y += sr.height + 4; }
+    if (hasText(it.subtitle)) { var sr = b.text(it.subtitle, x, y, 1160 - x, 28, { size: 19, min: 14, bold: true, color: C.muted, maxLines: 1, field: 'sous-titre', noScale: true }); y += sr.height + 4; }
     y += 6;
     var w2 = 1160 - x;
     var hasAmount = hasText(pa.amount);
     if (hasText(pa.offer) || hasAmount) {
       var offerParas = rich(pa.offer || '', { bold: true });
       var ow = w2 - (hasAmount ? 150 : 0) - 36;
-      var oh = Math.max(hasAmount ? 128 : 70, Math.min(150, b.measure(offerParas, ow, 26, { bold: true }) + 30));
+      var oh = Math.max(hasAmount ? 124 : 70, Math.min(150, b.measure(offerParas, ow, 26, { bold: true }) + 30));
       b.rect(x, y, w2, oh, { fill: C.lilac, stroke: '#DCCFF8', r: 14 });
       if (hasAmount) {
-        b.ellipse(x + 14, y + oh / 2 - 60, 120, 120, { fill: C.red, rot: -8 });
-        b.text(pa.amount, x + 20, y + oh / 2 - 60, 108, 120, { size: 34, min: 14, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 2, rot: -8, role: 'deco', noScale: true, field: 'remise' });
+        b.ellipse(x + 16, y + oh / 2 - 56, 112, 112, { fill: C.purple });
+        b.text(pa.amount, x + 22, y + oh / 2 - 56, 100, 112, { size: 32, min: 14, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 2, role: 'deco', noScale: true, field: 'remise' });
       }
-      if (offerParas.length) b.text(offerParas, x + (hasAmount ? 150 : 18), y + 12, ow, oh - 24, { size: 28, min: 15, bold: true, color: C.purple, valign: 'middle', field: 'offre', noScale: true });
+      if (offerParas.length) b.text(offerParas, x + (hasAmount ? 150 : 18), y + 12, ow, oh - 24, { size: 27, min: 15, bold: true, color: C.purple, valign: 'middle', field: 'offre', noScale: true });
       y += oh + 12;
     }
-    var rowH = 0, rx = x;
-    if (hasText(pa.code)) { var cw2 = b.pill('CODE : ' + pa.code, rx, y, { size: 18, h: 40, fill: C.navy }); rx += cw2 + 12; rowH = 40; }
+    var rowH = 0, rx2 = x;
+    if (hasText(pa.code)) { var cw2 = b.pill('CODE : ' + pa.code, rx2, y, { size: 18, h: 40, fill: C.navy }); rx2 += cw2 + 12; rowH = 40; }
     var until = pa.validUntil || it.regEnd;
-    if (until) { b.pill('Jusqu’au ' + d.fmtLong(until) + (cls.daysLeft !== null && cls.daysLeft <= 7 && cls.daysLeft >= 0 ? ' · ' + d.countdown(until, ctx.ref) : ''), rx, y, { size: 17, h: 40, fill: C.red }); rowH = 40; }
+    if (until) {
+      var soon = cls.daysLeft !== null && cls.daysLeft <= 7 && cls.daysLeft >= 0;
+      b.pill('Jusqu’au ' + d.fmtLong(until), rx2, y, { size: 17, h: 40, fill: soon ? C.lastBg : C.light, color: soon ? C.lastText : C.navy, stroke: soon ? C.lastBorder : C.border });
+      rowH = 40;
+    }
     if (rowH) y += rowH + 14;
     var paras = bodyParas(ctx);
-    if (paras.length) b.text(paras, x, y, w2, 590 - y, { size: 19, field: 'conditions de l’offre' });
+    if (paras.length) b.text(paras, x, y, w2, 590 - y, { size: 19, min: L().MIN.body, field: 'conditions de l’offre' });
     itemFooter(b, ctx);
     return [b.result()];
   }
 
-  /** Calendrier mensuel de permanences (jours ouvrés). Les cases sont cliquables dans l'aperçu. */
+  /** Calendrier mensuel de permanences (jours ouvrés) : Ouvert (vert, horaire standard), Horaire particulier
+   * (orange, horaire saisi jour par jour), Fermé (rouge). Légende générée à partir des jours réellement utilisés.
+   * Les cases sont cliquables dans l'aperçu. */
   function calendar(ctx) {
-    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, d = D(), cal = it.calendar || {};
+    var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, d = D(), cal = it.calendar || {}, M_ = CSE.model;
     b.banner();
     var month = cal.month || (ctx.ref || d.todayParis()).slice(0, 7);
     var title = it.title || 'Permanences du mois';
     b.text(title, 300, 186, 860, 44, { size: 32, min: 22, bold: true, color: C.navy, align: 'center', maxLines: 1, field: 'titre', noScale: true });
     if (hasText(it.subtitle)) b.text(it.subtitle, 300, 228, 860, 26, { size: 18, min: 13, bold: true, color: C.purple, align: 'center', maxLines: 1, field: 'sous-titre', noScale: true });
-    // Colonne gauche : service, photo, contact, catalogue.
+    // Colonne gauche : service, photo, contacts (noms cliquables), catalogue.
     var lx = 40, lw = 230, ly = 194;
     var service = cal.service || 'Permanences';
     b.rect(lx, ly, lw, 54, { fill: C.blue, r: 27 });
-    b.text(service, lx + 14, ly, lw - 28, 54, { size: 22, min: 12, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 2, field: 'service', noScale: true });
+    b.glyph('calendar', lx + 16, ly + 14, 26, C.white);
+    b.text(service, lx + 50, ly, lw - 64, 54, { size: 21, min: 12, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 2, field: 'service', noScale: true });
     ly += 66;
     var photo = (it.photos || [])[0];
     if (photo) { b.photo(photo, lx, ly, lw, 150); ly += 162; }
-    var contactParas = [];
-    if ((it.contacts || []).length) {
-      contactParas.push({ runs: [{ text: 'Contact :', bold: true, color: C.navy }] });
-      it.contacts.forEach(function (c) {
-        contactParas.push({ runs: [{ text: c.name || c.email, bold: true, color: C.purple }] });
-        if (c.name && c.email) contactParas.push({ runs: [{ text: c.email, color: C.purple, link: 'mailto:' + c.email }] });
-        if (c.phone) contactParas.push({ runs: [{ text: c.phone, color: C.muted }] });
-      });
+    var cParas = [];
+    var shown = shownContacts(it);
+    if (shown.length) {
+      cParas.push({ runs: [{ text: shown.length > 1 ? 'Contacts :' : 'Contact :', bold: true, color: C.navy }] });
+      shown.forEach(function (c) { var link = mailto(c.email); var name = hasText(c.name) ? c.name.trim() : String(c.email).split('@')[0]; cParas.push({ runs: [link ? { text: name, bold: true, color: C.purple, link: link } : { text: name, bold: true, color: C.purple }] }); });
     }
     var catH = cal.catalogUrl ? 44 : 0;
-    if (contactParas.length) b.text(contactParas, lx, ly, lw, 590 - ly - catH, { size: 17, min: 12, align: 'center', field: 'contacts' });
+    if (cParas.length) b.text(cParas, lx, ly, lw, 590 - ly - catH, { size: 17, min: 12, align: 'center', field: 'contacts' });
     if (cal.catalogUrl && CO().validUrl(cal.catalogUrl)) {
       b.rect(lx, 590 - 38, lw, 38, { fill: C.light, stroke: C.border, r: 10 });
       b.text((cal.catalogLabel || 'Catalogue') + ' →', lx + 8, 590 - 38, lw - 16, 38, { size: 15, min: 11, bold: true, color: C.blue, align: 'center', valign: 'middle', maxLines: 1, link: cal.catalogUrl, role: 'label', noScale: true });
@@ -513,18 +634,16 @@
     // Grille.
     var p = /^(\d{4})-(\d{2})$/.exec(month), year = +p[1], mo = +p[2];
     var first = month + '-01', mon = d.monday(first);
-    var lastDay = new Date(Date.UTC(year, mo, 0)).getUTCDate();
-    var lastIso = month + '-' + d.pad(lastDay);
+    var lastIso = month + '-' + d.pad(new Date(Date.UTC(year, mo, 0)).getUTCDate());
     var weeks = [];
     for (var wk = mon; wk <= lastIso; wk = d.addDays(wk, 7)) {
-      // Ignore une semaine dont aucun jour ouvré n'appartient au mois.
       var anyIn = false;
       for (var k = 0; k < 5; k++) if (d.addDays(wk, k).slice(0, 7) === month) anyIn = true;
       if (anyIn) weeks.push(wk);
     }
     var gx = 300, gy = 262, gw = 560, colW = 58, cellW = (gw - colW) / 5;
     var headH = 40, dayH = 30;
-    var rowH = Math.min(52, (590 - 24 - gy - headH - dayH) / weeks.length);
+    var rowH = Math.min(54, (590 - 24 - gy - headH - dayH) / weeks.length);
     b.rect(gx, gy, gw, headH, { fill: C.navy, r: 10 });
     b.text(d.monthLabel(month), gx, gy, gw, headH, { size: 23, min: 14, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true });
     var hy = gy + headH;
@@ -533,36 +652,72 @@
       b.rect(hx, hy, hw, dayH, { fill: '#DCE6F7', stroke: '#B8C8E4' });
       b.text(h, hx, hy, hw, dayH, { size: 14, min: 10, bold: true, color: C.navy, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true });
     });
-    var statusMap = {};
-    (cal.statuses || []).forEach(function (s) { statusMap[s.key] = s; });
+    var used = { open: [], special: [], closed: [] };
     weeks.forEach(function (wkStart, r) {
       var ry = hy + dayH + r * rowH;
       b.rect(gx, ry, colW, rowH, { fill: '#F2F5FB', stroke: '#B8C8E4' });
       b.text(String(d.isoWeek(wkStart).week), gx, ry, colW, rowH, { size: 16, min: 10, color: C.muted, bold: true, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true });
       for (var c = 0; c < 5; c++) {
         var day = d.addDays(wkStart, c), inMonth = day.slice(0, 7) === month;
-        var st = statusMap[(cal.days || {})[day]];
+        var st = inMonth ? M_.calendarDay(cal, day) : null;
+        var def = st ? M_.CAL_STATES[st.state] : null;
         var cx = gx + colW + c * cellW;
-        b.rect(cx, ry, cellW, rowH, { fill: inMonth ? (st ? st.color : C.white) : '#EEF0F3', stroke: '#B8C8E4', act: inMonth ? { type: 'calendar-day', date: day } : null });
-        if (inMonth) b.text(String(+day.slice(8)), cx, ry, cellW, rowH, { size: 18, min: 10, bold: true, color: st && isDark(st.color) ? C.white : C.ink, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, act: { type: 'calendar-day', date: day } });
+        b.rect(cx, ry, cellW, rowH, { fill: inMonth ? (def ? def.color : C.white) : '#EEF0F3', stroke: '#B8C8E4', act: inMonth ? { type: 'calendar-day', date: day } : null });
+        if (!inMonth) continue;
+        if (st) used[st.state].push({ date: day, hours: st.hours });
+        var hrs = st && st.state === 'special' ? st.hours : '';
+        if (hrs && rowH >= 40 && Mx().countLines(Mx().toParas(hrs), cellW - 8, 10.5) <= 2) {
+          b.text(String(+day.slice(8)), cx, ry + 3, cellW, 20, { size: 16, min: 10, bold: true, color: C.ink, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, act: { type: 'calendar-day', date: day } });
+          b.text(hrs, cx + 4, ry + 22, cellW - 8, rowH - 24, { size: 10.5, min: 9, bold: true, color: '#5A3A12', align: 'center', valign: 'top', maxLines: 2, role: 'label', noScale: true, field: 'horaire du jour', act: { type: 'calendar-day', date: day } });
+        } else {
+          b.text(String(+day.slice(8)) + (hrs ? '*' : ''), cx, ry, cellW, rowH, { size: 18, min: 10, bold: true, color: def && isDark(def.color) ? C.white : C.ink, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, act: { type: 'calendar-day', date: day } });
+        }
       }
     });
     var gridBottom = hy + dayH + weeks.length * rowH;
-    // Légende et horaires.
+    // Légende générée : seulement les états utilisés ce mois-ci, horaires dédoublonnés.
+    var legend = calendarLegend(cal, used);
     var rx = 890, rw = 270, ry2 = 262;
-    b.text('Légende', rx, ry2, rw, 26, { size: 17, bold: true, color: C.navy, upper: true, maxLines: 1, role: 'label', noScale: true });
+    if (legend.length) b.text('Légende', rx, ry2, rw, 26, { size: 17, bold: true, color: C.navy, upper: true, maxLines: 1, role: 'label', noScale: true });
     ry2 += 34;
-    (cal.statuses || []).forEach(function (s) {
-      if (!hasText(s.label)) return;
-      b.rect(rx, ry2 + 3, 34, 26, { fill: s.color, stroke: '#9AA8BF', r: 4 });
-      var lr = b.text(s.label, rx + 44, ry2, rw - 44, 52, { size: 17, min: 12, bold: true, color: C.ink, valign: 'top', maxLines: 2, field: 'légende', noScale: true });
-      ry2 += Math.max(36, lr.height + 10);
+    var hoursH = hasText(cal.hours) ? Math.min(90, b.measure(cal.hours, rw, 15, { bold: true }) + 12) : 0;
+    var room = 590 - ry2 - hoursH;
+    legend.forEach(function (e, i) {
+      var remaining = legend.length - i;
+      var maxH = Math.max(32, room - 36 * (remaining - 1));
+      b.rect(rx, ry2 + 2, 30, 24, { fill: M_.CAL_STATES[e.state].color, stroke: '#9AA8BF', r: 4 });
+      var lr = b.text(e.paras, rx + 40, ry2, rw - 40, maxH, { size: 16, min: 12, color: C.ink, valign: 'top', field: 'légende', noScale: true });
+      var hgt = Math.max(30, lr.height + 10);
+      ry2 += hgt; room -= hgt;
     });
-    if (hasText(cal.hours)) { ry2 += 6; b.text(cal.hours, rx, ry2, rw, 590 - ry2, { size: 17, min: 12, color: C.blue, bold: true, field: 'horaires' }); }
+    if (hoursH) b.text(cal.hours, rx, Math.max(ry2 + 4, 590 - hoursH), rw, hoursH, { size: 15, min: 12, color: C.blue, bold: true, field: 'horaires' });
     var note = cal.note || (ctx.settings.mentions && ctx.settings.mentions.calendar) || '';
-    if (note) b.text(note, gx, Math.min(gridBottom + 8, 590), gw + 300, 20, { size: 12.5, min: 10, color: C.muted, maxLines: 1, field: 'mention', role: 'label', noScale: true, important: false });
+    if (note) b.text(note, gx, Math.min(gridBottom + 8, 590), gw, 20, { size: 12.5, min: 10, color: C.muted, maxLines: 1, field: 'mention', role: 'label', noScale: true, important: false });
+    if (!used.open.length && !used.special.length && !used.closed.length) b.warn('Calendrier vide : cliquer sur les jours pour indiquer Ouvert, Horaire particulier ou Fermé.', 'warn');
+    if (used.special.some(function (x) { return !hasText(x.hours); })) b.warn('Des jours « Horaire particulier » n’ont pas d’horaire saisi.', 'warn');
     b.footer({ link: '', note: ctx.settings.footerNote });
     return [b.result()];
+  }
+  /** Légende du calendrier : [{state, paras}] uniquement pour les états présents. */
+  function calendarLegend(cal, used) {
+    var C = L().C, out = [];
+    if (used.open.length) out.push({ state: 'open', paras: [{ runs: [{ text: 'Ouvert', bold: true }].concat(hasText(cal.openHours) ? [{ text: ' : ' + cal.openHours.trim() }] : []) }] });
+    if (used.special.length) {
+      var groups = [], byHours = {};
+      used.special.forEach(function (x) {
+        var k = hasText(x.hours) ? x.hours.trim() : 'horaire à préciser';
+        if (!byHours[k]) { byHours[k] = []; groups.push(k); }
+        byHours[k].push(x.date);
+      });
+      var paras = [{ runs: [{ text: 'Horaires spécifiques', bold: true }].concat(groups.length === 1 ? [{ text: ' : ' + groups[0] }] : []) }];
+      if (groups.length > 1) groups.forEach(function (g) {
+        var dates = byHours[g].map(function (dt) { return dt.slice(8) + '/' + dt.slice(5, 7); }).join(', ');
+        paras.push({ runs: [{ text: dates + ' : ', bold: true, color: C.lastText }, { text: g }] });
+      });
+      out.push({ state: 'special', paras: paras });
+    }
+    if (used.closed.length) out.push({ state: 'closed', paras: [{ runs: [{ text: 'Fermé', bold: true }] }] });
+    return out;
   }
   function isDark(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return false; var n = parseInt(m[1], 16); return ((n >> 16 & 255) * 299 + (n >> 8 & 255) * 587 + (n & 255) * 114) / 1000 < 140; }
 
@@ -637,8 +792,8 @@
       mustRuns = [{ text: data.last.length > 1 ? 'Dernière semaine pour vous inscrire : ' : 'Dernière semaine pour vous inscrire à ', bold: true, color: C.navy }];
       data.last.slice(0, 5).forEach(function (it, i) {
         if (i) mustRuns.push({ text: ' · ', color: C.navy });
-        mustRuns.push({ text: it.title, bold: true, color: C.red });
-        if (it.regEnd) mustRuns.push({ text: ' (jusqu’au ' + d.fmtShort(it.regEnd) + ')', color: C.red });
+        mustRuns.push({ text: it.title, bold: true, color: C.lastText });
+        if (it.regEnd) mustRuns.push({ text: ' (jusqu’au ' + d.fmtShort(it.regEnd) + ')', color: C.lastText });
       });
       if (data.last.length > 5) mustRuns.push({ text: ' et ' + (data.last.length - 5) + ' autre(s)', color: C.navy });
     }
@@ -677,13 +832,13 @@
       y += h + gap;
     }
     if (hImp) row('message important', hImp, '#EAF2FE', '#C9DBF6', C.blue, imp.label || 'Important', impParas, 'mail');
-    if (hMust) row('à ne pas manquer', hMust, C.amber, '#F6D2A8', C.orange, 'À ne pas manquer', mustParas, 'calendar');
+    if (hMust) row('à ne pas manquer', hMust, C.lastBg, C.lastBorder, C.lastText, 'À ne pas manquer', mustParas, 'calendar');
     if (hNews) {
       var ny = y + 14, nh = hNews - 14;
-      b.rect(40, ny, 1120, nh, { fill: C.white, stroke: '#7CC49A', sw: 2, r: 14 });
+      b.rect(40, ny, 1120, nh, { fill: C.white, stroke: C.newBorder, sw: 2, r: 14 });
       var lab = data.newsTotal > 1 ? 'Les nouveautés de la semaine' : 'La nouveauté de la semaine';
       var lw = Mx().width(lab.toLocaleUpperCase('fr'), 16, true) * 1.06 + 40;
-      b.pill(lab.toLocaleUpperCase('fr'), 600 - lw / 2, ny - 16, { size: 16, h: 32, w: lw, fill: C.green });
+      b.pill(lab.toLocaleUpperCase('fr'), 600 - lw / 2, ny - 16, { size: 16, h: 32, w: lw, fill: C.newText });
       var n = news.length, cg = 14, cw = (1120 - 32 - (n - 1) * cg) / n, ch = nh - 32;
       news.forEach(function (it, i) {
         var cx = 56 + i * (cw + cg), cy = ny + 22;
@@ -721,15 +876,16 @@
       var b = new (L().Builder)(nth(ctx, ci));
       b.banner();
       var bandY = L().BANNER_H + 2.5, bandH = 66;
-      var color = urgent ? '#D9381E' : C.green;
-      b.rect(0, bandY, 1200, bandH, { fill: color });
-      if (urgent) { b.rect(0, bandY + bandH - 7, 1200, 7, { fill: '#FF9F1C' }); }
+      var bg = urgent ? C.lastBg : C.newBg, fg = urgent ? C.lastText : C.newText, bd = urgent ? C.lastBorder : C.newBorder, color = fg;
+      b.rect(0, bandY, 1200, bandH, { fill: bg });
+      b.rect(0, bandY + bandH - 2, 1200, 2, { fill: bd });
+      b.glyph(urgent ? 'calendar' : 'star', 40, bandY + 15, 34, fg);
       var title = o.title || (urgent ? 'Dernière chance !' : 'Les nouveautés de la semaine');
-      b.text(title.toLocaleUpperCase('fr') + (chunks.length > 1 ? ' (' + (ci + 1) + '/' + chunks.length + ')' : ''), 40, bandY + 6, 760, 36, { size: 30, min: 18, bold: true, color: C.white, maxLines: 1, field: 'titre', noScale: true });
+      b.text(title.toLocaleUpperCase('fr') + (chunks.length > 1 ? ' (' + (ci + 1) + '/' + chunks.length + ')' : ''), 88, bandY + 6, 712, 36, { size: 28, min: 18, bold: true, color: fg, maxLines: 1, field: 'titre', noScale: true });
       var sub = o.subtitle || (urgent ? 'Clôture des inscriptions d’ici le ' + d.fmtLong(d.addDays(ctx.issue.refDate, ctx.settings.lastDays || 7)) : (all.length > 1 ? all.length + ' nouvelles activités à découvrir' : 'Une nouvelle activité à découvrir'));
-      b.text(sub, 40, bandY + 38, 760, 22, { size: 16, min: 11, color: '#FFF6E8', maxLines: 1, field: 'sous-titre', noScale: true, role: 'label' });
+      b.text(sub, 88, bandY + 38, 712, 22, { size: 15, min: 11, color: fg, maxLines: 1, field: 'sous-titre', noScale: true, role: 'label' });
       var link = ctx.settings.portalUrl;
-      if (link) b.pill('Inscriptions sur le portail CSE →', 1160, bandY + 15, { size: 15, h: 34, fill: C.white, color: color, align: 'right', link: link });
+      if (link) b.pill('Inscriptions sur le portail CSE →', 1160, bandY + 15, { size: 15, h: 34, fill: C.white, color: fg, stroke: bd, align: 'right', link: link });
       var top = bandY + bandH + 14, bottom = 636;
       if (!items.length) {
         b.text(urgent ? 'Aucune activité ne se termine dans les 7 jours suivant la date du MEL.' : 'Aucune nouveauté sélectionnée pour ce MEL.', 80, top + 60, 1040, 120, { size: 24, color: C.muted, align: 'center', valign: 'middle', role: 'label' });
@@ -755,19 +911,21 @@
     var cat = CSE.model.categoryOf(ctx.project, it), col = cat ? cat.color : C.blue;
     var cls = CO().classify(it, ctx.issue.refDate, ctx.settings);
     var horizontal = w / h >= 1.6;
-    b.rect(x, y, w, h, { fill: C.white, stroke: urgent ? '#F2B8A8' : C.border, sw: urgent ? 2 : 1, r: 14 });
+    b.rect(x, y, w, h, { fill: C.white, stroke: C.border, sw: 1, r: 14 });
     var photo = (it.photos || [])[0];
     var pw = horizontal ? Math.min(h * 1.25, w * (n === 1 ? 0.5 : n >= 5 ? 0.34 : 0.42)) : w, ph = horizontal ? h : Math.min(h * 0.5, w * 0.62);
     b.photo(photo, x, y, pw, ph, { color: col, label: cat ? cat.name : '' });
-    if (urgent) {
-      var cd = it.regEnd ? d.countdown(it.regEnd, ctx.issue.refDate) : 'Urgent';
-      b.pill(cd, x + 12, y + 12, { size: n <= 2 ? 22 : 17, h: n <= 2 ? 40 : 32, fill: C.red });
-    } else if (cls.isNew || ctx.page.kind === 'news') {
-      b.badge('new', x + 10, y + 10, n <= 2 ? 78 : 62);
-    }
     var tx = horizontal ? x + pw + 16 : x + 14, ty = horizontal ? y + 14 : y + ph + 10;
     var tw = horizontal ? w - pw - 30 : w - 28, bottomY = y + h - 12;
-    if (cat) { b.text(cat.name, tx, ty, tw, 20, { size: 14, min: 10, bold: true, color: col, upper: true, maxLines: 1, role: 'label', noScale: true }); ty += 22; }
+    // Étiquette de statut miniature, alignée avec la catégorie (jamais sur la photo).
+    var stTxt = urgent ? (it.regEnd ? d.countdown(it.regEnd, ctx.issue.refDate) : 'Dernière semaine') : (cls.isNew || ctx.page.kind === 'news' ? 'Nouveauté' : '');
+    var stW = stTxt ? Math.min(150, Mx().width(stTxt, 11.5, true) * 1.06 + 18) : 0;
+    if (stTxt) b.statusLabel(urgent ? 'last' : 'new', stTxt, tx + tw, ty - 1, { align: 'right', size: 11.5, h: 22 });
+    if (cat) {
+      b.glyph(CSE.icons ? CSE.icons.iconFor(cat) : 'star', tx, ty + 1, 18, col);
+      b.text(cat.name, tx + 24, ty, tw - 24 - stW - 8, 20, { size: 14, min: 10, bold: true, color: col, upper: true, maxLines: 1, role: 'label', noScale: true });
+    }
+    if (cat || stTxt) ty += 26;
     var infoH = urgent ? 54 : 26;
     var big = n === 1;
     var titleH = bottomY - ty - infoH - 6;
@@ -776,14 +934,14 @@
     if (summaryParas) { var sy = ty + tr.height + 8; if (bottomY - infoH - 8 - sy > 40) b.text(summaryParas, tx, sy, tw, bottomY - infoH - 8 - sy, { size: big ? 21 : 18, min: 13, color: C.ink, field: 'résumé', important: false }); }
     var dt = d.fmtRange(it.dateStart, it.dateEnd);
     if (urgent) {
-      b.rect(tx, bottomY - infoH, tw, infoH, { fill: '#FFE9E3', r: 8 });
+      b.rect(tx, bottomY - infoH, tw, infoH, { fill: C.lastBg, stroke: C.lastBorder, r: 8 });
       var narrow = tw < 300;
-      b.text(it.regEnd ? (narrow ? 'Jusqu’au ' : 'Inscriptions jusqu’au ') + d.fmtDayShort(it.regEnd) : 'Date limite à préciser', tx + 10, bottomY - infoH + 4, tw - 20, 24, { size: 17, min: 11, bold: true, color: C.red, maxLines: 1, role: 'label', noScale: true, field: 'date limite' });
+      b.text(it.regEnd ? (narrow ? 'Jusqu’au ' : 'Inscriptions jusqu’au ') + d.fmtDayShort(it.regEnd) : 'Date limite à préciser', tx + 10, bottomY - infoH + 4, tw - 20, 24, { size: 16, min: 11, bold: true, color: C.lastText, maxLines: 1, role: 'label', noScale: true, field: 'date limite' });
       var dts = narrow ? d.fmtRangeShort(it.dateStart, it.dateEnd) : dt;
-      b.text(dts ? (narrow ? '' : 'Activité : ') + dts : 'Dernière semaine', tx + 10, bottomY - infoH + 28, tw - 20, 20, { size: 14, min: 10, color: '#8A3B12', maxLines: 1, role: 'label', noScale: true, field: 'date activité', important: false });
+      b.text(dts ? (narrow ? '' : 'Activité : ') + dts : 'Dernière semaine', tx + 10, bottomY - infoH + 28, tw - 20, 20, { size: 13.5, min: 10, color: C.lastText, maxLines: 1, role: 'label', noScale: true, field: 'date activité', important: false });
     } else if (dt) {
-      b.rect(tx, bottomY - infoH, tw, infoH, { fill: C.greenLight, r: 7 });
-      b.text(dt, tx + 10, bottomY - infoH, tw - 20, infoH, { size: 15, min: 10, bold: true, color: C.green, valign: 'middle', maxLines: 1, role: 'label', noScale: true });
+      b.rect(tx, bottomY - infoH, tw, infoH, { fill: C.newBg, stroke: C.newBorder, r: 7 });
+      b.text(dt, tx + 10, bottomY - infoH, tw - 20, infoH, { size: 15, min: 10, bold: true, color: C.newText, valign: 'middle', maxLines: 1, role: 'label', noScale: true });
     }
   }
 

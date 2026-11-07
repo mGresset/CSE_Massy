@@ -21,6 +21,12 @@
     delete c.cloud; delete c.updatedAt; delete c.version;
     return fnv(JSON.stringify(c));
   }
+  /** Remplace le contenu d'une fiche SANS changer d'objet (les vues ouvertes gardent une référence valide). */
+  function replaceInPlace(target, src) {
+    Object.keys(target).forEach(function (k) { if (!(k in src)) delete target[k]; });
+    Object.keys(src).forEach(function (k) { target[k] = src[k]; });
+    return target;
+  }
   function canEdit(role) { return role === 'editor' || role === 'admin'; }
   function canApprove(role) { return role === 'reviewer' || role === 'admin'; }
   function statusFor(item, role) {
@@ -73,17 +79,19 @@
                 report.conflicts.push(local.title);
               }
               remote.cloud = { id: row.id, version: row.version, hash: itemHash(remote) };
-              project.items[project.items.indexOf(local)] = remote;
+              replaceInPlace(local, remote);
               report.pulled++;
             });
           }
           if (localChanged) {
             if (!canEdit(role) && !(canApprove(role) && onlyStatusChanged(local, row))) { report.errors.push('« ' + local.title + ' » : modification locale non envoyée (rôle ' + role + ').'); return; }
+            // Empreinte figée AVANT l'envoi : une modification faite pendant la requête restera « à envoyer ».
+            var sentHash = itemHash(local);
             var body = canEdit(role) ? { title: local.title, payload: payloadOf(local, opts.embed), editorial_status: statusFor(local, role) } : { editorial_status: statusFor(local, role) };
             return api(ACT + '?id=eq.' + encodeURIComponent(row.id) + '&version=eq.' + row.version + '&select=id,version,editorial_status', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) }).then(function (res) {
               if (!res || !res.length) { report.conflicts.push(local.title); return; }
-              local.editorialStatus = res[0].editorial_status;
-              local.cloud = { id: row.id, version: res[0].version, hash: itemHash(local) };
+              if (itemHash(local) === sentHash) { local.editorialStatus = res[0].editorial_status; local.cloud = { id: row.id, version: res[0].version, hash: itemHash(local) }; }
+              else local.cloud = { id: row.id, version: res[0].version, hash: sentHash };
               report.pushed++;
             }, function (e) { report.errors.push('« ' + local.title + ' » : ' + e.message); });
           }
@@ -97,8 +105,14 @@
         var c2 = Promise.resolve();
         news.forEach(function (it) {
           c2 = c2.then(function () {
+            var sentHash = itemHash(it);
             return api(ACT + '?select=id,version,editorial_status', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ title: it.title, payload: payloadOf(it, opts.embed), editorial_status: statusFor(it, role) === 'approved' ? 'review' : statusFor(it, role) }) })
-              .then(function (res) { if (res && res[0]) { it.cloud = { id: res[0].id, version: res[0].version, hash: itemHash(it) }; it.editorialStatus = res[0].editorial_status; report.created++; } }, function (e) { report.errors.push('« ' + it.title + ' » : ' + e.message); });
+              .then(function (res) {
+                if (!res || !res[0]) return;
+                if (itemHash(it) === sentHash) { it.editorialStatus = res[0].editorial_status; it.cloud = { id: res[0].id, version: res[0].version, hash: itemHash(it) }; }
+                else it.cloud = { id: res[0].id, version: res[0].version, hash: sentHash };
+                report.created++;
+              }, function (e) { report.errors.push('« ' + it.title + ' » : ' + e.message); });
           });
         });
         return c2;

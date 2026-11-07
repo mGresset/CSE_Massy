@@ -94,6 +94,18 @@
       slide.addShape(shape, o);
       return Promise.resolve();
     }
+    if (it.t === 'path') {
+      // Pictogramme : forme libre (custGeom), mêmes points que le SVG de l'aperçu.
+      var k = it.w / (it.vb || 24) / PX, pts = [];
+      (it.d || []).forEach(function (c) {
+        if (c[0] === 'M') pts.push({ x: c[1] * k, y: c[2] * k, moveTo: true });
+        else if (c[0] === 'L') pts.push({ x: c[1] * k, y: c[2] * k });
+        else if (c[0] === 'Q') pts.push({ x: c[3] * k, y: c[4] * k, curve: { type: 'quadratic', x1: c[1] * k, y1: c[2] * k } });
+        else if (c[0] === 'Z') pts.push({ close: true });
+      });
+      slide.addShape(pptx.ShapeType.custGeom, Object.assign({}, g, { points: pts, fill: { color: hex(it.fill) }, line: { type: 'none' } }));
+      return Promise.resolve();
+    }
     if (it.t === 'image') {
       if (it.role === 'banner') return Promise.resolve(); // déjà dans le masque
       return prepareImage(it.src, it.w, it.h, it.fit, images).then(function (data) {
@@ -123,7 +135,7 @@
       pptx.author = meta.author || 'CSE THALES LAS MASSY';
       pptx.company = 'CSE THALES LAS MASSY';
       pptx.title = meta.title || 'MEL du CSE';
-      pptx.subject = 'Généré avec CSE Studio V9';
+      pptx.subject = 'Généré avec CSE Studio V9.1';
       pptx.lang = 'fr-FR';
       pptx.defineSlideMaster({ title: 'CSE_MEL', background: { color: 'FFFFFF' }, objects: [{ image: { x: 0, y: 0, w: inch(1200), h: inch(CSE.layout.BANNER_H), data: bd } }] });
       var warnings = [], images = {};

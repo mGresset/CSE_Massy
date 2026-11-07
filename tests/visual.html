@@ -30,12 +30,14 @@
 <script src="js/engine/metrics.js"></script>
 <script src="js/core/model.js"></script>
 <script src="js/core/compose.js"></script>
+<script src="js/engine/icons.js"></script>
 <script src="js/engine/layout.js"></script>
 <script src="js/engine/templates.js"></script>
 <script src="js/engine/render-html.js"></script>
 <script src="js/core/images.js"></script>
 <script src="js/core/demo-art.js"></script>
 <script src="js/core/demo.js"></script>
+<script src="tests/fixtures/v91-cases.js"></script>
 <script>
 (function () {
   var C = window.CSE, params = new URLSearchParams(location.search);
@@ -46,8 +48,9 @@
     var map = {};
     C.demoArt.themes.forEach(function (t) { map['img:demo-' + t] = C.demoArt.paint(t, 900, 600); });
     return C.images.importMap(map).then(function () {
-      var p = C.demo.build(ref, photo);
-      var issue = p.issues[0];
+      var p, issue;
+      if (params.get('set') === 'cases') { var cs = window.CSE_CASES.build(C, ref, photo); p = cs.project; issue = cs.issue; }
+      else { p = C.demo.build(ref, photo); issue = p.issues[0]; }
       if (params.get('split')) issue.pages.forEach(function (pg) { pg.split = true; });
       if (params.get('numbers')) issue.numbering = true;
       var out = C.templates.renderIssue(p, issue);

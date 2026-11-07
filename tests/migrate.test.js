@@ -49,7 +49,9 @@ test('migration du navigateur V6 + V8 : toutes les données reprises, clés d’
   assert.equal(info.type, 'info'); assert.equal(info.pricing.enabled, false); assert.equal(info.pricing.mode, 'fixed');
   // V8
   const cal = byTitle('Permanences');
-  assert.equal(cal.type, 'calendar'); assert.equal(cal.calendar.days['2026-11-04'], 'short'); assert.equal(cal.calendar.statuses[0].label, 'Permanence 13h–16h');
+  assert.equal(cal.type, 'calendar'); assert.equal(cal.calendar.statuses[0].label, 'Permanence 13h–16h', 'anciens statuts conservés');
+  assert.equal(cal.calendar.days['2026-11-04'], 'special', 'ancien statut « short » → horaire particulier');
+  assert.equal(cal.calendar.dayHours['2026-11-04'], '14h30–16h'); assert.equal(cal.calendar.openHours, '13h–16h');
   const d = byTitle('Atelier dessin');
   assert.equal(d.pricing.manual.length, 10); assert.equal(d.editorial, 'new'); assert.equal(d.density, 'compact');
   assert.deepEqual(d.contacts.map((c) => c.name + '|' + c.email), ['Claire Petit|claire@exemple.org', 'Denis|']);
@@ -96,5 +98,10 @@ test('sauvegarde V9 : aller-retour sans perte et fusion sans écrasement', () =>
   assert.equal(new Set(merged.items.map((x) => x.id)).size, merged.items.length, 'identifiants uniques');
   const is = merged.issues[1];
   assert.ok(is.pages.filter((pg) => pg.kind === 'item').every((pg) => merged.items.some((x) => x.id === pg.itemId)), 'références réécrites');
+});
+test('sauvegarde : les images des fiches en corbeille sont incluses', () => {
+  const I = require('../js/core/images.js');
+  const proj = { items: [{ photos: ['img:a', 'https://x/y.jpg'] }], trash: [{ at: 'x', item: { photos: ['img:b'] } }] };
+  assert.deepEqual(I.refsOf(proj).sort(), ['img:a', 'img:b']);
 });
 done('migrations et sauvegardes');

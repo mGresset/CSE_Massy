@@ -363,7 +363,14 @@
         var up = h('button', { class: 'btn small icon', type: 'button', 'aria-label': 'Monter ' + c.name, disabled: i <= 1 || c.name === 'Informations', onclick: function () { var t = p.categories[i - 1]; p.categories[i - 1] = c; p.categories[i] = t; App.save('settings'); draw(); } }, '↑');
         var down = h('button', { class: 'btn small icon', type: 'button', 'aria-label': 'Descendre ' + c.name, disabled: i === 0 || i === p.categories.length - 1, onclick: function () { var t = p.categories[i + 1]; p.categories[i + 1] = c; p.categories[i] = t; App.save('settings'); draw(); } }, '↓');
         var del = h('button', { class: 'btn small danger', type: 'button', disabled: c.name === 'Informations', onclick: function () { removeCat(c); } }, 'Supprimer');
-        box.appendChild(h('div', { class: 'cat-row' }, h('span', { class: 'muted small' }, String(i + 1)), color, name, h('span', { class: 'muted small' }, used(c.id) + ' fiche(s)'), h('div', { class: 'btn-group' }, up, down, del)));
+        var I = C.icons, auto = I.iconFor({ name: c.name });
+        var iconSel = ui.selectEl([{ id: '', label: 'Pictogramme auto (' + I.ICONS[auto].label + ')' }].concat(I.keys.map(function (k) { return { id: k, label: I.ICONS[k].label }; })), c.icon || '', { 'aria-label': 'Pictogramme de ' + c.name });
+        iconSel.addEventListener('change', function () { if (iconSel.value) c.icon = iconSel.value; else delete c.icon; App.save('settings'); draw(); });
+        var prev = h('span', { class: 'cat-ico', style: { background: c.color }, 'aria-hidden': 'true' });
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 24 24');
+        I.ICONS[I.iconFor(c)].paths.forEach(function (d) { var pa = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pa.setAttribute('d', I.svgPath(d)); pa.setAttribute('fill', '#FFFFFF'); svg.appendChild(pa); });
+        prev.appendChild(svg);
+        box.appendChild(h('div', { class: 'cat-row' }, prev, color, name, h('span', { class: 'muted small' }, used(c.id) + ' fiche(s)'), h('div', { class: 'btn-group' }, up, down, del), h('div', { class: 'cat-icon-sel' }, iconSel)));
       });
       var nn = h('input', { placeholder: 'Nouvelle catégorie…', maxlength: 45 });
       var add = h('button', { class: 'btn primary', type: 'button', onclick: function () {
@@ -397,18 +404,18 @@
     var box = h('div');
     function draw() {
       ui.clear(box);
-      box.appendChild(h('p', { class: 'small muted' }, 'Référents réutilisables dans les fiches (bouton « Ajouter un référent enregistré »). Tous les champs sont facultatifs. Ne saisir que des coordonnées destinées à être diffusées.'));
+      box.appendChild(h('p', { class: 'small muted' }, 'Référents réutilisables dans les fiches. Seul le nom est affiché sur les diapositives ; l’e-mail sert au lien « mailto: » (il reste lisible dans le lien). Les téléphones et fonctions saisis dans les versions précédentes sont conservés sans être affichés.'));
       p.settings.referents.forEach(function (r, i) {
-        var row = h('div', { class: 'contact-row' });
-        ['name', 'email', 'phone', 'role'].forEach(function (k) {
-          var inp = h('input', { type: k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text', value: r[k] || '', placeholder: { name: 'Nom', email: 'E-mail', phone: 'Téléphone', role: 'Fonction' }[k], 'aria-label': { name: 'Nom', email: 'E-mail', phone: 'Téléphone', role: 'Fonction' }[k] });
-          inp.addEventListener('input', function () { r[k] = inp.value; App.save('settings'); });
-          row.appendChild(inp);
+        var row = h('div', { class: 'contact-row two' });
+        ['name', 'email'].forEach(function (k) {
+          var inp = h('input', { type: k === 'email' ? 'email' : 'text', value: r[k] || '', placeholder: k === 'name' ? 'Prénom Nom' : 'E-mail (lien mailto)', 'aria-label': (k === 'name' ? 'Nom' : 'E-mail') + ' du référent ' + (i + 1) });
+          inp.addEventListener('input', function () { r[k] = inp.value.trim ? (k === 'email' ? inp.value.trim() : inp.value) : inp.value; App.save('settings'); });
+          row.appendChild(h('div', {}, inp));
         });
-        row.appendChild(h('button', { class: 'btn small danger', type: 'button', 'aria-label': 'Retirer', onclick: function () { p.settings.referents.splice(i, 1); App.save('settings'); draw(); } }, '✕'));
+        row.appendChild(h('button', { class: 'btn small danger', type: 'button', 'aria-label': 'Retirer le référent ' + (i + 1), onclick: function () { p.settings.referents.splice(i, 1); App.save('settings'); draw(); } }, '✕'));
         box.appendChild(row);
       });
-      box.appendChild(h('button', { class: 'btn', type: 'button', onclick: function () { p.settings.referents.push({ name: '', email: '', phone: '', role: '' }); App.save('settings'); draw(); } }, '+ Ajouter un référent'));
+      box.appendChild(h('button', { class: 'btn', type: 'button', onclick: function () { p.settings.referents.push({ name: '', email: '' }); App.save('settings'); draw(); } }, '+ Ajouter un référent'));
     }
     draw();
     return box;

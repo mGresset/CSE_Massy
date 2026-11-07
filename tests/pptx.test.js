@@ -52,9 +52,10 @@ const JSZip = globalThis.JSZip;
     assert.ok(/<a:t>17<\/a:t>/.test(xml) || /<a:t>18<\/a:t>/.test(xml), 'numéro de page présent');
     assert.ok(files.some((f) => /notesSlide/.test(f)));
   });
-  test('formes natives (rectangles arrondis, ellipses) et rotation des pastilles', () => {
-    assert.ok(/prstGeom prst="roundRect"/.test(xml) && /prstGeom prst="ellipse"/.test(xml));
-    assert.ok(/rot="-720000"/.test(xml), 'pastille inclinée de −12°');
+  test('formes natives et pictogrammes vectoriels (forme libre), sans pastille inclinée', () => {
+    assert.ok(/prstGeom prst="roundRect"/.test(xml));
+    assert.ok(/<a:custGeom>/.test(xml) && /<a:quadBezTo>/.test(xml), 'pictogrammes en forme libre');
+    assert.ok(!/rot="-720000"/.test(xml), 'plus de pastille « NEW ! » inclinée');
   });
   done('export PowerPoint (' + slides.length + ' diapositives, ' + Math.round(res.buffer.length / 1024) + ' Ko)');
 })().catch((e) => { console.error(e); process.exit(1); });

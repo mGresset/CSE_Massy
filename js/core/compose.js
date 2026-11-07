@@ -214,6 +214,11 @@
       CSE.pricing.fromPricing(item.pricing, project.settings).issues.forEach(function (x) { out.push(x); });
     }
     if (item.points && item.points.value && !item.points.counter) out.push(['info', 'Points saisis sans compteur : seule la valeur sera affichée.']);
+    (item.contacts || []).forEach(function (c) {
+      var e = String(c.email || '').trim();
+      if (e && !/^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[A-Za-z]{2,}$/.test(e)) out.push(['info', 'E-mail de « ' + (c.name || e) + ' » invalide : le nom sera affiché sans lien.']);
+    });
+    if (item.forceLast && !item.regEnd) out.push(['warn', '« Dernière chance » forcée sans date limite d’inscription : aucune date ne sera affichée.']);
     if (ref && project) {
       var c = classify(item, ref, project.settings);
       if (c.expired) out.push(['warn', 'Fiche expirée à la date du MEL (' + d.fmtLong(ref) + ').']);

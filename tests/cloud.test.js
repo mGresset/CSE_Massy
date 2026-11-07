@@ -99,5 +99,32 @@ function project(titles) {
     assert.equal(ro.created, 0, 'pas de recréation automatique en ligne');
     assert.ok(!srv.db.act.some((r) => r.title === 'Concert'));
   });
+  // Modification faite PENDANT l'envoi : elle ne doit pas être marquée comme synchronisée.
+  const srv2 = fakeServer();
+  const E = project(['Atelier']);
+  await S.syncItems(E, srv2.api('editor'), { role: 'editor' });
+  const slow = (fn) => async (path, opts) => { const r = await fn(path, opts); if (opts && opts.method === 'PATCH') E.items[0].summary = 'Saisi pendant la synchronisation'; return r; };
+  E.items[0].summary = 'Version 1';
+  const ref = E.items[0];
+  await S.syncItems(E, slow(srv2.api('editor')), { role: 'editor' });
+  test('modification concurrente pendant l’envoi : conservée et renvoyée ensuite', () => {
+    assert.equal(srv2.db.act[0].payload.summary, 'Version 1');
+    assert.notEqual(S.itemHash(E.items[0]), E.items[0].cloud.hash, 'reste « à envoyer »');
+  });
+  await S.syncItems(E, srv2.api('editor'), { role: 'editor' });
+  test('… puis envoyée à la synchronisation suivante, sans changer d’objet', () => {
+    assert.equal(srv2.db.act[0].payload.summary, 'Saisi pendant la synchronisation');
+    assert.equal(S.itemHash(E.items[0]), E.items[0].cloud.hash);
+    assert.ok(E.items[0] === ref, 'la fiche ouverte dans l’éditeur reste la même');
+  });
+  // Mise à jour reçue d'un autre bénévole : remplacement en place (référence conservée).
+  const F = M.blankProject();
+  await S.syncItems(F, srv2.api('editor'), { role: 'editor' });
+  const opened = F.items[0];
+  srv2.db.act[0].payload.summary = 'Modifié ailleurs'; srv2.db.act[0].version++;
+  await S.syncItems(F, srv2.api('editor'), { role: 'editor' });
+  test('mise à jour distante appliquée en place', () => {
+    assert.ok(F.items[0] === opened); assert.equal(opened.summary, 'Modifié ailleurs');
+  });
   done('synchronisation Supabase (faux serveur)');
 })().catch((e) => { console.error(e); process.exit(1); });
