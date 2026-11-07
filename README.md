@@ -1,3 +1,7 @@
+## CSE Studio V9.6.2
+
+Corrections du rendu des images dans les PowerPoint et finitions graphiques des fiches activités. Voir `MISE_A_JOUR_V9_6_2.md`.
+
 # CSE Studio V9.6 — Finition visuelle et fiabilisation
 
 **Version actuelle : 9.6 (7 novembre 2026).** Application statique à publier sur GitHub Pages, sans changement de structure des sauvegardes V9.5.2.

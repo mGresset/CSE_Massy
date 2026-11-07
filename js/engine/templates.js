@@ -69,7 +69,16 @@
       // Éviter « Du 15 au 20 février — Du 15 au 20 février » lorsque le sous-titre
       // répète déjà exactement la période remplie dans les champs de date.
       var normalized = function (v) { return String(v || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr'); };
-      if (!range || normalized(subtitle) !== normalized(range)) line = line ? line + ' — ' + subtitle : subtitle;
+      if (range) {
+        var subNorm = normalized(subtitle), rangeNorm = normalized(range);
+        if (subNorm === rangeNorm) subtitle = '';
+        else if (subNorm.indexOf(rangeNorm) === 0 && /^[\s\-–—·:]+/.test(subtitle.slice(range.length))) {
+          // Exemple : « Du 15 au 28 février 2027 — Excursions » : la date
+          // est déjà produite par les champs structurés, garder seulement le complément.
+          subtitle = subtitle.slice(range.length).replace(/^[\s\-–—·:]+/, '').trim();
+        }
+      }
+      if (subtitle) line = line ? line + ' — ' + subtitle : subtitle;
     }
     return line;
   }
@@ -285,22 +294,33 @@
     var asideMode = rows.length >= 3 ? 'column' : rows.length ? 'strip' : 'none';
     var asideW = asideMode === 'column' ? 240 : 0;
     var plainLen = Mx().plain(paras).length;
-    var photoOpts = photos.length ? [200, 250, 300, 360, 420] : (plainLen < 560 ? [-280, 0] : [0]);
+    // Les fiches peu chargées gagnent à privilégier le visuel et un corps de texte aéré
+    // plutôt qu'un petit paragraphe isolé au milieu d'une grande zone blanche.
+    var sparse = paras.length && plainLen < 360;
+    if (sparse && probe.density !== 'compact') R.max = Math.max(R.max, 22);
+    var photoOpts = photos.length ? (sparse ? [360, 410, 460] : [200, 250, 300, 360, 420]) : (plainLen < 560 ? [-330, -280, 0] : [0]);
     function geometry(pw, cols) {
       var x0 = 40, right = 1160 - (asideW ? asideW + gap : 0);
-      var stripH = asideMode === 'strip' ? 46 + 12 : 0;
       var panelH = asideW ? probe.infoPanelSize(rows, asideW) : 0;
-      // Le rectangle T1–T10 reste en bas à gauche, pas sur toute la largeur.
-      // Le moteur réserve uniquement sa hauteur pour ne pas masquer le contenu.
+      // Les 1–2 informations pratiques s'alignent à DROITE du cartouche tarifaire,
+      // au lieu d'ajouter une rangée pleine largeur en dessous : le corps de la fiche
+      // récupère ainsi de la hauteur et la zone blanche sous le contenu disparaît.
       var compactPriceW = Math.min(465, right - x0);
       var g = probe.priceGridSize(pr, compactPriceW);
+      var alongsidePrice = asideMode === 'strip' && g.h > 0 && right - (x0 + g.actualW + 12) >= 235;
+      var stripH = asideMode === 'strip' && !alongsidePrice ? 46 + 12 : 0;
       var priceH = g.h ? g.h + 8 : 0;
       var bodyBottom = bottom - stripH - priceH;
       var tx = x0 + (pw ? Math.abs(pw) + gap : 0), tw = right - tx;
       if (cols === 2 && tw < 620) return null;
       var bh = bodyBottom - top;
       if (bh < 80) return null;
-      return { pw: pw, cols: cols, top: top, bodyBottom: bodyBottom, right: right, priceW: compactPriceW, priceY: bodyBottom + 8, stripY: bottom - 46,
+      var priceY = bodyBottom + 8;
+      return { pw: pw, cols: cols, top: top, bodyBottom: bodyBottom, right: right, priceW: compactPriceW, priceY: priceY,
+        stripY: alongsidePrice ? priceY : bottom - 46,
+        stripX: alongsidePrice ? x0 + g.actualW + 12 : x0,
+        stripW: alongsidePrice ? right - x0 - g.actualW - 12 : 1120,
+        stripBesidePrices: alongsidePrice,
         panel: asideW ? { x: right + gap, y: top, w: asideW } : null, boxes: columns(tx, top, tw, bh, cols, 30) };
     }
     var best = null;
@@ -345,6 +365,14 @@
     }
     if (gm.pw > 0) photoStack(b, photos, 40, gm.top, gm.pw, gm.bodyBottom - gm.top, color);
     else if (gm.pw < 0) decoPanel(b, ctx, 40, gm.top, -gm.pw, gm.bodyBottom - gm.top);
+    // Fond éditorial léger sur les fiches concises : la zone à droite de la photo
+    // reste un bloc structuré et non une large bande blanche vide.
+    if (sparse && gm.boxes && gm.boxes.length) {
+      var firstBox = gm.boxes[0], finalBox = gm.boxes[gm.boxes.length - 1];
+      var cardX = firstBox.x - 10, cardW = finalBox.x + finalBox.w - firstBox.x + 20;
+      b.rect(cardX, gm.top - 6, cardW, gm.bodyBottom - gm.top + 10,
+        { fill: '#F7F9FD', stroke: '#E3E9F5', r: 10 });
+    }
     if (paras.length) {
       if (mode === 'off' && (!best)) {
         var f0 = flow(paras, gm.boxes, R.min);
@@ -362,7 +390,7 @@
     }
     if (pr.kind === 'grid') b.priceGrid(pr, 40, gm.priceY, gm.priceW);
     if (gm.panel) b.infoPanel(rows, gm.panel.x, gm.panel.y, gm.panel.w);
-    else if (asideMode === 'strip') b.infoStrip(rows, 40, gm.stripY, 1120);
+    else if (asideMode === 'strip') b.infoStrip(rows, gm.stripX, gm.stripY, gm.stripW, { stretch: gm.stripBesidePrices });
     itemFooter(b, ctx);
     var slides = [b.result()];
     if (rest.length) {

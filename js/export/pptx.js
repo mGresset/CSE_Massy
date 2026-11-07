@@ -30,6 +30,17 @@
     }).then(function (d) { bannerData = d; return d; });
   }
   function resolve(src) { return /^img:/.test(src || '') ? (CSE.images ? CSE.images.url(src) : '') : (src || ''); }
+  /** Indique précisément comment récupérer une photographie manquante.
+   *  Un export incomplet ne doit jamais être présenté comme réussi. */
+  function imageFailure(src, title, cause) {
+    var source = String(src || '');
+    var advice = /^https?:/i.test(source)
+      ? 'Ce site empêche probablement la récupération de son image (CORS). Ouvrez la fiche et importez la photo depuis un fichier JPG/PNG, ou collez une copie réelle de l’image.'
+      : /^img:/i.test(source)
+        ? 'Cette photo enregistrée localement est introuvable ou illisible. Restaurez-la depuis la sauvegarde JSON ou importez-la à nouveau dans la fiche.'
+        : 'La photo est introuvable ou illisible. Vérifiez le chemin ou réimportez le fichier.';
+    return Error('Image non intégrable au PowerPoint dans « ' + title + ' ». ' + advice + (cause && cause.message ? ' (' + cause.message + ')' : ''));
+  }
   function canvas(w, h) { if (CSE.env && CSE.env.createCanvas) return CSE.env.createCanvas(w, h); var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
   function loadImage(src) {
     if (CSE.env && CSE.env.loadImage) return CSE.env.loadImage(src);
@@ -46,6 +57,12 @@
     var key = src + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + fit;
     if (cache[key]) return cache[key];
     var real = resolve(src);
+    // Les tests et générateurs exécutés sous Node peuvent fournir un adaptateur image.
+    // En navigateur, le recadrage est réalisé dans un canvas sécurisé.
+    if (real && CSE.env && typeof CSE.env.prepareImage === 'function') {
+      cache[key] = Promise.resolve().then(function () { return CSE.env.prepareImage(real, w, h, fit); });
+      return cache[key];
+    }
     cache[key] = (real ? loadImage(real) : Promise.reject(Error('Image absente'))).then(function (img) {
       var scale = Math.min(2, Math.max(1, 1600 / Math.max(w, h)));
       var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
@@ -112,9 +129,10 @@
       if (it.role === 'banner') return Promise.resolve(); // déjà dans le masque
       return prepareImage(it.src, it.w, it.h, it.fit, images).then(function (data) {
         slide.addImage(Object.assign({}, g, { data: data }));
-      }, function () {
-        warnings.push('Image indisponible dans « ' + title + ' » (remplacée par un cadre gris).');
-        slide.addShape(pptx.ShapeType.rect, Object.assign({}, g, { fill: { color: 'E9EEF6' }, line: { type: 'none' } }));
+      }).catch(function (err) {
+        // Ne PAS remplacer silencieusement une photo par un rectangle gris.
+        // L'utilisateur doit pouvoir restaurer la photo avant la diffusion du MEL.
+        throw imageFailure(it.src, title, err);
       });
     }
     if (it.t === 'text') {
@@ -137,7 +155,7 @@
       pptx.author = meta.author || 'CSE THALES LAS MASSY';
       pptx.company = 'CSE THALES LAS MASSY';
       pptx.title = meta.title || 'MEL du CSE';
-      pptx.subject = 'Généré avec CSE Studio V9.5';
+      pptx.subject = 'Généré avec CSE Studio V9.6.2';
       pptx.lang = 'fr-FR';
       pptx.defineSlideMaster({ title: 'CSE_MEL', background: { color: 'FFFFFF' }, objects: [{ image: { x: 0, y: 0, w: inch(1200), h: inch(CSE.layout.BANNER_H), data: bd } }] });
       var warnings = [], images = {};

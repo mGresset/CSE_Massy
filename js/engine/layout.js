@@ -252,91 +252,92 @@
   };
   /** Cartouche tarifaire 4 / 4 / (2 + extérieur) sur trois lignes resserrées.
    *  Sa géométrie est identique dans l'aperçu HTML et l'export PPTX. */
+  /** Mesure réellement la place nécessaire au cartouche, y compris les compléments.
+   *  Les notes courtes sont intégrées en haut à droite, jamais isolées sous les dix tarifs. */
   B.priceGridSize = function (pr, w) {
     if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0, rows: 0 };
-    var n = pr.rows.length;
+    var P = CSE.pricing, n = pr.rows.length;
     var cols = w >= 425 ? Math.min(4, n) : w >= 295 ? Math.min(3, n) : Math.min(2, n);
     var rows = Math.ceil(n / cols);
-    // Intitulé + 3 lignes de prix (4 / 4 / 2) + éventuel supplément.
-    var h = 17 + rows * 14.6 + (pr.notes ? 14 : 0);
-    return { h: h, cols: cols, rows: rows };
+    var labelW = pr.rows.reduce(function (maxW, r) { return Math.max(maxW, M().width(String(r.label || ''), 12.1, true)); }, 0) + 4;
+    var amountW = pr.rows.reduce(function (maxW, r) { return Math.max(maxW, M().width(P.money(r.price), 12.1, true)); }, 0) + 4;
+    var cellGap = 6, cellW = Math.max(103, labelW + amountW + cellGap + 14);
+    var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
+    var lastCount = Math.min(cols, n - (rows - 1) * cols);
+    var outsideOnLastRow = !!outside && cols === 4 && lastCount === 2;
+    if (outsideOnLastRow) cellW = Math.max(cellW, (M().width(outside, 12.4, true) * 1.03 + 12) / 2);
+    var actualW = Math.min(w, 28 + cellW * cols);
+    var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
+    var notes = String(pr.notes || '').trim();
+    var headW = M().width(head, 11, true) * 1.06;
+    var noteW = notes ? M().width(notes, 10.7, true) * 1.06 + 5 : 0;
+    var noteInline = !!notes && headW + noteW + 54 < actualW;
+    var h = 17 + rows * 14.6 + (notes && !noteInline ? 16 : 0);
+    return { h: h, cols: cols, rows: rows, labelW: labelW, amountW: amountW,
+      cellW: cellW, actualW: actualW, outsideOnLastRow: outsideOnLastRow,
+      noteInline: noteInline, noteW: noteW, headW: headW };
   };
-  /** Tarifs dans le rectangle bas-gauche (~39 % de la diapo).
-   *  T9 / T10 et le prix extérieur se répartissent la dernière ligne ;
-   *  sans prix extérieur, les cases restantes sont recentrées. */
+  /** Cartouche 4 / 4 / (2 + extérieur), avec supplément intégré au bandeau de titre.
+   *  Une géométrie partagée garantit les mêmes alignements dans HTML et PPTX. */
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
+    w = g.actualW;
+    var padL = 14, padR = 14, top = y + 16.5, rowH = 14.6, self = this;
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols, lastRowCount = Math.min(g.cols, pr.rows.length - lastRowStart);
-    var outsideOnLastRow = !!outside && g.cols === 4 && lastRowCount === 2;
-
-    var labelW = pr.rows.reduce(function (maxW, r) {
-      return Math.max(maxW, M().width(String(r.label || ''), 12.1, true));
-    }, 0) + 4;
-    var amountW = pr.rows.reduce(function (maxW, r) {
-      return Math.max(maxW, M().width(P.money(r.price), 12.1, true));
-    }, 0) + 4;
-    var cellGap = 6;
-    var cellW = Math.max(103, labelW + amountW + cellGap + 14);
-    var outsideNeed = outsideOnLastRow ? (M().width(outside, 12.4, true) * 1.03 + 12) / 2 : 0;
-    if (outsideNeed > cellW) cellW = outsideNeed;
-
-    var innerW = cellW * g.cols;
-    var padL = 14, padR = 14;
-    w = Math.min(w, padL + padR + innerW);
-    if (w < padL + padR + innerW - 2) this.warn('Tarifs exceptionnellement élevés : vérifiez leur lisibilité dans le cartouche.', 'warn', 'price-grid-width');
-
+    var notes = String(pr.notes || '').trim();
+    var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols;
     this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
-    // Barre violette plus équilibrée, avec marges haute et basse constantes.
+    // La barre d'accent reste à distance égale des deux extrémités du cartouche.
     this.rect(x + 1, y + 11, 4, Math.max(8, g.h - 22), { fill: C.purple, r: 1.5 });
-    this.text(head, x + padL + 18, y + 2, w - (padL + padR + 18), 13,
+    var titleW = g.noteInline ? Math.max(100, w - padL - padR - g.noteW - 24) : w - (padL + padR + 18);
+    this.text(head, x + padL + 18, y + 2, titleW, 13,
       { size: 11, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-
-    var top = y + 16.5, rowH = 14.6, self = this;
+    if (g.noteInline) {
+      this.text(notes, x + w - padR - g.noteW, y + 2, g.noteW, 13,
+        { size: 10.7, min: 9.5, bold: true, color: C.muted, align: 'right', maxLines: 1,
+          role: 'label', noScale: true, field: 'notes tarifs' });
+    }
     var gridX = x + padL;
-
     function drawCell(r, cx, cy) {
-      self.text([{ runs: [{ text: String(r.label || ''), bold: true, color: C.purple }] }], cx, cy, labelW, rowH,
+      self.text([{ runs: [{ text: String(r.label || ''), bold: true, color: C.purple }] }], cx, cy, g.labelW, rowH,
         { size: 12.1, min: 11, color: C.purple, valign: 'middle', align: 'left', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
-      self.text(P.money(r.price), cx + labelW + cellGap, cy, cellW - labelW - cellGap - 14, rowH,
+      self.text(P.money(r.price), cx + g.labelW + 6, cy, g.cellW - g.labelW - 6 - 14, rowH,
         { size: 12.1, min: 11, color: C.dark, bold: true, valign: 'middle', align: 'right', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
     }
-
     pr.rows.forEach(function (r, i) {
       var row = Math.floor(i / g.cols), col = i % g.cols;
       var cy = top + row * rowH;
       var cx;
-      if (row === lastRow && outsideOnLastRow) {
-        cx = gridX + col * cellW;
-      } else {
+      if (row === lastRow && g.outsideOnLastRow) cx = gridX + col * g.cellW;
+      else {
         var nLast = Math.min(g.cols, pr.rows.length - row * g.cols);
-        var rowOffset = (g.cols - nLast) * cellW / 2;
-        cx = gridX + rowOffset + col * cellW;
+        cx = gridX + (g.cols - nLast) * g.cellW / 2 + col * g.cellW;
       }
       drawCell(r, cx, cy);
     });
-
     if (outside) {
-      if (outsideOnLastRow) {
-        var extX = gridX + 2 * cellW;
-        self.text(outside, extX, top + lastRow * rowH, 2 * cellW - 14, rowH,
+      if (g.outsideOnLastRow) {
+        this.text(outside, gridX + 2 * g.cellW, top + lastRow * rowH, 2 * g.cellW - 14, rowH,
           { size: 12.4, min: 11.2, bold: true, color: C.muted, valign: 'middle', align: 'right', maxLines: 1,
             role: 'label', noScale: true, field: 'tarifs' });
       } else {
-        var ow = Math.min(w - (padL + padR), M().width(outside, 12.4, true) * 1.06 + 8);
-        self.text(outside, x + w - padR - ow, y + 2, ow, 13,
+        var ow = Math.min(w - padL - padR, M().width(outside, 12.4, true) * 1.06 + 8);
+        this.text(outside, x + w - padR - ow, y + 2, ow, 13,
           { size: 12.4, min: 11.2, bold: true, color: C.muted, align: 'right', maxLines: 1,
             role: 'label', noScale: true, field: 'tarifs' });
       }
     }
-
-    if (pr.notes) this.text(pr.notes, x + padL + 18, y + g.h - 14, w - (padL + padR + 18), 13,
-      { size: 10.7, min: 9.5, color: C.muted, maxLines: 1,
-        field: 'notes tarifs', noScale: true, role: 'label', important: false });
+    if (notes && !g.noteInline) {
+      this.rect(x + padL + 14, y + g.h - 15, w - padL - padR - 14, 14,
+        { fill: C.lilac, r: 3 });
+      this.text(notes, x + padL + 20, y + g.h - 14.5, w - padL - padR - 25, 13,
+        { size: 10.7, min: 9.5, color: C.muted, maxLines: 1, align: 'left',
+          field: 'notes tarifs', noScale: true, role: 'label', important: false });
+    }
     return g.h;
   };
 
@@ -363,9 +364,11 @@
     return h;
   };
   /** Variante horizontale (1 ou 2 informations) : bande basse, sans colonne réservée. */
-  B.infoStrip = function (rows, x, y, w) {
+  B.infoStrip = function (rows, x, y, w, opts) {
     if (!rows.length) return 0;
-    var self = this, gap = 12, cw = Math.min(rows.length === 1 ? 360 : 420, (w - gap * (rows.length - 1)) / rows.length);
+    opts = opts || {};
+    var self = this, gap = 12, cw = opts.stretch ? (w - gap * (rows.length - 1)) / rows.length
+      : Math.min(rows.length === 1 ? 360 : 420, (w - gap * (rows.length - 1)) / rows.length);
     rows.forEach(function (r, i) {
       var cx = x + i * (cw + gap);
       self.rect(cx, y, cw, 46, { fill: C.lighter, stroke: C.border, r: 10 });

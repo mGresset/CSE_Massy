@@ -52,7 +52,7 @@
     return { cover: 'Couverture', news: (pg.opts && pg.opts.title) || 'Nouveautés', last: (pg.opts && pg.opts.title) || 'Dernières chances', upcoming: (pg.opts && pg.opts.title) || 'Programme à venir' }[pg.kind] || pg.kind;
   };
   App.notesFor = function (pg, it, s) {
-    var lines = ['CSE Studio V9.6 · ' + (C.templates.TEMPLATES.find(function (t) { return t.id === s.templateId; }) || { name: s.templateId }).name];
+    var lines = ['CSE Studio V9.6.2 · ' + (C.templates.TEMPLATES.find(function (t) { return t.id === s.templateId; }) || { name: s.templateId }).name];
     if (it) lines.push('Fiche : ' + App.pageLabel(pg) + (it.regEnd ? ' · inscriptions jusqu’au ' + C.dates.fmtLong(it.regEnd) : ''));
     var link = it ? C.compose.linkOf(it, App.p().settings) : '';
     if (link) lines.push('Lien : ' + link);
@@ -106,7 +106,7 @@
         ui.download(r.blob, fileName);
         ui.toast('PowerPoint créé : ' + entries.length + ' diapositive(s).' + (r.warnings.length ? ' ' + r.warnings.length + ' image(s) indisponible(s).' : ''), 'ok');
         if (r.warnings.length) ui.toast(r.warnings.slice(0, 3).join(' · '), 'error');
-      }).catch(function (e) { console.error(e); ui.toast('Export impossible : ' + e.message, 'error'); })
+      }).catch(function (e) { console.error(e); ui.toast('Export interrompu : ' + e.message, 'error', 9000); })
         .then(function () { if (btn) { btn.disabled = false; btn.textContent = label; } });
     });
   };
@@ -180,7 +180,7 @@
     currentView = view;
     try { view.render(el, parts.slice(1)); }
     catch (e) { console.error(e); el.appendChild(h('div', { class: 'alert error' }, 'Erreur d’affichage : ' + e.message)); }
-    document.title = (view.title || 'CSE Studio') + ' · CSE Studio V9.6';
+    document.title = (view.title || 'CSE Studio') + ' · CSE Studio V9.6.2';
     el.focus({ preventScroll: true });
   }
   App.refresh = function () { route(); };

@@ -265,6 +265,7 @@
         it.photos.forEach(function (ref, i) {
           var src = C.renderHTML.resolve(ref);
           list.appendChild(h('div', { class: 'photo' }, src ? h('img', { src: src, alt: 'Photo ' + (i + 1) }) : h('div', { class: 'small muted', style: { padding: '8px' } }, 'Image indisponible'),
+            /^https?:/i.test(ref) ? h('span', { class: 'badge', title: 'Lien externe : remplacer par un fichier pour garantir sa présence dans le PPTX.' }, '⚠ À réimporter pour PPTX') : null,
             i === 0 ? h('span', { class: 'badge' }, it.type === 'partner' ? 'Logo' : 'Principale') : null,
             h('div', { class: 'tools' },
               i > 0 ? h('button', { type: 'button', 'aria-label': 'Placer en premier', onclick: function () { it.photos.splice(i, 1); it.photos.unshift(ref); ctx.touch(); ctx.render(); draw(); } }, '★') : null,
@@ -296,7 +297,7 @@
         var u = url.value.trim();
         if (!C.compose.validUrl(u) || !u) return ui.toast('Adresse invalide.', 'error');
         C.images.importUrl(u).then(function (ref) { it.photos.push(ref); ctx.touch(); ctx.render(); draw(); ui.toast('Image récupérée et enregistrée localement.', 'ok'); url.value = ''; })
-          .catch(function () { it.photos.push(u); ctx.touch(); ctx.render(); draw(); ui.toast('Image liée pour l’aperçu, mais le site bloque son intégration au PowerPoint. Copiez-collez l’image (Ctrl+V) ou importez-la depuis un fichier.', 'error'); });
+          .catch(function () { ui.toast('Image non ajoutée : le site refuse sa récupération (CORS). Importez un fichier JPG/PNG ou collez une copie de la photo (Ctrl+V), afin qu’elle figure aussi dans le PowerPoint.', 'error'); });
       } }, 'Ajouter');
       box.appendChild(h('h3', {}, it.type === 'partner' ? 'Logo et visuels' : 'Photos'));
       box.appendChild(list); box.appendChild(dz);

@@ -19,6 +19,37 @@ function loadExport(canvasModulePath) {
   globalThis.CSE_BANNER_DATA = 'data:image/jpeg;base64,' + fs.readFileSync(path.join(ROOT, 'assets/bandeau-cse.jpg')).toString('base64');
   const CSE = load(['js/export/pptx.js']);
   CSE.env = { node: true };
+  // En Node, le navigateur/canvas n'est pas disponible. Fournir un adaptateur
+  // pour embarquer les véritables photos dans les PowerPoint de test et démo.
+  // Sharp est facultatif : les JPEG/PNG d'origine restent intégrables sans lui.
+  CSE.env.prepareImage = async (src, w, h, fit) => {
+    let buf, mime;
+    if (/^data:image\/(jpeg|png|webp);base64,/i.test(src)) {
+      mime = src.match(/^data:image\/([^;]+)/i)[1].toLowerCase();
+      buf = Buffer.from(src.split(',')[1], 'base64');
+    } else if (!/^[a-z]+:/i.test(src)) {
+      const local = path.resolve(ROOT, src.replace(/^\//, ''));
+      if (!local.startsWith(ROOT + path.sep) || !fs.existsSync(local)) throw Error('Photo locale introuvable : ' + src);
+      buf = fs.readFileSync(local);
+      mime = /\.png$/i.test(local) ? 'png' : /\.webp$/i.test(local) ? 'webp' : 'jpeg';
+    } else throw Error('URL non disponible dans le générateur local : ' + src);
+
+    let sharp;
+    try { sharp = require('sharp'); } catch (_) { sharp = null; }
+    if (sharp) {
+      const scale = Math.min(2, Math.max(1, 1600 / Math.max(w, h)));
+      const width = Math.max(1, Math.round(w * scale)), height = Math.max(1, Math.round(h * scale));
+      const ff = fit === 'contain' ? 'contain' : fit === 'stretch' ? 'fill' : 'cover';
+      const transparent = mime === 'png' && fit !== 'stretch';
+      const result = await sharp(buf).rotate().resize(width, height,
+        { fit: ff, background: transparent ? {r:255,g:255,b:255,alpha:0} : {r:255,g:255,b:255,alpha:1} });
+      if (transparent) { buf = await result.png().toBuffer(); mime = 'png'; }
+      else { buf = await result.jpeg({quality:90}).toBuffer(); mime = 'jpeg'; }
+    } else if (mime !== 'jpeg' && mime !== 'png') {
+      throw Error('Format non convertible sans Sharp : ' + mime);
+    }
+    return 'data:image/' + mime + ';base64,' + buf.toString('base64');
+  };
   if (canvasModulePath) {
     const cv = require(canvasModulePath);
     CSE.env.createCanvas = (w, h) => cv.createCanvas(w, h);
