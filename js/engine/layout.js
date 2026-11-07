@@ -294,8 +294,19 @@
     });
     if (outside) {
       if (outsideOnLastRow) {
-        // La case extérieure occupe l'espace restant, calée sur les mêmes lignes de base.
-        self.text(outside, x + 12 + 2 * cw, top + lastRow * rowH, 2 * cw, rowH,
+        // Aligner la FIN du prix extérieur sur la fin des montants T4/T8,
+        // et non sur le bord du cartouche (trop éloigné visuellement).
+        // Les longueurs varient selon le barème : calculer l'ancrage sur les
+        // montants réellement affichés dans la dernière colonne remplie.
+        var finalCol = g.cols - 1;
+        var refW = pr.rows.reduce(function (maxW, r, i) {
+          if (i % g.cols !== finalCol || i >= lastRowStart) return maxW;
+          var line = r.label + '\u00a0' + P.money(r.price);
+          return Math.max(maxW, M().width(line, 12.1, true) * 1.04);
+        }, 0);
+        var priceRight = Math.min(x + w - 15, x + 12 + finalCol * cw + Math.min(cw - 5, refW));
+        var extX = x + 12 + 2 * cw;
+        self.text(outside, extX, top + lastRow * rowH, Math.max(20, priceRight - extX), rowH,
           { size: 12.4, min: 11.2, bold: true, color: C.muted, valign: 'middle', align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
       } else {
         var ow = M().width(outside, 11, false) * 1.08 + 5;
