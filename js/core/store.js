@@ -12,6 +12,8 @@
   var KEY = 'cse-studio-massy:v9:project';
   var SNAP_KEY = 'cse-studio-massy:v9:snapshots';
   var project = null, timer = 0, listeners = [], lastError = '', migrationReport = null;
+  /* V10 : historique des modifications (annuler / rétablir), par points de contrôle regroupés. */
+  var hist = { undo: [], redo: [], last: '', timer: 0, max: 30 };
   var ls = function () { try { return G.localStorage; } catch (e) { return null; } };
 
   function emit(kind) { listeners.forEach(function (fn) { try { fn(kind); } catch (e) { console.error(e); } }); }
@@ -55,14 +57,51 @@
     return Promise.resolve({ project: project, migrated: false, fresh: true });
   }
   function get() { return project; }
-  function set(p, reason) { project = CSE.model.normalizeProject(p); saveNow(); emit(reason || 'replace'); }
+  function set(p, reason) { checkpoint(); project = CSE.model.normalizeProject(p); saveNow(); checkpoint(); emit(reason || 'replace'); }
   /** Signale une modification : sauvegarde différée et notification des vues. */
   function changed(kind) {
     clearTimeout(timer);
     emit(kind || 'change');
     status('pending');
     timer = setTimeout(saveNow, 250);
+    clearTimeout(hist.timer);
+    hist.timer = setTimeout(checkpoint, 900);
   }
+  /** Point de contrôle de l'historique (une saisie continue forme une seule étape). */
+  function checkpoint() {
+    clearTimeout(hist.timer);
+    if (!project) return;
+    var cur = serialize(project);
+    if (!hist.last) { hist.last = cur; return; }
+    if (cur === hist.last) return;
+    hist.undo.push(hist.last);
+    if (hist.undo.length > hist.max) hist.undo.shift();
+    hist.redo = [];
+    hist.last = cur;
+  }
+  function restoreState(json) {
+    project = CSE.model.normalizeProject(JSON.parse(json));
+    hist.last = json;
+    saveNow();
+    emit('replace');
+  }
+  /** Annule la dernière étape (fiches, MEL, paramètres). Renvoie false s'il n'y a rien à annuler. */
+  function undo() {
+    checkpoint();
+    if (!hist.undo.length) return false;
+    hist.redo.push(hist.last);
+    restoreState(hist.undo.pop());
+    return true;
+  }
+  function redo() {
+    checkpoint();
+    if (!hist.redo.length) return false;
+    hist.undo.push(hist.last);
+    restoreState(hist.redo.pop());
+    return true;
+  }
+  function canUndo() { return hist.undo.length > 0 || (!!project && !!hist.last && serialize(project) !== hist.last); }
+  function canRedo() { return hist.redo.length > 0; }
   var statusFns = [];
   function onStatus(fn) { statusFns.push(fn); }
   function status(s, msg) { statusFns.forEach(function (fn) { fn(s, msg); }); }
@@ -109,7 +148,7 @@
     var images = CSE.images.exportMap(refs);
     // Signale explicitement des photos manquantes au lieu d’annoncer une sauvegarde complète à tort.
     var missing = refs.filter(function (ref) { return !Object.prototype.hasOwnProperty.call(images, ref); });
-    return Object.assign({ schema: CSE.model.SCHEMA, app: 'CSE Studio V9.5', exportedAt: new Date().toISOString() }, JSON.parse(serialize(project)),
+    return Object.assign({ schema: CSE.model.SCHEMA, app: 'CSE Studio V10', exportedAt: new Date().toISOString() }, JSON.parse(serialize(project)),
       { images: images, backupWarnings: missing.length ? ['Images absentes du stockage local : ' + missing.length + ' référence(s).'] : [] });
   }
   /** Importe une sauvegarde : mode 'merge' (ajout) ou 'replace' (instantané préalable). */
@@ -160,7 +199,7 @@
     try { for (var i = 0; i < st.length; i++) { var k = st.key(i); bytes += (k.length + (st.getItem(k) || '').length) * 2; } } catch (e) { /* ignoré */ }
     return { localBytes: bytes, images: CSE.images.usage() };
   }
-  return { KEY: KEY, setVolatile: setVolatile, isVolatile: function () { return volatile; }, load: load, get: get, set: set, changed: changed, saveNow: saveNow, on: on, onStatus: onStatus, snapshot: snapshot, snapshots: snapshots,
+  return { KEY: KEY, undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo, checkpoint: checkpoint, setVolatile: setVolatile, isVolatile: function () { return volatile; }, load: load, get: get, set: set, changed: changed, saveNow: saveNow, on: on, onStatus: onStatus, snapshot: snapshot, snapshots: snapshots,
     restoreSnapshot: restoreSnapshot, backupObject: backupObject, importBackup: importBackup, trashItem: trashItem, restoreTrash: restoreTrash, emptyTrash: emptyTrash,
     legacyPresent: legacyPresent, legacyDump: legacyDump, storageUsage: storageUsage, internImages: internImages,
     lastError: function () { return lastError; }, migrationReport: function () { return migrationReport; } };

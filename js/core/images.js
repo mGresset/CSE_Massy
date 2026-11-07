@@ -76,12 +76,83 @@
     if (!db) return Promise.resolve();
     return new Promise(function (resolve) { try { var tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).delete(ref); tx.oncomplete = resolve; tx.onerror = resolve; } catch (e) { resolve(); } });
   }
-  /** Images réellement utilisées par un projet. */
+  /** Images réellement utilisées par un projet : fiches, corbeille, personnalisations de pages
+   *  et instantanés des MEL publiés (un MEL figé doit rester exportable avec ses photos). */
   function refsOf(project) {
     var set = {};
-    // Les fiches de la corbeille gardent leurs images : une restauration après sauvegarde ne doit rien perdre.
-    (project.items || []).concat((project.trash || []).map(function (t) { return t && t.item; }).filter(Boolean)).forEach(function (it) { (it.photos || []).forEach(function (p) { if (/^img:/.test(p)) set[p] = 1; }); });
+    function addItem(it) { if (!it) return; (it.photos || []).forEach(function (p) { if (/^img:/.test(p)) set[p] = 1; }); }
+    (project.items || []).forEach(addItem);
+    (project.trash || []).forEach(function (t) { addItem(t && t.item); });
+    (project.issues || []).forEach(function (is) {
+      (is.pages || []).forEach(function (pg) { var ov = pg.opts && pg.opts.override; if (ov && Array.isArray(ov.photos)) addItem({ photos: ov.photos }); });
+      [is.snapshot].concat(is.previousSnapshots || []).forEach(function (sn) {
+        if (!sn) return;
+        (sn.items || []).forEach(addItem);
+        (sn.pages || []).forEach(function (pg) { var ov = pg.opts && pg.opts.override; if (ov && Array.isArray(ov.photos)) addItem({ photos: ov.photos }); });
+      });
+    });
     return Object.keys(set);
+  }
+  /** État d'une image référencée : 'ready' (octets disponibles localement, intégrable au PowerPoint),
+   *  'remote' (simple lien Web non importé : CORS possible, non intégrable) ou 'missing'. */
+  function status(ref) {
+    ref = String(ref || '');
+    if (!ref) return 'missing';
+    if (/^img:/.test(ref)) return mem[ref] ? 'ready' : 'missing';
+    if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(ref)) return 'ready';
+    if (/^assets\//.test(ref)) return 'ready';
+    if (/^https?:\/\//i.test(ref)) return 'remote';
+    return 'missing';
+  }
+  /** Supprime les images orphelines (jamais celles d'un MEL publié, de la corbeille ou d'une personnalisation). */
+  function gc(project) {
+    var keep = {};
+    refsOf(project).forEach(function (r) { keep[r] = 1; });
+    var removed = Object.keys(mem).filter(function (k) { return /^img:/.test(k) && !/^img:demo-/.test(k) && !keep[k]; });
+    return Promise.all(removed.map(remove)).then(function () { return removed.length; });
+  }
+  /** Signature binaire réelle (ne pas se fier à l'extension ni au type annoncé). */
+  function sniff(bytes) {
+    var b = bytes;
+    if (b.length >= 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image/jpeg';
+    if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return 'image/png';
+    if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+    if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+    return '';
+  }
+  function err(code, msg) { var e = Error(msg); e.code = code; return e; }
+  /** Lit un Blob/File, vérifie son contenu réel, puis le redimensionne et le stocke localement. */
+  function importBlob(blob, opts) {
+    if (!blob) return Promise.reject(err('empty', 'Aucun fichier.'));
+    if (blob.size > 25 * 1024 * 1024) return Promise.reject(err('size', 'Image trop lourde (25 Mo maximum).'));
+    var head = blob.slice ? blob.slice(0, 16) : blob;
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onerror = function () { reject(err('read', 'Fichier illisible.')); };
+      fr.onload = function () { resolve(new Uint8Array(fr.result)); };
+      fr.readAsArrayBuffer(head);
+    }).then(function (bytes) {
+      var type = sniff(bytes);
+      if (!type) throw err('notimage', 'Ce fichier n’est pas une image JPG, PNG, WEBP ou GIF (contenu vérifié).');
+      return new Promise(function (resolve, reject) {
+        var fr = new FileReader();
+        fr.onerror = function () { reject(err('read', 'Fichier illisible.')); };
+        fr.onload = function () { resolve(String(fr.result).replace(/^data:[^;]*;/, 'data:' + type + ';')); };
+        fr.readAsDataURL(blob);
+      });
+    }).then(function (d) { return compress(d, opts || {}); }).then(put);
+  }
+  /** Teste si une adresse s'affiche comme image (sans pouvoir lire ses octets) : distingue CORS et lien cassé. */
+  function probe(u) {
+    return new Promise(function (resolve) {
+      if (typeof Image === 'undefined') return resolve(false);
+      var img = new Image(), done = false;
+      var end = function (v) { if (done) return; done = true; resolve(v); };
+      img.onload = function () { end(img.naturalWidth > 0); };
+      img.onerror = function () { end(false); };
+      setTimeout(function () { end(false); }, 8000);
+      img.src = u;
+    });
   }
   function exportMap(refs) { var o = {}; refs.forEach(function (r) { if (mem[r]) o[r] = mem[r]; }); return o; }
   /** Restaure des images issues d'une sauvegarde. Renvoie le nombre importé. */
@@ -99,20 +170,11 @@
     Object.keys(mem).forEach(function (k) { n++; bytes += mem[k].length * 0.75; });
     return { count: n, bytes: bytes, persistent: persistent };
   }
-  /** Lit, redimensionne et compresse un fichier image local. */
+  /** Lit, vérifie, redimensionne et compresse un fichier image local (import, collage, glisser-déposer). */
   function importFile(file, opts) {
-    opts = opts || {};
-    return new Promise(function (resolve, reject) {
-      if (!file) return reject(Error('Aucun fichier.'));
-      if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return reject(Error('Formats acceptés : JPG, PNG, WEBP.'));
-      if (file.size > 25 * 1024 * 1024) return reject(Error('Image trop lourde (25 Mo maximum).'));
-      var fr = new FileReader();
-      fr.onerror = function () { reject(Error('Fichier illisible.')); };
-      fr.onload = function () {
-        compress(fr.result, opts).then(put).then(resolve, reject);
-      };
-      fr.readAsDataURL(file);
-    });
+    if (!file) return Promise.reject(err('empty', 'Aucun fichier.'));
+    if (file.type && !/^image\//.test(file.type)) return Promise.reject(err('notimage', 'Formats acceptés : JPG, PNG, WEBP.'));
+    return importBlob(file, opts);
   }
   function compress(dataUrl, opts) {
     opts = opts || {};
@@ -146,16 +208,25 @@
     } catch (e) { /* ignoré */ }
     return false;
   }
-  /** Télécharge une image distante (si le site l'autorise : CORS) et la stocke localement. */
+  /** Télécharge une image distante SI le site l'autorise (CORS), vérifie qu'il s'agit bien d'une image
+   *  et la stocke localement (elle devient « prête » pour le PowerPoint). Sinon, erreur explicite :
+   *  code 'cors' (image visible mais récupération interdite), 'http' (404…), 'html' (page Web),
+   *  'notimage', 'unreachable'. Aucun proxy tiers n'est utilisé. */
   function importUrl(u) {
-    return fetch(u, { mode: 'cors' }).then(function (r) {
-      if (!r.ok) throw Error('HTTP ' + r.status);
+    if (!/^https?:\/\//i.test(String(u || ''))) return Promise.reject(err('url', 'Adresse invalide : elle doit commencer par https://'));
+    return fetch(u, { mode: 'cors', credentials: 'omit', redirect: 'follow' }).then(function (r) {
+      if (!r.ok) throw err('http', 'Le site répond « ' + r.status + ' » : image introuvable ou accès refusé.');
+      var ct = String(r.headers.get('content-type') || '');
+      if (/text\/html/i.test(ct)) throw err('html', 'Cette adresse mène à une page Web, pas à un fichier image. Ouvrez la page puis copiez l’image elle-même (clic droit → Copier l’image).');
       return r.blob();
-    }).then(function (blob) {
-      if (!/^image\//.test(blob.type)) throw Error('Le lien ne pointe pas vers une image.');
-      return new Promise(function (resolve, reject) { var fr = new FileReader(); fr.onload = function () { resolve(fr.result); }; fr.onerror = reject; fr.readAsDataURL(blob); });
-    }).then(function (d) { return compress(d, {}); }).then(put);
+    }, function () {
+      return probe(u).then(function (visible) {
+        throw visible
+          ? err('cors', 'Le site affiche cette image mais interdit sa récupération par CSE Studio (règle CORS du site). Elle ne pourrait pas figurer dans le PowerPoint.')
+          : err('unreachable', 'Adresse injoignable, ou ce n’est pas une image accessible.');
+      });
+    }).then(function (blob) { return importBlob(blob, {}); });
   }
   return { init: init, put: put, putTemp: putTemp, url: url, has: has, remove: remove, refsOf: refsOf, exportMap: exportMap, importMap: importMap, usage: usage,
-    importFile: importFile, importUrl: importUrl, compress: compress, hash: hash };
+    importFile: importFile, importBlob: importBlob, importUrl: importUrl, compress: compress, hash: hash, status: status, gc: gc, sniff: sniff, probe: probe };
 });

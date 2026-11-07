@@ -240,6 +240,8 @@
   /** Image ou panneau décoratif aux couleurs de la catégorie (jamais de texte « ajouter une image » exporté). */
   B.photo = function (src, x, y, w, h, o) {
     o = o || {};
+    // Photo explicitement écartée à l'export (non intégrable) : traitée comme absente partout (couverture, mosaïques…).
+    if (src && this.ctx.skipImages && this.ctx.skipImages.indexOf(src) >= 0) src = '';
     if (src) {
       var st = imageStatus(src);
       if (st === 'ready') { this.image(src, x, y, w, h, { fit: o.fit }); return true; }

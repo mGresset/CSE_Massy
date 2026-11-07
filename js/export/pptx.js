@@ -53,8 +53,9 @@
     });
   }
   /** Recadre l'image exactement comme l'aperçu (cover / contain) au format de la zone. */
-  function prepareImage(src, w, h, fit, cache) {
-    var key = src + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + fit;
+  function prepareImage(src, w, h, fit, cache, fx, fy) {
+    fx = fx === undefined ? 50 : fx; fy = fy === undefined ? 50 : fy;
+    var key = src + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + fit + '|' + fx + ',' + fy;
     if (cache[key]) return cache[key];
     var real = resolve(src);
     // Les tests et générateurs exécutés sous Node peuvent fournir un adaptateur image.
@@ -75,7 +76,8 @@
       else {
         var s = fit === 'contain' ? Math.min(cw / iw, ch / ih) : Math.max(cw / iw, ch / ih);
         var dw = iw * s, dh = ih * s;
-        ctx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+        // Point focal (cadrage choisi dans l'éditeur) : même règle que object-position en CSS.
+        ctx.drawImage(img, (cw - dw) * fx / 100, (ch - dh) * fy / 100, dw, dh);
       }
       return png ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9);
     });
@@ -132,8 +134,8 @@
     }
     if (it.t === 'image') {
       if (it.role === 'banner') return Promise.resolve(); // déjà dans le masque
-      return prepareImage(it.src, it.w, it.h, it.fit, images).then(function (data) {
-        slide.addImage(Object.assign({}, g, { data: data }));
+      return prepareImage(it.src, it.w, it.h, it.fit, images, it.fx, it.fy).then(function (data) {
+        slide.addImage(Object.assign({}, g, { data: data, altText: it.alt || '' }));
       }).catch(function (err) {
         // Ne PAS remplacer silencieusement une photo par un rectangle gris.
         // L'utilisateur doit pouvoir restaurer la photo avant la diffusion du MEL.
@@ -160,7 +162,7 @@
       pptx.author = meta.author || 'CSE THALES LAS MASSY';
       pptx.company = 'CSE THALES LAS MASSY';
       pptx.title = meta.title || 'MEL du CSE';
-      pptx.subject = 'Généré avec CSE Studio V9.6.2';
+      pptx.subject = 'Généré avec CSE Studio V10';
       pptx.lang = 'fr-FR';
       pptx.defineSlideMaster({ title: 'CSE_MEL', background: { color: 'FFFFFF' }, objects: [{ image: { x: 0, y: 0, w: inch(1200), h: inch(CSE.layout.BANNER_H), data: bd } }] });
       var warnings = [], images = {};
@@ -178,13 +180,30 @@
       return chain.then(function () { return { pptx: pptx, warnings: warnings }; });
     });
   }
+  /** Contrôle d'intégrité du fichier produit : nombre de diapositives et de médias réellement
+   *  présents dans ppt/media (une photo annoncée doit y figurer, jamais un cadre gris). */
+  function verify(data, entries) {
+    var expectedImages = 0;
+    entries.forEach(function (e) { e.slide.items.forEach(function (it) { if (it.t === 'image' && it.role !== 'banner') expectedImages++; }); });
+    if (!G.JSZip) return Promise.resolve({ slides: entries.length, expectedImages: expectedImages, media: null, ok: true });
+    return G.JSZip.loadAsync(data).then(function (zip) {
+      var names = Object.keys(zip.files);
+      var slides = names.filter(function (n) { return /^ppt\/slides\/slide\d+\.xml$/.test(n); }).length;
+      var media = names.filter(function (n) { return /^ppt\/media\//.test(n) && !zip.files[n].dir; }).length;
+      // + 1 : le bandeau officiel, placé une seule fois dans le masque.
+      return { slides: slides, expectedImages: expectedImages, media: media, ok: slides === entries.length && media >= expectedImages + 1 };
+    });
+  }
   function toBlob(entries, meta) {
     return build(entries, meta).then(function (r) {
-      if (typeof Blob === 'undefined' || (CSE.env && CSE.env.node)) return r.pptx.write({ outputType: 'nodebuffer' }).then(function (buf) { return { buffer: buf, warnings: r.warnings }; });
+      if (typeof Blob === 'undefined' || (CSE.env && CSE.env.node)) return r.pptx.write({ outputType: 'nodebuffer' }).then(function (buf) {
+        return verify(buf, entries).then(function (check) { return { buffer: buf, warnings: r.warnings, check: check }; });
+      });
       return r.pptx.write({ outputType: 'blob' }).then(function (blob) {
-        return { blob: blob instanceof Blob ? blob : new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), warnings: r.warnings };
+        blob = blob instanceof Blob ? blob : new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+        return verify(blob, entries).then(function (check) { return { blob: blob, warnings: r.warnings, check: check }; }, function () { return { blob: blob, warnings: r.warnings, check: null }; });
       });
     });
   }
-  return { build: build, toBlob: toBlob, banner: banner, prepareImage: prepareImage, textRuns: textRuns };
+  return { build: build, toBlob: toBlob, verify: verify, banner: banner, prepareImage: prepareImage, textRuns: textRuns };
 });

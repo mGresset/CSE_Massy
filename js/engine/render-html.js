@@ -50,7 +50,10 @@
           e.decoding = 'async';
           e.src = src;
           e.style.objectFit = it.fit === 'contain' ? 'contain' : it.fit === 'stretch' ? 'fill' : 'cover';
+          if (it.fx !== undefined || it.fy !== undefined) e.style.objectPosition = (it.fx === undefined ? 50 : it.fx) + '% ' + (it.fy === undefined ? 50 : it.fy) + '%';
+          if (it.alt) e.alt = it.alt;
           e.onerror = function () { this.classList.add('cse-img-broken'); this.removeAttribute('src'); };
+          if (it.role === 'photo') e.dataset.field = 'photo';
         } else {
           e = el('div', 'cse-img-missing');
           e.textContent = 'Image indisponible';

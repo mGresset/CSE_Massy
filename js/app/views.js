@@ -33,7 +33,7 @@
 
       el.appendChild(h('div', { class: 'page-head' },
         h('div', {}, h('h1', {}, 'Tableau de bord'), h('p', { class: 'lead' }, 'Préparez les fiches, composez le MEL de la semaine et exportez un PowerPoint modifiable pour Canva.')),
-        h('div', { class: 'btn-group' }, h('button', { class: 'btn', type: 'button', onclick: newItemDialog }, '+ Nouvelle fiche'), h('a', { class: 'btn primary', href: '#/mel' }, 'Composer le MEL'))));
+        h('div', { class: 'btn-group' }, App.undoButtons(), h('button', { class: 'btn', type: 'button', onclick: newItemDialog }, '+ Nouvelle fiche'), h('a', { class: 'btn', href: '#/mels' }, 'Mes MEL'), h('a', { class: 'btn primary', href: '#/mel' }, 'Composer le MEL'))));
 
       if (p.migration && !p.migration.dismissed) {
         el.appendChild(h('div', { class: 'alert info' },
@@ -59,10 +59,11 @@
           h('h2', {}, 'MEL en préparation · semaine ' + issue.week),
           h('p', { class: 'muted', style: { margin: '0 0 10px' } }, 'Semaine du ' + D.fmtRange(mon, D.addDays(mon, 4)).replace(/^Du /, '') + ' · date de référence ' + D.fmtLong(issue.refDate) + ' · ' + included + ' page(s) incluse(s)'),
           h('div', { class: 'row' }, h('a', { class: 'btn primary', href: '#/mel' }, 'Ouvrir le compositeur'),
-            h('button', { class: 'btn', type: 'button', onclick: function (e) { App.exportPptx(App.issueEntries(issue), 'CSE_MEL_S' + issue.week + '_' + issue.year + '.pptx', e.currentTarget); } }, '↓ Exporter le MEL (.pptx)'))));
+            h('button', { class: 'btn', type: 'button', title: 'Le MEL actuel reste intact', onclick: function () { App.duplicateIssueDialog(issue); } }, '⧉ Créer la semaine suivante'),
+            h('button', { class: 'btn', type: 'button', onclick: function (e) { App.exportIssue(issue, e.currentTarget); } }, '↓ Exporter le MEL (.pptx)'))));
       } else {
         heroBody.appendChild(h('div', {}, h('h2', {}, 'Aucun MEL en préparation'), h('p', { class: 'muted' }, 'Créez le MEL de la semaine : il sera composé automatiquement à partir de la bibliothèque.'),
-          h('button', { class: 'btn primary', type: 'button', onclick: function () { App.newIssue(); App.go('#/mel'); } }, 'Créer le MEL de la semaine ' + D.isoWeek(App.defaultRefDate()).week)));
+          h('button', { class: 'btn primary', type: 'button', onclick: function () { App.newIssueDialog(); } }, 'Créer le MEL de la semaine ' + D.isoWeek(App.defaultRefDate()).week)));
       }
       var heroThumb = h('div');
       if (issue) {
@@ -202,6 +203,7 @@
   };
   App.addToIssue = function (it) {
     var issue = App.ensureIssue();
+    if (C.compose.isFrozen(issue)) { ui.toast('Le MEL semaine ' + issue.week + ' est publié (figé) : créez la semaine suivante ou rouvrez-le en brouillon.', 'error', 7000); return; }
     if (issue.pages.some(function (pg) { return pg.itemId === it.id; })) { ui.toast('Cette fiche figure déjà dans le MEL de la semaine ' + issue.week + '.'); return; }
     issue.pages.push(C.model.blankPage('item', { itemId: it.id }));
     issue.suppressed = (issue.suppressed || []).filter(function (k) { return k !== 'item:' + it.id; });
@@ -258,6 +260,7 @@
   }
   App.addSpecialPage = function (tid) {
     var issue = App.ensureIssue();
+    if (C.compose.isFrozen(issue)) { ui.toast('Ce MEL est publié (figé) : rouvrez-le en brouillon pour ajouter une page.', 'error'); return; }
     var M = C.model, pg;
     if (tid === 'cover') { if (issue.pages.some(function (x) { return x.kind === 'cover'; })) { ui.toast('Ce MEL a déjà une couverture.'); App.go('#/mel'); return; } pg = M.blankPage('cover'); }
     else if (tid === 'news' || tid === 'last') pg = M.blankPage(tid);
@@ -295,12 +298,16 @@
         text('portalUrl', 'Portail CSE (lien par défaut des boutons)', { type: 'url', help: 'Up Expert / Kalidea. Le lien mène à l’accueil du portail : les inscriptions restent gérées dans Kalidea.' }),
         text('planningUrl', 'Lien « vue d’ensemble des activités » (couverture, facultatif)', { type: 'url' }),
         text('planningLabel', 'Texte de ce lien'),
-        text('canvaUrl', 'Présentation Canva du MEL (ouverture)', { type: 'url' }),
+        text('canvaUrl', 'Présentation Canva du MEL (bouton « Ouvrir Canva »)', { type: 'url', help: 'Le lien ouvre la présentation ; l’ajout se fait en important le .pptx dans Canva (pas d’ajout automatique sans intégration Canva autorisée).' }),
+        h('div', { class: 'cols' }, text('siteUrl', 'Site CSE Studio', { type: 'url' }), text('composerUrl', 'Compositeur (mel.html)', { type: 'url' })),
+        text('repoUrl', 'Dépôt GitHub du site', { type: 'url' }),
         text('footerNote', 'Mention en bas de chaque diapositive (facultatif)')
       ]);
       // Règles éditoriales
       var newDays = h('input', { type: 'number', min: 0, max: 90, value: s.newDays });
       newDays.addEventListener('change', function () { s.newDays = Math.max(0, Math.min(90, parseInt(newDays.value, 10) || 0)); App.save('settings'); });
+      var newMax = h('input', { type: 'number', min: 1, max: 8, value: s.newMaxWeeks || 2 });
+      newMax.addEventListener('change', function () { s.newMaxWeeks = Math.max(1, Math.min(8, parseInt(newMax.value, 10) || 2)); App.save('settings'); });
       var lastDays = h('input', { type: 'number', min: 1, max: 31, value: s.lastDays });
       lastDays.addEventListener('change', function () { s.lastDays = Math.max(1, Math.min(31, parseInt(lastDays.value, 10) || 7)); App.save('settings'); });
       var dens = ui.selectEl(C.model.DENSITIES, s.defaultDensity);
@@ -311,6 +318,7 @@
         h('div', { class: 'cols' },
           ui.field('Nouveauté automatique (jours après création)', newDays, { help: '0 = uniquement les fiches marquées « Nouveauté ».' }),
           ui.field('Fenêtre « Dernière semaine » (jours)', lastDays, { help: 'Clôture entre la date du MEL et J+' + s.lastDays + ' inclus.' }),
+          ui.field('Durée d’annonce d’une nouveauté (semaines)', newMax, { help: 'Lors de la reprise d’un MEL, une nouveauté déjà annoncée cesse d’être « nouveauté » après ce nombre de semaines.' }),
           ui.field('Densité par défaut', dens)),
         h('label', { class: 'check' }, num, 'Numéroter les pages par défaut dans les nouveaux MEL')
       ]);
@@ -446,14 +454,22 @@
       grid.appendChild(h('div', { class: 'card' }, h('h2', {}, 'Sauvegarde complète'),
         h('p', { class: 'small muted' }, 'Fiches, catégories, paramètres, MEL et images. Format « ' + C.model.SCHEMA + ' ».'),
         h('div', { class: 'btn-group' },
-          h('button', { class: 'btn primary', type: 'button', onclick: function () { ui.download(JSON.stringify(C.store.backupObject(), null, 1), 'CSE_Studio_sauvegarde_' + App.today() + '.json', 'application/json'); ui.toast('Sauvegarde téléchargée.', 'ok'); } }, '↓ Télécharger la sauvegarde (.json)'),
+          h('button', { class: 'btn primary', type: 'button', onclick: function () { App.downloadBackup('CSE_Studio_sauvegarde_' + App.today() + '.json'); } }, '↓ Télécharger la sauvegarde (.json)'),
           h('button', { class: 'btn', type: 'button', onclick: importDialog }, '↑ Restaurer / importer un fichier'))));
       grid.appendChild(h('div', { class: 'card' }, h('h2', {}, 'Exports'),
         h('div', { class: 'btn-group' },
-          h('button', { class: 'btn', type: 'button', onclick: function (e) { var is = App.activeIssue(); if (!is) return ui.toast('Aucun MEL.', 'error'); App.exportPptx(App.issueEntries(is), 'CSE_MEL_S' + is.week + '_' + is.year + '.pptx', e.currentTarget); } }, '↓ MEL en cours (.pptx)'),
+          h('button', { class: 'btn', type: 'button', onclick: function (e) { var is = App.activeIssue(); if (!is) return ui.toast('Aucun MEL.', 'error'); App.exportIssue(is, e.currentTarget); } }, '↓ MEL en cours (.pptx)'),
           h('button', { class: 'btn', type: 'button', onclick: function () { var is = App.activeIssue(); if (!is) return ui.toast('Aucun MEL.', 'error'); App.print(App.issueEntries(is).map(function (x) { return x.slide; })); } }, '🖨 MEL en PDF (impression)'),
           h('button', { class: 'btn', type: 'button', onclick: exportCsv }, '↓ Bibliothèque (.csv)')),
         h('p', { class: 'small muted' }, 'Le CSV (séparateur « ; », UTF-8) s’ouvre dans un tableur. Pour l’impression PDF, choisir « Enregistrer au format PDF » et « Paysage ».')));
+      var usage = C.images.usage(), used = C.images.refsOf(p).length;
+      grid.appendChild(h('div', { class: 'card' }, h('h2', {}, 'Images'),
+        h('p', { class: 'small muted' }, usage.count + ' image(s) stockée(s) sur cet appareil (' + Math.round(usage.bytes / 1024 / 1024 * 10) / 10 + ' Mo), dont ' + used + ' utilisée(s) par les fiches, la corbeille, les personnalisations et les MEL publiés.' + (usage.persistent ? '' : ' Stockage persistant indisponible dans ce navigateur : sauvegardez en JSON.')),
+        h('button', { class: 'btn', type: 'button', onclick: function () {
+          ui.confirm('Nettoyer les images inutilisées', 'Les images qui ne sont utilisées par aucune fiche, aucune fiche en corbeille, aucune personnalisation ni aucun MEL publié seront supprimées de cet appareil. Pensez à télécharger une sauvegarde JSON avant.', 'Nettoyer', true).then(function (ok) {
+            if (!ok) return; C.images.gc(p).then(function (n) { ui.toast(n + ' image(s) inutilisée(s) supprimée(s).', 'ok'); App.refresh(); });
+          });
+        } }, 'Nettoyer les images inutilisées')));
       // Instantanés
       var snaps = C.store.snapshots();
       var sc = h('div', { class: 'card' }, h('h2', {}, 'Instantanés automatiques'), h('p', { class: 'small muted' }, 'Créés avant chaque migration, import ou remplacement (3 derniers conservés, sans les images).'));

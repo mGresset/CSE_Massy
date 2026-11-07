@@ -146,7 +146,7 @@
       var p = q.shift(), box = boxes[bi], cap = (box.h + 0.5) / (size * lh);
       var empty = M.isEmpty(p);
       if (empty && used === 0) continue;
-      var n = empty ? M.PARA_GAP : M.wrapPara(p, box.w, size).length;
+      var n = empty ? M.PARA_GAP : M.lineCount(p, box.w, size);
       // Un intertitre ne reste jamais seul en bas de colonne : il part avec au moins 2 lignes.
       if (p.heading && used + n + 2 > cap + 1e-6 && q.length && used > 0) { bi++; used = 0; q.unshift(p); continue; }
       if (used + n <= cap + 1e-6) { chunks[bi].push(p); used += n; continue; }
@@ -232,8 +232,15 @@
   /* ---------- Moteur de composition adaptatif ---------- */
   /** Plus grande taille (≥ minimum lisible) pour laquelle tout le texte tient dans les zones ; null sinon. */
   function bestSize(paras, boxes, max, min) {
-    for (var s = max; s >= min - 0.001; s -= 0.5) { if (!flow(paras, boxes, s).rest.length) return Math.round(s * 10) / 10; }
-    return null;
+    // Recherche dichotomique sur une grille de 0,5 px (la capacité décroît avec la taille).
+    var fits = function (s) { return !flow(paras, boxes, s).rest.length; };
+    var n = Math.floor((max - min) / 0.5 + 1e-6);
+    if (fits(max)) return Math.round(max * 10) / 10;
+    if (!fits(min)) return null;
+    var val = function (k) { return k > n ? max : min + k * 0.5; };
+    var lo = 0, hi = n + 1; // val(lo) tient, val(hi) ne tient pas
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (fits(val(mid))) lo = mid; else hi = mid; }
+    return Math.round(val(lo) * 10) / 10;
   }
   function usedHeight(paras, boxes, s) {
     var f = flow(paras, boxes, s);
