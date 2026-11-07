@@ -68,7 +68,7 @@
       var lastSlides = [];
       preview.appendChild(h('div', { class: 'card' },
         h('div', { class: 'preview-tools' }, ui.field('Modèle', tplSel), ui.field('Densité', densSel),
-          h('label', { class: 'check', title: 'Aperçu de la fiche sur deux diapositives' }, splitChk, 'Scinder en 2 pages'), h('span', { class: 'spacer' }), read),
+          h('label', { class: 'check', title: 'Forcer la publication sur deux diapositives (sinon : automatique si le texte ne tient pas à 12 pt)' }, splitChk, 'Toujours 2 diapositives'), h('span', { class: 'spacer' }), read),
         h('div', { style: { marginTop: '10px' } }, stage),
         h('div', { class: 'row', style: { marginTop: '10px' } },
           h('button', { class: 'btn', type: 'button', onclick: function () { App.fullscreen(lastSlides); } }, '⤢ Aperçu plein écran'),
@@ -103,7 +103,7 @@
         lastSlides.forEach(function (s) { s.warnings.forEach(function (w) {
           if (seen[w.msg] || /^Tarifs : /.test(w.msg)) return; seen[w.msg] = 1;
           var act = null;
-          if (w.code === 'suggest-split' || w.code === 'overflow') act = h('button', { class: 'btn small act', type: 'button', onclick: function () { state.split = true; splitChk.checked = true; renderPreview(); ui.toast('Aperçu sur deux pages. Dans le MEL, cochez « Scinder en 2 pages » sur la page de cette fiche.'); } }, 'Scinder');
+          if (w.code === 'suggest-split' || w.code === 'overflow') act = h('button', { class: 'btn small act', type: 'button', onclick: function () { state.split = true; splitChk.checked = true; renderPreview(); } }, '2 diapositives');
           addIssue(w.level, w.msg, act);
         }); });
         if (!issuesBox.children.length) addIssue('ok', 'Aucun problème détecté. Relisez la diapositive avant diffusion.');
@@ -113,10 +113,7 @@
         if (a.type === 'calendar-day') { cycleDay(a.date); }
       }
       function cycleDay(date) {
-        var keys = ['none'].concat(it.calendar.statuses.map(function (s) { return s.key; }));
-        var cur = it.calendar.days[date] || 'none';
-        var next = keys[(keys.indexOf(cur) + 1) % keys.length];
-        if (next === 'none') delete it.calendar.days[date]; else it.calendar.days[date] = next;
+        C.model.cycleCalendarDay(it.calendar, date, state.calBrush && state.calBrush.hours);
         touch(); renderPreview(); if (state.step === 'calendrier') drawStep();
       }
       function touch() {
@@ -316,16 +313,29 @@
         box.appendChild(bindInput(it, 'carbon', ctx, { label: 'Bilan carbone (facultatif)', placeholder: 'Ex. 619 kg CO₂e (vol A/R)' }));
       }
       box.appendChild(h('h3', {}, 'Contacts / référents'));
+      box.appendChild(h('p', { class: 'small muted' }, 'Sur la diapositive, seul le nom apparaît ; s’il a un e-mail valide, le nom devient un lien « mailto: » qui ouvre la messagerie de l’ordinateur. L’adresse reste lisible dans le lien : ne saisir que des adresses destinées à être diffusées.'));
       var list = h('div');
+      var EMAIL = /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[A-Za-z]{2,}$/;
       function draw() {
         ui.clear(list);
         it.contacts.forEach(function (c, i) {
-          var row = h('div', { class: 'contact-row' });
-          ['name', 'email', 'phone', 'role'].forEach(function (k) {
-            var inp = h('input', { type: k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text', value: c[k] || '', placeholder: { name: 'Nom', email: 'E-mail', phone: 'Téléphone', role: 'Fonction' }[k], 'aria-label': { name: 'Nom', email: 'E-mail', phone: 'Téléphone', role: 'Fonction' }[k] + ' du contact ' + (i + 1) });
-            inp.addEventListener('input', function () { c[k] = inp.value; ctx.touch(); ctx.render(); });
-            row.appendChild(inp);
-          });
+          var row = h('div', { class: 'contact-row two' });
+          var name = h('input', { type: 'text', value: c.name || '', placeholder: 'Prénom Nom', 'aria-label': 'Nom du contact ' + (i + 1) });
+          var mail = h('input', { type: 'email', value: c.email || '', placeholder: 'prenom.nom@…', 'aria-label': 'E-mail du contact ' + (i + 1) });
+          var msg = h('small', { class: 'field-msg', 'aria-live': 'polite' });
+          function check() {
+            var e = String(mail.value || '').trim();
+            var bad = e && !EMAIL.test(e);
+            mail.setAttribute('aria-invalid', bad ? 'true' : 'false');
+            msg.textContent = bad ? 'Adresse invalide : le nom sera affiché sans lien.' : (e ? 'Lien mailto actif sur le nom.' : 'Sans e-mail : nom affiché sans lien.');
+            msg.className = 'field-msg' + (bad ? ' warn' : '');
+          }
+          name.addEventListener('input', function () { c.name = name.value; ctx.touch(); ctx.render(); });
+          mail.addEventListener('input', function () { c.email = mail.value.trim(); check(); ctx.touch(); ctx.render(); });
+          check();
+          // Téléphone et fonction des versions précédentes : conservés tels quels, sans être affichés.
+          row.appendChild(h('div', {}, name));
+          row.appendChild(h('div', {}, mail, msg));
           row.appendChild(h('button', { class: 'btn small danger', type: 'button', 'aria-label': 'Retirer le contact ' + (i + 1), onclick: function () { it.contacts.splice(i, 1); ctx.touch(); ctx.render(); draw(); } }, '✕'));
           list.appendChild(row);
         });
@@ -334,9 +344,9 @@
       draw();
       box.appendChild(list);
       var refs = p.settings.referents.filter(function (r) { return r.name || r.email; });
-      var refSel = ui.selectEl([{ id: '', label: 'Ajouter un référent enregistré…' }].concat(refs.map(function (r, i) { return { id: String(i), label: [r.name, r.role].filter(Boolean).join(' · ') }; })), '');
+      var refSel = ui.selectEl([{ id: '', label: 'Ajouter un référent enregistré…' }].concat(refs.map(function (r, i) { return { id: String(i), label: r.name || r.email }; })), '');
       refSel.addEventListener('change', function () { var r = refs[Number(refSel.value)]; if (r) { it.contacts.push(Object.assign({}, r)); ctx.touch(); ctx.render(); draw(); } refSel.value = ''; });
-      box.appendChild(h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: function () { it.contacts.push({ name: '', email: '', phone: '', role: '' }); draw(); } }, '+ Ajouter un contact'), refs.length ? refSel : h('a', { href: '#/parametres', class: 'small' }, 'Enregistrer des référents réutilisables')));
+      box.appendChild(h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: function () { it.contacts.push({ name: '', email: '' }); draw(); } }, '+ Ajouter un contact'), refs.length ? refSel : h('a', { href: '#/parametres', class: 'small' }, 'Enregistrer des référents réutilisables')));
     },
     offre: function (box, it, p, ctx) {
       var pa = it.partner;
@@ -347,43 +357,64 @@
         bindInput(it, 'partner', ctx, { label: 'Valable jusqu’au', type: 'date', get: function () { return pa.validUntil; }, set: function (v) { pa.validUntil = v; } })));
     },
     calendrier: function (box, it, p, ctx) {
-      var cal = it.calendar;
+      var cal = it.calendar, M = C.model;
+      cal.dayHours = cal.dayHours || {};
       box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'calendar', ctx, { label: 'Mois affiché', type: 'month', get: function () { return cal.month; }, set: function (v) { cal.month = v; }, after: function () { ctx.redraw(); } }),
         bindInput(it, 'calendar', ctx, { label: 'Nom du service (pastille)', get: function () { return cal.service; }, set: function (v) { cal.service = v; }, placeholder: 'Permanences, Prêt de matériel…' })));
-      box.appendChild(h('p', { class: 'small muted' }, 'Cliquez sur un jour (ici ou directement sur l’aperçu) pour faire défiler : vide → ' + cal.statuses.map(function (s) { return s.label || s.key; }).join(' → ') + ' → vide.'));
+      box.appendChild(bindInput(it, 'calendar', ctx, { label: 'Horaire standard des jours « Ouvert » (vert)', get: function () { return cal.openHours; }, set: function (v) { cal.openHours = v; }, placeholder: 'Ex. 13h–16h' }));
+      // Pinceau : on choisit un état puis on clique sur les jours ; les autres dates ne sont jamais effacées.
+      var brush = state.calBrush = state.calBrush || { state: 'open', hours: '' };
+      var brushBox = h('fieldset', {}, h('legend', {}, '1. Choisir l’état à appliquer'));
+      [['open', 'Ouvert'], ['special', 'Horaire particulier'], ['closed', 'Fermé'], ['none', 'Effacer']].forEach(function (o) {
+        var r = h('input', { type: 'radio', name: 'cal-brush', value: o[0], checked: brush.state === o[0] });
+        r.addEventListener('change', function () { brush.state = o[0]; hoursWrap.classList.toggle('hidden', o[0] !== 'special'); });
+        var sw = o[0] === 'none' ? h('span', { class: 'dot', style: { background: '#FFFFFF', border: '1px solid #9AA8BF' } }) : h('span', { class: 'dot', style: { background: M.CAL_STATES[o[0]].color } });
+        brushBox.appendChild(h('label', { class: 'check', style: { display: 'inline-flex', marginRight: '14px' } }, r, sw, o[1]));
+      });
+      var hoursIn = h('input', { value: brush.hours, placeholder: 'Ex. 9h–12h ou 10h–12h / 14h–16h', 'aria-label': 'Horaire particulier à appliquer' });
+      hoursIn.addEventListener('input', function () { brush.hours = hoursIn.value; });
+      var hoursWrap = h('div', { class: brush.state === 'special' ? '' : 'hidden' }, ui.field('Horaire appliqué aux jours cliqués', hoursIn, { help: 'Chaque jour garde son propre horaire, modifiable ci-dessous.' }));
+      brushBox.appendChild(hoursWrap);
+      box.appendChild(brushBox);
+      box.appendChild(h('p', { class: 'small muted', style: { margin: '4px 0' } }, '2. Cliquer sur les jours (ici ou directement sur l’aperçu, où un clic fait défiler Ouvert → Horaire particulier → Fermé → vide).'));
       var grid = h('div', { class: 'cal-editor', role: 'grid', 'aria-label': 'Jours du mois' });
       ['LUN', 'MAR', 'MER', 'JEU', 'VEN'].forEach(function (d) { grid.appendChild(h('div', { class: 'h' }, d)); });
       var month = cal.month || App.refDate().slice(0, 7);
-      var first = month + '-01';
-      var statusMap = {}; cal.statuses.forEach(function (s) { statusMap[s.key] = s; });
-      for (var d = D.monday(first); d.slice(0, 7) <= month; d = D.addDays(d, 1)) {
+      for (var d = D.monday(month + '-01'); d.slice(0, 7) <= month; d = D.addDays(d, 1)) {
         var wd = D.weekday(d);
         if (wd === 0 || wd === 6) continue;
         (function (day) {
           var inMonth = day.slice(0, 7) === month;
-          var st = statusMap[cal.days[day]];
-          var b = h('button', { type: 'button', class: inMonth ? '' : 'out', style: st ? { background: st.color } : {}, 'aria-label': D.fmtDay(day) + ' : ' + (st ? st.label : 'sans information') }, inMonth ? String(+day.slice(8)) : '');
+          var st = inMonth ? M.calendarDay(cal, day) : null;
+          var label = st ? M.CAL_STATES[st.state].label + (st.hours ? ' ' + st.hours : '') : 'sans information';
+          var b = h('button', { type: 'button', class: inMonth ? '' : 'out', style: st ? { background: M.CAL_STATES[st.state].color } : {}, 'aria-label': D.fmtDay(day) + ' : ' + label, title: label },
+            inMonth ? String(+day.slice(8)) : '', st && st.state === 'special' && st.hours ? h('small', { class: 'cal-h' }, st.hours) : null);
           if (inMonth) b.addEventListener('click', function () {
-            var keys = ['none'].concat(cal.statuses.map(function (s) { return s.key; }));
-            var cur = cal.days[day] || 'none', next = keys[(keys.indexOf(cur) + 1) % keys.length];
-            if (next === 'none') delete cal.days[day]; else cal.days[day] = next;
+            if (brush.state === 'none') { delete cal.days[day]; delete cal.dayHours[day]; }
+            else {
+              cal.days[day] = brush.state;
+              if (brush.state === 'special') { if (String(brush.hours).trim()) cal.dayHours[day] = brush.hours.trim(); }
+              else delete cal.dayHours[day];
+            }
             ctx.touch(); ctx.render(); ctx.redraw();
           });
           grid.appendChild(b);
         })(d);
       }
       box.appendChild(grid);
-      box.appendChild(h('h3', {}, 'Légende (couleurs et libellés)'));
-      cal.statuses.forEach(function (s, i) {
-        var col = h('input', { type: 'color', value: s.color, 'aria-label': 'Couleur ' + (i + 1) });
-        col.addEventListener('change', function () { s.color = col.value.toUpperCase(); ctx.touch(); ctx.render(); ctx.redraw(); });
-        var lab = h('input', { value: s.label, 'aria-label': 'Libellé ' + (i + 1) });
-        lab.addEventListener('input', function () { s.label = lab.value; ctx.touch(); ctx.render(); });
-        var rm = h('button', { class: 'btn small danger', type: 'button', disabled: cal.statuses.length <= 1, 'aria-label': 'Retirer cette légende', onclick: function () { cal.statuses.splice(i, 1); Object.keys(cal.days).forEach(function (k) { if (cal.days[k] === s.key) delete cal.days[k]; }); ctx.touch(); ctx.render(); ctx.redraw(); } }, '✕');
-        box.appendChild(h('div', { class: 'legend-row' }, col, lab, rm));
-      });
-      if (cal.statuses.length < 6) box.appendChild(h('button', { class: 'btn small', type: 'button', onclick: function () { cal.statuses.push({ key: 'st' + Date.now().toString(36), label: 'Nouveau statut', color: '#7FB3FF' }); ctx.touch(); ctx.render(); ctx.redraw(); } }, '+ Ajouter un statut'));
-      box.appendChild(bindInput(it, 'calendar', ctx, { label: 'Horaires / lieu (texte sous la légende)', rows: 2, get: function () { return cal.hours; }, set: function (v) { cal.hours = v; } }));
+      var specials = Object.keys(cal.days).filter(function (k) { return k.slice(0, 7) === month && cal.days[k] === 'special'; }).sort();
+      if (specials.length) {
+        var fs = h('fieldset', {}, h('legend', {}, 'Horaires particuliers du mois'));
+        specials.forEach(function (day) {
+          var inp = h('input', { value: cal.dayHours[day] || '', placeholder: 'Horaire', 'aria-label': 'Horaire du ' + D.fmtDay(day) });
+          inp.addEventListener('input', function () { if (inp.value.trim()) cal.dayHours[day] = inp.value; else delete cal.dayHours[day]; ctx.touch(); ctx.render(); });
+          var msg = cal.dayHours[day] ? null : h('small', { class: 'field-msg warn' }, 'Horaire à saisir');
+          fs.appendChild(h('div', { class: 'legend-row', style: { gridTemplateColumns: '150px 1fr' } }, h('span', { class: 'small' }, D.capital(D.fmtDayShort(day))), h('div', {}, inp, msg)));
+        });
+        box.appendChild(fs);
+      }
+      box.appendChild(h('p', { class: 'small muted' }, 'La légende est générée automatiquement : seuls les états utilisés ce mois-ci apparaissent, et les horaires identiques sont regroupés.'));
+      box.appendChild(bindInput(it, 'calendar', ctx, { label: 'Lieu / informations (texte sous la légende)', rows: 2, get: function () { return cal.hours; }, set: function (v) { cal.hours = v; } }));
       box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'calendar', ctx, { label: 'Lien du catalogue (facultatif)', type: 'url', get: function () { return cal.catalogUrl; }, set: function (v) { cal.catalogUrl = v.trim(); } }),
         bindInput(it, 'calendar', ctx, { label: 'Texte du lien', get: function () { return cal.catalogLabel; }, set: function (v) { cal.catalogLabel = v; } })));
       box.appendChild(bindInput(it, 'calendar', ctx, { label: 'Mention sous le calendrier (facultatif)', get: function () { return cal.note; }, set: function (v) { cal.note = v; }, placeholder: p.settings.mentions.calendar }));

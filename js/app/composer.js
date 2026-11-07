@@ -154,7 +154,7 @@
         slides.forEach(function (s) { s.warnings.forEach(function (w) {
           if (seen[w.msg]) return; seen[w.msg] = 1;
           var act = null;
-          if ((w.code === 'suggest-split' || w.code === 'overflow') && pg.kind === 'item' && !pg.split) act = h('button', { class: 'btn small act', type: 'button', onclick: function () { pg.split = true; App.save('issues'); refreshAll(); } }, 'Scinder en 2 pages');
+          if ((w.code === 'suggest-split' || w.code === 'overflow') && pg.kind === 'item' && pg.split !== 'force') act = h('button', { class: 'btn small act', type: 'button', onclick: function () { pg.split = 'auto'; App.save('issues'); refreshAll(); } }, 'Scission automatique');
           ul.appendChild(h('li', { class: w.level }, h('span', { class: 'ic' }, w.level === 'block' ? '✕' : w.level === 'info' ? 'i' : '!'), h('span', {}, w.msg), act));
         }); });
         if (it) C.compose.checkItem(it, p, issue.refDate).forEach(function (x) { if (!seen[x[1]]) ul.appendChild(h('li', { class: x[0] }, h('span', { class: 'ic' }, x[0] === 'block' ? '✕' : '!'), h('span', {}, x[1]))); });
@@ -172,9 +172,7 @@
       function onAction(pg, a) {
         if (a.type !== 'calendar-day') return;
         var it = App.item(pg.itemId); if (!it) return;
-        var keys = ['none'].concat(it.calendar.statuses.map(function (s) { return s.key; }));
-        var cur = it.calendar.days[a.date] || 'none', next = keys[(keys.indexOf(cur) + 1) % keys.length];
-        if (next === 'none') delete it.calendar.days[a.date]; else it.calendar.days[a.date] = next;
+        C.model.cycleCalendarDay(it.calendar, a.date, '');
         it.updatedAt = new Date().toISOString();
         App.save('items'); drawCenter(); refreshThumb(pg);
       }
@@ -209,10 +207,10 @@
           var dens = ui.selectEl([{ id: 'auto', label: 'Celle de la fiche' }].concat(C.model.DENSITIES.slice(1)), pg.density);
           dens.addEventListener('change', function () { pg.density = dens.value; changed(); });
           card.appendChild(ui.field('Densité', dens, { help: 'Automatique / Aéré / Compact. En automatique, le mode compact s’applique seul si le texte ne tient pas.' }));
-          if (C.templates.templateIdFor(pg, it, p) === 'classic') {
-            var sp = h('input', { type: 'checkbox', checked: pg.split });
-            sp.addEventListener('change', function () { pg.split = sp.checked; changed(); });
-            card.appendChild(h('label', { class: 'check' }, sp, 'Scinder la fiche en deux pages'));
+          if (['classic', 'immersive', 'info'].indexOf(C.templates.templateIdFor(pg, it, p)) >= 0) {
+            var sp = ui.selectEl([{ id: 'auto', label: 'Automatique : 2e diapositive si le texte ne tient pas à 12 pt' }, { id: 'force', label: 'Toujours 2 diapositives' }, { id: 'off', label: 'Jamais (texte tronqué et signalé)' }], pg.split || 'auto');
+            sp.addEventListener('change', function () { pg.split = sp.value; changed(); });
+            card.appendChild(ui.field('Texte long', sp));
           }
           var cls = C.compose.classify(it, issue.refDate, p.settings);
           var chips = h('div', { class: 'row' }); ui.rubricChip(cls).forEach(function (x) { chips.appendChild(x); });

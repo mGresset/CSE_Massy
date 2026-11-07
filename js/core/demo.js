@@ -53,17 +53,18 @@
       description: 'Offre réservée aux bénéficiaires du CSE, non cumulable avec d’autres promotions. Commande en ligne avec le code ci-dessus.',
       link: { type: 'custom', url: 'https://www.exemple.org/offre-cse', label: 'Voir l’offre' }, photos: ph('books'), createdAt: recent, editorial: 'new'
     });
-    var days = {};
+    var days = {}, dayHours = {};
     for (var d = 1; d <= 31; d++) {
       var iso = month + '-' + D.pad(d);
       if (!D.isValid(iso)) continue;
       var wd = D.weekday(iso);
       if (wd === 0 || wd === 6) continue;
-      days[iso] = wd === 3 ? 'short' : (d % 9 === 0 ? 'closed' : 'open');
+      days[iso] = wd === 3 ? 'special' : (d % 9 === 0 ? 'closed' : 'open');
+      if (wd === 3) dayHours[iso] = d > 20 ? '10h–12h' : '14h30–16h';
     }
     item('calendar', {
       title: 'Permanences CSE du mois', categoryId: cat('Informations'),
-      calendar: { month: month, days: days, service: 'Permanences', hours: 'Bureau du CSE, bâtiment A, rez-de-chaussée.', catalogUrl: '', note: '' },
+      calendar: { month: month, days: days, dayHours: dayHours, openHours: '13h–16h', service: 'Permanences', hours: 'Bureau du CSE, bâtiment A, rez-de-chaussée.', catalogUrl: '', note: '' },
       contacts: [{ name: 'Accueil CSE', email: 'accueil-cse@exemple.org' }]
     });
     item('activity', {
@@ -137,9 +138,6 @@
 
     issue.pages.splice(issue.pages.length - 2, 0, M.normalizePage({ kind: 'upcoming', opts: { style: 'table', auto: true, categoryId: cat('Sorties culturelles'), title: 'Prévision des sorties culturelles', subtitle: 'Inscriptions bientôt ouvertes' } }));
 
-    // La fiche Sri Lanka, très complète, est publiée sur deux pages (fonction « Scinder »).
-    var sri = p.items.find(function (x) { return /Sri Lanka/.test(x.title); });
-    issue.pages.forEach(function (pg) { if (sri && pg.itemId === sri.id) pg.split = true; });
     p.issues = [issue];
     p.activeIssueId = issue.id;
     return p;

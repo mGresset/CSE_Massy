@@ -19,10 +19,17 @@
   var C = {
     navy: '#1C3474', blue: '#2F5DA8', bar: '#3B4BA3', purple: '#6236C9', red: '#D6263C', orange: '#EF7A1A', amber: '#FFF2E0',
     coral: '#FDECEC', green: '#1E8A4C', greenLight: '#E8F6EE', light: '#EEF3FB', lighter: '#F6F8FC', ink: '#1F2937', muted: '#56657C',
-    border: '#D7E0EE', white: '#FFFFFF', yellow: '#FFD43B', lilac: '#F1ECFD', dark: '#15295A'
+    border: '#D7E0EE', white: '#FFFFFF', yellow: '#FFD43B', lilac: '#F1ECFD', dark: '#15295A',
+    // Statuts éditoriaux sobres (V9.1)
+    newBg: '#EAF5ED', newText: '#3E7657', newBorder: '#C6E0CE',
+    lastBg: '#FFF1E5', lastText: '#A75B2C', lastBorder: '#F1C9A8',
+    priceBg: '#F8F6FE', priceBorder: '#E6DFFA'
   };
-  /* Seuils de lisibilité (px de diapositive ; 1 px = 0,8 pt dans PowerPoint). */
-  var MIN = { body: 14, compactBody: 12.5, small: 11, title: 22 };
+  /* Seuils de lisibilité, en px de diapositive (1 px = 0,8 pt dans PowerPoint) :
+   *   corps de texte : 15 px = 12 pt minimum, cible 17,5–20 px = 14–16 pt ;
+   *   titres : 22 px = 17,6 pt minimum ; petites métadonnées (libellés, mentions) : 11 px = 8,8 pt. */
+  var MIN = { body: 15, compactBody: 15, small: 11, title: 22 };
+  var PT = 0.8;
   var M = function () { return CSE.metrics; };
 
   function Builder(ctx) {
@@ -116,9 +123,10 @@
       this.text(label + ' →', right - bw + 10, 600, bw - 20, 36, { size: 16, min: 12, bold: true, color: C.white, align: 'center', valign: 'middle', link: link, maxLines: 1, role: 'label', noScale: true, field: 'bouton' });
       right = right - bw - 16;
     }
-    if (o.contact) {
-      this.text([{ runs: [{ text: 'Contact : ', bold: true }].concat(o.contactRuns || [{ text: o.contact, bold: false }]) }], 40, 602, right - 40, 34,
-        { size: 15, min: 11, color: C.purple, valign: 'middle', maxLines: 2, field: 'contacts', role: 'label', noScale: true, important: false });
+    if (o.contactRuns && o.contactRuns.length) {
+      var lbl = o.contactCount > 1 ? 'Contacts : ' : 'Contact : ';
+      this.text([{ runs: [{ text: lbl, bold: true }].concat(o.contactRuns) }], 40, 602, right - 40, 34,
+        { size: 15, min: 12, color: C.purple, valign: 'middle', maxLines: 2, field: 'contacts', role: 'label', noScale: true, important: false });
     }
   };
   /** Étiquette de rubrique / catégorie en petites capitales colorées. */
@@ -131,16 +139,46 @@
     this.text(text, x + 10, y, w - 20, size + 12, { size: size, min: 10, bold: true, color: C.white, upper: true, valign: 'middle', maxLines: 1, role: 'label', noScale: true, align: 'center' });
     return w;
   };
-  /** Pastille ronde « NEW ! » (vert) ou « Dernière chance » (jaune), légèrement inclinée. */
-  B.badge = function (kind, x, y, d) {
-    d = d || 92;
-    if (kind === 'new') {
-      this.ellipse(x, y, d, d, { fill: '#2FB344', stroke: C.white, sw: 3, rot: -12 });
-      this.text('NEW !', x, y, d, d, { size: d * 0.26, min: 10, bold: true, color: C.white, align: 'center', valign: 'middle', rot: -12, maxLines: 1, role: 'deco', noScale: true });
-    } else if (kind === 'last') {
-      this.ellipse(x, y, d, d, { fill: C.yellow, stroke: C.white, sw: 3, rot: -12 });
-      this.text('DERNIÈRE\nCHANCE !', x + 4, y, d - 8, d, { size: d * 0.17, min: 9, bold: true, color: '#7A1F00', align: 'center', valign: 'middle', rot: -12, role: 'deco', noScale: true });
-    }
+  /** Étiquette de statut sobre : « Nouveauté » (vert pastel) ou « Dernière chance » (orange pastel). Renvoie {w,h,x}. */
+  B.statusLabel = function (kind, text, x, y, o) {
+    o = o || {};
+    var last = kind === 'last', size = o.size || 13, h = o.h || 26;
+    var w = Math.min(o.maxW || 320, M().width(text, size, true) * 1.06 + 22);
+    var px = o.align === 'right' ? x - w : x;
+    this.rect(px, y, w, h, { fill: last ? C.lastBg : C.newBg, stroke: last ? C.lastBorder : C.newBorder, r: 6 });
+    this.text(text, px + 10, y, w - 20, h, { size: size, min: 10, bold: true, color: last ? C.lastText : C.newText, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'statut' });
+    return { w: w, h: h, x: px };
+  };
+  /** Encart « Dernière chance » : titre + date limite, dimensionné au texte. Renvoie {w,h,x}. */
+  B.lastChanceBox = function (deadlineText, x, y, o) {
+    o = o || {};
+    var line2 = deadlineText ? 'Inscriptions jusqu’au ' + deadlineText : 'Inscriptions bientôt closes';
+    var w = Math.min(o.maxW || 360, Math.max(M().width('Dernière chance', 15, true), M().width(line2, 13.5, false)) * 1.06 + 28);
+    var h = 50, px = o.align === 'right' ? x - w : x;
+    this.rect(px, y, w, h, { fill: C.lastBg, stroke: C.lastBorder, r: 8 });
+    this.rect(px, y + 8, 3, h - 16, { fill: C.lastText });
+    this.text('Dernière chance', px + 14, y + 6, w - 22, 20, { size: 15, min: 11, bold: true, color: C.lastText, maxLines: 1, role: 'label', noScale: true, field: 'dernière chance' });
+    this.text(line2, px + 14, y + 26, w - 22, 18, { size: 13.5, min: 10, color: C.lastText, maxLines: 1, role: 'label', noScale: true, field: 'date limite' });
+    return { w: w, h: h, x: px };
+  };
+  /** Pictogramme vectoriel (même tracé en SVG et dans PowerPoint). */
+  B.glyph = function (key, x, y, size, color) {
+    var I = CSE.icons, ic = I && (I.ICONS[key] || I.ICONS.star);
+    if (!ic) return;
+    var self = this;
+    ic.paths.forEach(function (cmds) { self.items.push({ t: 'path', x: x, y: y, w: size, h: size, vb: 24, d: cmds, fill: color || C.navy, icon: key }); });
+  };
+  /** Étiquette de catégorie avec pictogramme. Renvoie la largeur totale. */
+  B.catTag = function (cat, x, y, o) {
+    o = o || {};
+    if (!cat) return 0;
+    var color = cat.color || C.blue, h = o.h || 26;
+    this.rect(x, y, h, h, { fill: color, r: 6 });
+    this.glyph(CSE.icons ? CSE.icons.iconFor(cat) : 'star', x + 4, y + 4, h - 8, C.white);
+    var size = o.size || 13;
+    var tw = Math.min(o.maxW || 420, M().width(String(cat.name).toLocaleUpperCase('fr'), size, true) * 1.06 + 4);
+    this.text(cat.name, x + h + 8, y, tw, h, { size: size, min: 10, bold: true, color: shade(color, 0.12), upper: true, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'catégorie' });
+    return h + 8 + tw;
   };
   /** Pastille de texte (J−3, CODE…). Renvoie la largeur utilisée. */
   B.pill = function (text, x, y, o) {
@@ -212,34 +250,71 @@
     });
     return cy - gap - y;
   };
-  /** Hauteur nécessaire à la grille des tarifs pour une largeur donnée. */
+  /** Dimensions du bandeau des tarifs T1–T10 : une ligne si la largeur le permet, sinon deux rangées de cinq. */
   B.priceGridSize = function (pr, w) {
     if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0 };
-    var cols = w >= 600 ? 5 : w >= 430 ? 4 : 2;
-    var rows = Math.ceil(pr.rows.length / cols);
-    var h = 40 + rows * 31 + (pr.notes ? 24 : 0) + 8;
-    return { h: h, cols: cols, rows: rows };
+    var n = pr.rows.length;
+    var one = w >= 1060 && n <= 10;
+    var cols = one ? n : w >= 440 ? Math.min(5, n) : 2;
+    var rows = Math.ceil(n / cols);
+    var h = (one ? 26 + 24 : 28 + rows * 24) + 8 + (pr.notes ? 18 : 0);
+    return { h: h, cols: cols, rows: rows, one: one };
   };
+  /** Bandeau compact des tarifs : fond très clair, accent fin, « Extérieur » discret. */
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
-    this.rect(x, y, w, g.h, { fill: C.lilac, stroke: '#DCD0F7', r: 12 });
-    this.rect(x, y, 6, g.h, { fill: C.purple });
-    var head = 'TARIFS CSE' + (pr.label ? ' · ' + pr.label : '');
+    this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 8 });
+    this.rect(x, y + 6, 3, g.h - 12, { fill: C.purple });
+    var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var ow = outside ? M().width(outside, 14, true) * 1.06 + 10 : 0;
-    this.text(head, x + 18, y + 9, w - 36 - ow, 22, { size: 15, min: 11, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    if (outside) this.text(outside, x + w - 14 - ow, y + 10, ow, 20, { size: 14, min: 10, bold: true, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true });
-    var cw = (w - 30) / g.cols, top = y + 38, self = this;
+    var ow = outside ? M().width(outside, 12.5, false) * 1.06 + 6 : 0;
+    this.text(head, x + 14, y + 6, w - 28 - ow, 18, { size: 12.5, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    if (outside) this.text(outside, x + w - 12 - ow, y + 6, ow, 18, { size: 12.5, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    var cw = (w - 26) / g.cols, top = y + (g.one ? 26 : 28), self = this;
     pr.rows.forEach(function (r, i) {
       var col = i % g.cols, row = Math.floor(i / g.cols);
-      var cx = x + 16 + col * cw, cy = top + row * 31;
-      self.rect(cx, cy, cw - 8, 27, { fill: C.white, r: 6 });
-      self.text([{ runs: [{ text: r.label + '  ', bold: true, color: C.purple }, { text: P.money(r.price), bold: true }] }], cx + 7, cy, cw - 22, 27,
-        { size: 15, min: 11, color: C.dark, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      var cx = x + 14 + col * cw, cy = top + row * 24;
+      self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple }, { text: P.money(r.price), bold: true }] }], cx, cy, cw - 8, 22,
+        { size: 15, min: 12, color: C.dark, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      if (col > 0) self.rect(cx - 5, cy + 5, 1, 13, { fill: C.priceBorder });
     });
-    if (pr.notes) this.text(pr.notes, x + 18, y + g.h - 30, w - 36, 22, { size: 13, min: 10, color: C.muted, maxLines: 1, field: 'notes tarifs', noScale: true, important: false });
+    if (pr.notes) this.text(pr.notes, x + 14, y + g.h - 22, w - 28, 16, { size: 12, min: 10, color: C.muted, maxLines: 1, field: 'notes tarifs', noScale: true, role: 'label', important: false });
     return g.h;
+  };
+  /** Informations pratiques : liste compacte (libellé + valeur), hauteur ajustée au contenu. */
+  B.infoRowHeight = function (r, w) {
+    var lines = Math.min(3, M().countLines(M().toParas(r.value, { bold: true }), w - 24, 15.5));
+    return 8 + 14 + 2 + lines * 15.5 * 1.2 + 8;
+  };
+  B.infoPanelSize = function (rows, w) {
+    var self = this;
+    return rows.reduce(function (h, r) { return h + self.infoRowHeight(r, w); }, 0) + 12;
+  };
+  B.infoPanel = function (rows, x, y, w) {
+    if (!rows.length) return 0;
+    var self = this, h = this.infoPanelSize(rows, w), cy = y + 6;
+    this.rect(x, y, w, h, { fill: C.lighter, stroke: C.border, r: 10 });
+    rows.forEach(function (r, i) {
+      var rh = self.infoRowHeight(r, w);
+      if (i) self.rect(x + 12, cy, w - 24, 1, { fill: C.border });
+      self.text(r.label, x + 12, cy + 8, w - 24, 14, { size: 11, min: 9, bold: true, color: C.muted, upper: true, maxLines: 1, role: 'label', noScale: true });
+      self.text(r.value, x + 12, cy + 24, w - 24, rh - 30, { size: 15.5, min: 12, bold: true, color: r.color || C.navy, maxLines: 3, field: r.label, noScale: true, role: 'label', important: false });
+      cy += rh;
+    });
+    return h;
+  };
+  /** Variante horizontale (1 ou 2 informations) : bande basse, sans colonne réservée. */
+  B.infoStrip = function (rows, x, y, w) {
+    if (!rows.length) return 0;
+    var self = this, gap = 12, cw = Math.min(rows.length === 1 ? 360 : 420, (w - gap * (rows.length - 1)) / rows.length);
+    rows.forEach(function (r, i) {
+      var cx = x + i * (cw + gap);
+      self.rect(cx, y, cw, 46, { fill: C.lighter, stroke: C.border, r: 10 });
+      self.text(r.label, cx + 12, y + 6, cw - 24, 14, { size: 11, min: 9, bold: true, color: C.muted, upper: true, maxLines: 1, role: 'label', noScale: true });
+      self.text(r.value, cx + 12, y + 22, cw - 24, 20, { size: 15.5, min: 12, bold: true, color: r.color || C.navy, maxLines: 1, field: r.label, noScale: true, role: 'label', important: false });
+    });
+    return 46;
   };
   /** Ligne de prix compacte (modèles immersif, affiche, animation). */
   B.priceLine = function (pr) {
@@ -265,5 +340,5 @@
   function tint(h, k) { var c = hexToRgb(h); return rgbToHex(c.map(function (v) { return 255 - (255 - v) * k; })); }
   function shade(h, k) { var c = hexToRgb(h); return rgbToHex(c.map(function (v) { return v * (1 - k); })); }
 
-  return { W: W, H: H, BANNER_H: BANNER_H, C: C, MIN: MIN, Builder: Builder, tint: tint, shade: shade };
+  return { W: W, H: H, BANNER_H: BANNER_H, C: C, MIN: MIN, PT: PT, Builder: Builder, tint: tint, shade: shade };
 });

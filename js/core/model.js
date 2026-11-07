@@ -54,6 +54,39 @@
     { id: 'airy', label: 'Aéré' },
     { id: 'compact', label: 'Compact' }
   ];
+  /* Calendrier V9.1 : trois états fixes. « Horaire particulier » porte un horaire libre par jour (dayHours). */
+  var CAL_STATES = {
+    open: { label: 'Ouvert', color: '#8BC34A' },
+    special: { label: 'Horaire particulier', color: '#F7B05B' },
+    closed: { label: 'Fermé', color: '#E5484D' }
+  };
+  /** Extrait l'horaire d'un ancien libellé V9 (« Permanence 13h–16h » → « 13h–16h »). */
+  function hoursFromLabel(label) {
+    var t = String(label || '').trim();
+    var m = /^(?:permanences?|ouvertures?|ouvert|horaires?)\s*:?\s*(\d.*)$/i.exec(t);
+    return m ? m[1].trim() : (/^\d/.test(t) ? t : '');
+  }
+  /** État d'un jour : {state:'open'|'special'|'closed', hours} ou null. Compatible avec les calendriers V9. */
+  function calendarDay(cal, date) {
+    var v = cal && cal.days ? cal.days[date] : null;
+    if (!v || v === 'none') return null;
+    var hours = cal.dayHours && cal.dayHours[date] ? String(cal.dayHours[date]) : '';
+    if (v === 'open' || v === 'closed') return { state: v, hours: v === 'open' ? (hours || cal.openHours || '') : '' };
+    if (v === 'special') return { state: 'special', hours: hours };
+    var st = (cal.statuses || []).find(function (x) { return x.key === v; });
+    return { state: 'special', hours: hours || hoursFromLabel(st && st.label) || (st ? st.label : '') };
+  }
+  /** Clic sur un jour : vide → Ouvert → Horaire particulier → Fermé → vide (les autres dates ne changent pas). */
+  function cycleCalendarDay(cal, date, defaultHours) {
+    cal.days = cal.days || {}; cal.dayHours = cal.dayHours || {};
+    var cur = calendarDay(cal, date), order = ['none', 'open', 'special', 'closed'];
+    var next = order[(order.indexOf(cur ? cur.state : 'none') + 1) % order.length];
+    if (next === 'none') { delete cal.days[date]; delete cal.dayHours[date]; return null; }
+    cal.days[date] = next;
+    if (next === 'special') { if (!cal.dayHours[date] && String(defaultHours || '').trim()) cal.dayHours[date] = String(defaultHours).trim(); }
+    else if (next !== 'special' && cur && cur.state === 'special') { /* l'horaire saisi est conservé en mémoire du jour */ }
+    return next;
+  }
   var DEFAULT_STATUSES = [
     { key: 'open', label: 'Permanence 13h–16h', color: '#8BC34A' },
     { key: 'short', label: 'Ouverture 14h30–16h', color: '#FFE45C' },
@@ -84,7 +117,9 @@
       var id = str(o.id).trim() || 'cat-' + slug(name);
       while (seenId[id]) id = id + '-' + (i + 1);
       seenId[id] = 1; seenName[name.toLocaleLowerCase('fr')] = 1;
-      out.push({ id: id, name: name, color: /^#[0-9a-f]{6}$/i.test(o.color || '') ? o.color.toUpperCase() : PALETTE[out.length % PALETTE.length] });
+      var cat = { id: id, name: name, color: /^#[0-9a-f]{6}$/i.test(o.color || '') ? o.color.toUpperCase() : PALETTE[out.length % PALETTE.length] };
+      if (o.icon && /^[a-z]{2,20}$/.test(o.icon)) cat.icon = o.icon;
+      out.push(cat);
     });
     if (!out.length) out = defaultCategories();
     var info = out.findIndex(function (c) { return c.name.toLocaleLowerCase('fr') === 'informations'; });
@@ -163,7 +198,7 @@
       points: { value: '', counter: '' },
       link: { type: 'portal', url: '', label: 'Plus d’infos' },
       partner: { offer: '', amount: '', code: '', validUntil: '' },
-      calendar: { month: '', days: {}, statuses: DEFAULT_STATUSES.map(function (s) { return Object.assign({}, s); }), service: '', hours: '', catalogUrl: '', catalogLabel: 'Catalogue', note: '' },
+      calendar: { month: '', days: {}, dayHours: {}, openHours: '13h–16h', statuses: DEFAULT_STATUSES.map(function (s) { return Object.assign({}, s); }), service: '', hours: '', catalogUrl: '', catalogLabel: 'Catalogue', note: '' },
       template: 'auto', density: 'auto',
       archived: false, editorialStatus: 'draft',
       createdAt: now, updatedAt: now, version: 1
@@ -209,6 +244,19 @@
       return { key: str(s.key).trim() || 'st' + i, label: str(s.label, 80), color: /^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : DEFAULT_STATUSES[i % 3].color };
     });
     ['service', 'hours', 'catalogUrl', 'catalogLabel', 'note'].forEach(function (k) { it.calendar[k] = str(it.calendar[k], 400); });
+    // V9.1 : horaires du jour et horaire standard ; reprise explicite des anciens statuts personnalisés (statuses conservés).
+    it.calendar.dayHours = isObj(ca.dayHours) ? Object.keys(ca.dayHours).reduce(function (acc, k) { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && str(ca.dayHours[k]).trim()) acc[k] = str(ca.dayHours[k], 60).trim(); return acc; }, {}) : {};
+    if (ca.openHours === undefined) {
+      var openSt = it.calendar.statuses.find(function (x) { return x.key === 'open'; });
+      it.calendar.openHours = openSt ? hoursFromLabel(openSt.label) : '';
+    } else it.calendar.openHours = str(ca.openHours, 60);
+    Object.keys(it.calendar.days).forEach(function (k) {
+      var v = it.calendar.days[k];
+      if (v === 'open' || v === 'closed' || v === 'special') return;
+      var st = it.calendar.statuses.find(function (x) { return x.key === v; });
+      if (!it.calendar.dayHours[k]) { var hh = hoursFromLabel(st && st.label) || (st ? st.label : ''); if (hh) it.calendar.dayHours[k] = hh; }
+      it.calendar.days[k] = 'special';
+    });
     it.template = str(o.template || 'auto', 40);
     it.density = oneOf(o.density, DENSITIES, 'auto');
     it.archived = bool(o.archived);
@@ -222,7 +270,7 @@
   /* ---------- MEL ---------- */
   var PAGE_KINDS = ['cover', 'item', 'news', 'last', 'upcoming'];
   function blankPage(kind, extra) {
-    var p = { id: uid('page'), kind: oneOf(kind, PAGE_KINDS, 'item'), itemId: '', template: 'auto', density: 'auto', included: true, split: false, opts: {} };
+    var p = { id: uid('page'), kind: oneOf(kind, PAGE_KINDS, 'item'), itemId: '', template: 'auto', density: 'auto', included: true, split: 'auto', opts: {} };
     if (p.kind === 'cover') p.opts = { important: { label: 'Important', title: '', text: '' }, mustSee: { auto: true, text: '' }, newsAuto: true, newsIds: [], editorial: '', showPlanning: true };
     if (p.kind === 'news') p.opts = { auto: true, ids: [], categoryId: '', title: 'Les nouveautés de la semaine', subtitle: '' };
     if (p.kind === 'last') p.opts = { auto: true, ids: [], categoryId: '', title: 'Dernière chance !', subtitle: '' };
@@ -239,7 +287,7 @@
     p.template = str(o.template || 'auto', 40);
     p.density = oneOf(o.density, DENSITIES, 'auto');
     p.included = o.included !== false;
-    p.split = bool(o.split);
+    p.split = o.split === true || o.split === 'force' ? 'force' : o.split === 'off' ? 'off' : 'auto';
     p.opts = Object.assign({}, b.opts, isObj(o.opts) ? o.opts : {});
     if (Array.isArray(p.opts.ids)) p.opts.ids = p.opts.ids.map(String).slice(0, 6);
     if (Array.isArray(p.opts.newsIds)) p.opts.newsIds = p.opts.newsIds.map(String).slice(0, 4);
@@ -303,6 +351,7 @@
   return {
     SCHEMA: SCHEMA, PORTAL: PORTAL, CANVA: CANVA, DEFAULT_CATEGORY_NAMES: DEFAULT_CATEGORY_NAMES, PALETTE: PALETTE, TYPES: TYPES, EDITORIAL: EDITORIAL,
     REG_STATUS: REG_STATUS, COUNTERS: COUNTERS, DENSITIES: DENSITIES, DEFAULT_STATUSES: DEFAULT_STATUSES, PAGE_KINDS: PAGE_KINDS,
+    CAL_STATES: CAL_STATES, calendarDay: calendarDay, hoursFromLabel: hoursFromLabel, cycleCalendarDay: cycleCalendarDay,
     uid: uid, slug: slug, defaultCategories: defaultCategories, normalizeCategories: normalizeCategories, defaultSettings: defaultSettings,
     normalizeSettings: normalizeSettings, normalizeContacts: normalizeContacts, blankItem: blankItem, normalizeItem: normalizeItem,
     blankPage: blankPage, normalizePage: normalizePage, blankIssue: blankIssue, normalizeIssue: normalizeIssue,

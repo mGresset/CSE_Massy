@@ -30,6 +30,18 @@
         if (it.fill) e.style.background = it.fill;
         if (it.stroke) e.style.border = (it.sw || 1) + 'px solid ' + it.stroke;
         e.style.borderRadius = it.t === 'ellipse' ? '50%' : (it.r ? Math.min(it.r, it.w / 2, it.h / 2) + 'px' : '0');
+      } else if (it.t === 'path') {
+        // Pictogramme vectoriel : même tracé que la forme libre PowerPoint.
+        e = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        e.setAttribute('viewBox', '0 0 ' + (it.vb || 24) + ' ' + (it.vb || 24));
+        e.setAttribute('preserveAspectRatio', 'none');
+        e.setAttribute('aria-hidden', 'true');
+        e.setAttribute('class', 'cse-path');
+        var pth = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pth.setAttribute('d', CSE.icons ? CSE.icons.svgPath(it.d) : '');
+        pth.setAttribute('fill', it.fill || '#000');
+        e.appendChild(pth);
+        e.style.position = 'absolute';
       } else if (it.t === 'image') {
         var src = resolve(it.src);
         if (src) {
@@ -63,7 +75,11 @@
             s.textContent = r.text;
             if (r.bold !== undefined) s.style.fontWeight = r.bold || it.bold ? '700' : '400';
             if (r.color) s.style.color = r.color;
-            if (link) { s.href = link; s.target = '_blank'; s.rel = 'noopener noreferrer'; }
+            if (link) {
+              s.href = link;
+              if (/^mailto:/i.test(link)) { s.className = 'cse-mail'; s.title = 'Écrire à ' + r.text; }
+              else { s.target = '_blank'; s.rel = 'noopener noreferrer'; }
+            }
             pd.appendChild(s);
           });
           inner.appendChild(pd);

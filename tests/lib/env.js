@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.resolve(__dirname, '..', '..');
-const CORE = ['js/core/dates.js', 'js/pricing.js', 'js/engine/metrics.js', 'js/core/model.js', 'js/core/compose.js', 'js/engine/layout.js',
+const CORE = ['js/core/dates.js', 'js/pricing.js', 'js/engine/metrics.js', 'js/core/model.js', 'js/core/compose.js', 'js/engine/icons.js', 'js/engine/layout.js',
   'js/engine/templates.js', 'js/core/migrate.js', 'js/core/demo.js'];
 function load(extra) {
   for (const f of CORE.concat(extra || [])) {

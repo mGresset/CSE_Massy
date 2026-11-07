@@ -15,6 +15,9 @@
 .cse-text-inner{width:100%}
 .cse-p{min-height:1em}
 .cse-text a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.cse-text a.cse-mail{text-decoration:none;border-radius:3px}
+.cse-text a.cse-mail:hover,.cse-text a.cse-mail:focus-visible{text-decoration:underline;outline:2px solid currentColor;outline-offset:1px}
+.cse-path{pointer-events:none;overflow:visible}
 .cse-overflow::after,.cse-dom-overflow::after{content:"";position:absolute;inset:-3px;border:2px dashed #e03131;border-radius:4px;pointer-events:none}
 .cse-num{right:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;font:700 18px Arial;padding:2px 8px;border-radius:6px}
 .cse-print .cse-overflow::after,.cse-print .cse-dom-overflow::after{display:none}
