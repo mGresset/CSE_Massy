@@ -1,4 +1,4 @@
-/* CSE Studio V9 · Synchronisation facultative avec Supabase (logique pure, testable sans réseau).
+/* CSE Studio V9.2 · Synchronisation facultative avec Supabase (logique pure, testable sans réseau).
  * Sécurité : la clé publique (publishable/anon) ne donne aucun droit à elle seule ; les autorisations
  * sont appliquées côté serveur par la RLS et les déclencheurs SQL (supabase/v9_migration.sql).
  * Concurrence : chaque écriture filtre sur la version connue (version=eq.N) ; si une autre personne a
@@ -26,6 +26,61 @@
     Object.keys(target).forEach(function (k) { if (!(k in src)) delete target[k]; });
     Object.keys(src).forEach(function (k) { target[k] = src[k]; });
     return target;
+  }
+  /** Empreinte métier portable : compare les photos locales img: via leur data URL si possible. */
+  function portableItemHash(item, embed) {
+    var copy = Object.assign({}, item);
+    copy.photos = (item.photos || []).map(function (p) {
+      return /^img:/.test(p) && embed ? (embed(p) || p) : p;
+    });
+    return itemHash(copy);
+  }
+  function copyActivityConflict(project, local) {
+    var copy = JSON.parse(JSON.stringify(local));
+    copy.id = CSE.model.uid('fiche');
+    copy.title = (local.title || 'Fiche') + ' (version locale en conflit)';
+    delete copy.cloud;
+    project.items.push(CSE.model.normalizeItem(copy));
+    return copy.id;
+  }
+  /** Les brouillons en conflit doivent rester LOCAUX, jusqu'à une décision de l'utilisateur. */
+  function copyIssueConflict(project, id, localDoc) {
+    var signature = fnv(JSON.stringify(localDoc.payload));
+    var found = project.issues.find(function (issue) {
+      return issue.cloudConflict && issue.cloudConflict.sourceId === id && issue.cloudConflict.signature === signature;
+    });
+    if (found) return found.id;
+    var local = CSE.model.normalizeIssue(JSON.parse(JSON.stringify(localDoc.payload)));
+    local.id = CSE.model.uid('mel');
+    local.title = ((local.title || ('MEL semaine ' + local.week)) + ' (version locale en conflit)').slice(0, 120);
+    local.status = 'draft';
+    local.cloudConflict = { localOnly: true, sourceId: id, signature: signature, savedAt: new Date().toISOString() };
+    project.issues.push(local);
+    return local.id;
+  }
+  /** Sauvegarde persistante et restaurable des paramètres et catégories d'avant conflit. */
+  function copySettingsConflict(project, id, localDoc) {
+    project.cloud = project.cloud || {};
+    var backups = project.cloud.settingsBackups = project.cloud.settingsBackups || [];
+    var signature = fnv(JSON.stringify(localDoc.payload));
+    var found = backups.find(function (x) { return x.sourceId === id && x.signature === signature; });
+    if (found) return found.id;
+    var entry = { id: CSE.model.uid('parametres'), sourceId: id, signature: signature,
+      savedAt: new Date().toISOString(), settings: JSON.parse(JSON.stringify(localDoc.payload.settings || {})),
+      categories: JSON.parse(JSON.stringify(localDoc.payload.categories || [])) };
+    backups.unshift(entry);
+    project.cloud.settingsBackups = backups.slice(0, 10);
+    return entry.id;
+  }
+  function preserveDocumentConflict(project, row, localDoc, report) {
+    if (!localDoc) return;
+    if (row.kind === 'issue') {
+      var issueId = copyIssueConflict(project, row.id, localDoc);
+      report.savedCopies.push({ kind: 'issue', sourceId: row.id, id: issueId });
+    } else if (row.kind === 'settings') {
+      var settingsId = copySettingsConflict(project, row.id, localDoc);
+      report.savedCopies.push({ kind: 'settings', sourceId: row.id, id: settingsId });
+    }
   }
   function canEdit(role) { return role === 'editor' || role === 'admin'; }
   function canApprove(role) { return role === 'reviewer' || role === 'admin'; }
@@ -59,7 +114,24 @@
           var local = project.items.find(function (i) { return i.cloud && i.cloud.id === row.id; });
           if (!local) {
             var it = fromRow(row);
-            if (project.items.some(function (x) { return x.id === it.id; })) it.id = CSE.model.uid('fiche');
+            // Premier raccordement : une fiche restaurée sur un deuxième poste garde son identifiant métier.
+            // Ne JAMAIS la pousser en doublon si le serveur la connaît déjà sous un UUID différent.
+            var byBusinessId = project.items.find(function (x) { return x.id === it.id; });
+            if (byBusinessId && (!byBusinessId.cloud || !byBusinessId.cloud.id)) {
+              var same = portableItemHash(byBusinessId, opts.embed) === portableItemHash(it);
+              return internPhotos(it, opts).then(function () {
+                if (!same) {
+                  copyActivityConflict(project, byBusinessId);
+                  report.conflicts.push(byBusinessId.title);
+                }
+                it.id = byBusinessId.id;
+                it.cloud = { id: row.id, version: row.version, hash: itemHash(it) };
+                replaceInPlace(byBusinessId, it); report.pulled++;
+              });
+            }
+            // Deux fiches distantes différentes peuvent partager un id métier (ancien état).
+            // Conserver les deux sans réécrire une fiche déjà synchronisée.
+            if (byBusinessId) it.id = CSE.model.uid('fiche');
             return internPhotos(it, opts).then(function () {
               it.cloud = { id: row.id, version: row.version, hash: itemHash(it) };
               project.items.push(it); report.pulled++;
@@ -73,9 +145,7 @@
             return internPhotos(remote, opts).then(function () {
               if (localChanged) {
                 // Conflit : la version en ligne est reprise, la version locale est conservée en copie.
-                var copy = JSON.parse(JSON.stringify(local));
-                copy.id = CSE.model.uid('fiche'); copy.title = (local.title || 'Fiche') + ' (version locale en conflit)'; delete copy.cloud;
-                project.items.push(CSE.model.normalizeItem(copy));
+                copyActivityConflict(project, local);
                 report.conflicts.push(local.title);
               }
               remote.cloud = { id: row.id, version: row.version, hash: itemHash(remote) };
@@ -134,12 +204,16 @@
 
   /** Documents partagés : paramètres + catégories (administrateur) et MEL (rédacteurs). */
   function syncDocs(project, api, opts) {
-    var role = opts.role, report = { pulled: 0, pushed: 0, conflicts: [], errors: [] };
+    var role = opts.role, report = { pulled: 0, pushed: 0, conflicts: [], savedCopies: [], errors: [] };
     project.cloud = project.cloud || {};
     var meta = project.cloud.docs = project.cloud.docs || {};
     function localDocs() {
       var docs = { settings: { kind: 'settings', payload: { settings: project.settings, categories: project.categories } } };
-      project.issues.forEach(function (is) { docs['issue:' + is.id] = { kind: 'issue', payload: is }; });
+      project.issues.forEach(function (is) {
+        // Copie locale de récupération : visible dans Composer le MEL, jamais publiée sans décision.
+        if (is.cloudConflict && is.cloudConflict.localOnly) return;
+        docs['issue:' + is.id] = { kind: 'issue', payload: is };
+      });
       return docs;
     }
     return api(DOC + '?select=id,kind,payload,version,updated_at&limit=500').then(function (rows) {
@@ -150,16 +224,24 @@
           var m = meta[row.id], loc = docs[row.id];
           var locHash = loc ? fnv(JSON.stringify(loc.payload)) : '';
           var localChanged = !!(m && loc && locHash !== m.hash);
-          if (!m || row.version !== m.version) {
-            if (localChanged) report.conflicts.push(row.id === 'settings' ? 'Paramètres' : 'MEL ' + (row.payload && row.payload.week));
+          if (!m || !loc || row.version !== m.version) {
+            // Cas 1 : deux postes se raccordent pour la première fois, avec le MÊME identifiant de MEL.
+            // Cas 2 : la version distante a changé pendant que le bénévole travaillait.
+            // Dans les deux cas, conserver une copie LOCALE avant toute substitution.
+            var differs = !!(loc && fnv(JSON.stringify(row.payload)) !== locHash);
+            if (differs && (!m || localChanged)) {
+              preserveDocumentConflict(project, row, loc, report);
+              report.conflicts.push(row.id === 'settings' ? 'Paramètres' : 'MEL ' + (loc.payload && loc.payload.week));
+            }
             applyDoc(project, row);
-            meta[row.id] = { version: row.version, hash: fnv(JSON.stringify(localDocs()[row.id] ? localDocs()[row.id].payload : row.payload)) };
+            var updated = localDocs()[row.id];
+            meta[row.id] = { version: row.version, hash: fnv(JSON.stringify(updated ? updated.payload : row.payload)) };
             report.pulled++;
             return;
           }
           if (localChanged && mayWrite(row.kind, role)) {
             return api(DOC + '?id=eq.' + encodeURIComponent(row.id) + '&version=eq.' + row.version + '&select=id,version', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ payload: loc.payload }) })
-              .then(function (res) { if (!res || !res.length) report.conflicts.push(row.id); else { meta[row.id] = { version: res[0].version, hash: locHash }; report.pushed++; } }, function (e) { report.errors.push(row.id + ' : ' + e.message); });
+              .then(function (res) { if (!res || !res.length) { report.conflicts.push(row.id + ' (modification locale conservée ; relancer la synchronisation)'); } else { meta[row.id] = { version: res[0].version, hash: locHash }; report.pushed++; } }, function (e) { report.errors.push(row.id + ' : ' + e.message); });
           }
         });
       });

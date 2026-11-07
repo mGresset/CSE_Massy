@@ -40,7 +40,8 @@ test('sans tarifs, le texte récupère la place ; avec T1–T10, tarifs lisibles
   const withP = T.renderPage(M.blankPage('item', { itemId: 'a', template: 'classic' }), p, issue)[0];
   const noP = T.renderPage(M.blankPage('item', { itemId: 'b', template: 'classic' }), p, issue)[0];
   const area = (s) => { const t = textItem(s, 'description'); return t.w * t.h; };
-  assert.ok(area(noP) > area(withP) * 1.3, 'zone de texte plus grande sans tarifs');
+  assert.ok(area(noP) > area(withP) * 1.07, 'sans tarifs, la zone de texte récupère la place');
+  assert.ok(withP.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 55), 'tarifs très compacts (≤ 55 px)');
   assert.ok(/T1 720 €/.test(texts(withP)) && /T10 1 800 €/.test(texts(withP)), 'T1 et T10 affichés');
   assert.ok(!/Tarifs CSE/i.test(texts(noP)), 'aucun bloc tarif');
   const priceTexts = withP.items.filter((i) => i.t === 'text' && i.field === 'tarifs');

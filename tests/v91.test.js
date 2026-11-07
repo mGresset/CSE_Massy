@@ -38,7 +38,8 @@ test('1. Tarifs : bandeau compact, absent ou prix unique ; le texte reprend la p
   assert.ok(/Extérieur : 2 400 €/.test(texts(g)));
   assert.ok(!n.items.some((i) => i.fill === '#F8F6FE'), 'aucune zone tarifs réservée');
   const boxArea = (s) => body(s).reduce((a, t) => a + t.w * t.h, 0);
-  assert.ok(boxArea(n) > boxArea(g) * 1.15, 'zone de texte plus grande sans tarifs');
+  assert.ok(boxArea(n) > boxArea(g) * 1.035, 'sans tarifs, la zone de texte récupère la place même avec bandeau réduit');
+  assert.ok(g.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 55), 'nouvelle grille réduite à 55 px maximum hors notes');
   assert.ok(!u.items.some((i) => i.fill === '#F8F6FE') && /45 €/.test(texts(u)), 'prix unique : petit bloc, pas de grille');
 });
 test('2–3. Texte de 120, 400 et 900 mots : colonnes adaptées, sans recouvrement, corps ≥ 12 pt, jamais tronqué', () => {

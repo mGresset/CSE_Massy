@@ -114,7 +114,7 @@
       }
       function cycleDay(date) {
         C.model.cycleCalendarDay(it.calendar, date, state.calBrush && state.calBrush.hours);
-        touch(); renderPreview(); if (state.step === 'calendrier') drawStep();
+        touch(); renderPreview(); if (state.step === 'calendrier') redrawStepKeepingScroll();
       }
       function touch() {
         it.updatedAt = new Date().toISOString();
@@ -136,11 +136,19 @@
         var errs = { essentiel: !String(it.title).trim(), dates: !!(it.dateStart && it.dateEnd && it.dateEnd < it.dateStart) || !!(it.regStart && it.regEnd && it.regEnd < it.regStart), visuels: it.link.type === 'custom' && !!it.link.url && !C.compose.validUrl(it.link.url) };
         stepBar.querySelectorAll('button').forEach(function (b) { b.classList.toggle('has-error', !!errs[b.dataset.step]); });
       }
+      function redrawStepKeepingScroll() {
+        var scrollY = window.scrollY || window.pageYOffset || 0;
+        drawStep();
+        // Remplacer un tableau modifie sa hauteur et peut recaler le scroll du navigateur.
+        // Double restauration : après le rendu DOM, puis au frame suivant.
+        window.scrollTo(0, scrollY);
+        requestAnimationFrame(function () { window.scrollTo(0, scrollY); });
+      }
       function drawStep() {
         stepBar.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.step === state.step)); });
         ui.clear(stepBody); ui.clear(stepNav);
         var fn = STEP_RENDER[state.step];
-        fn(stepBody, it, p, { touch: touch, render: renderPreview, redraw: drawStep });
+        fn(stepBody, it, p, { touch: touch, render: renderPreview, redraw: drawStep, redrawKeepScroll: redrawStepKeepingScroll });
         var i = steps.indexOf(state.step);
         stepNav.appendChild(i > 0 ? h('button', { class: 'btn', type: 'button', onclick: function () { state.step = steps[i - 1]; drawStep(); } }, '← ' + STEP_LABELS[steps[i - 1]]) : h('span'));
         stepNav.appendChild(i < steps.length - 1 ? h('button', { class: 'btn primary', type: 'button', onclick: function () { state.step = steps[i + 1]; drawStep(); } }, STEP_LABELS[steps[i + 1]] + ' →') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'));
@@ -197,7 +205,25 @@
       box.appendChild(bindSelect(it, 'editorialStatus', [{ id: 'draft', label: 'Brouillon' }, { id: 'review', label: 'À relire' }, { id: 'approved', label: 'Validée pour diffusion' }], ctx, { label: 'Validation interne', help: 'Indication de travail en local. Une validation sécurisée (rôles Rédacteur / Relecteur) nécessite l’espace partagé Supabase.' }));
     },
     dates: function (box, it, p, ctx) {
-      box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'dateStart', ctx, { label: 'Date de début', type: 'date' }), bindInput(it, 'dateEnd', ctx, { label: 'Date de fin (facultatif)', type: 'date' })));
+      var startField = bindInput(it, 'dateStart', ctx, { label: 'Date de début', type: 'date' });
+      var endField = bindInput(it, 'dateEnd', ctx, { label: 'Date de fin', type: 'date' });
+      var startInput = startField.querySelector('input'), endInput = endField.querySelector('input');
+      function syncDates() {
+        endInput.min = it.dateStart || '';
+        if (it.dateStart && (!it.dateEnd || it.dateEnd < it.dateStart)) {
+          it.dateEnd = it.dateStart;
+          endInput.value = it.dateEnd;
+          ctx.touch(); ctx.render();
+        }
+      }
+      startInput.addEventListener('input', syncDates);
+      endInput.addEventListener('input', function () {
+        if (it.dateStart && it.dateEnd && it.dateEnd < it.dateStart) {
+          it.dateEnd = it.dateStart; endInput.value = it.dateStart; ctx.touch(); ctx.render();
+        }
+      });
+      endInput.min = it.dateStart || ''; // ne modifie pas silencieusement une fiche existante à l'ouverture
+      box.appendChild(h('div', { class: 'cols' }, startField, endField));
       box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'timeStart', ctx, { label: 'Heure de début', type: 'time' }), bindInput(it, 'timeEnd', ctx, { label: 'Heure de fin', type: 'time' })));
       box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'location', ctx, { label: 'Lieu / destination', placeholder: 'Ex. Salle Pékin Turin, Massy' }), bindInput(it, 'address', ctx, { label: 'Adresse (facultatif)' })));
       box.appendChild(h('fieldset', {}, h('legend', {}, 'Inscriptions'),
@@ -246,6 +272,11 @@
       var dz = h('div', { class: 'dropzone', tabindex: '0', role: 'button', 'aria-label': 'Ajouter des photos' }, it.type === 'partner' ? 'Glisser le logo puis un visuel, ou cliquer pour choisir (JPG, PNG, WEBP)' : 'Glisser des photos ici ou cliquer pour choisir (JPG, PNG, WEBP · 6 maximum)');
       dz.addEventListener('click', function () { ui.pickFile('image/png,image/jpeg,image/webp', true).then(addFiles); });
       dz.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dz.click(); } });
+      dz.title = 'Vous pouvez aussi copier une image sur une page Web, cliquer ici puis la coller (Ctrl+V).';
+      dz.addEventListener('paste', function (e) {
+        var files = Array.prototype.slice.call(e.clipboardData && e.clipboardData.items || []).filter(function (item) { return item.kind === 'file' && /^image\//.test(item.type); }).map(function (item) { return item.getAsFile(); }).filter(Boolean);
+        if (files.length) { e.preventDefault(); addFiles(files); }
+      });
       dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('over'); });
       dz.addEventListener('dragleave', function () { dz.classList.remove('over'); });
       dz.addEventListener('drop', function (e) { e.preventDefault(); dz.classList.remove('over'); addFiles(Array.prototype.slice.call(e.dataTransfer.files || [])); });
@@ -254,10 +285,19 @@
         var u = url.value.trim();
         if (!C.compose.validUrl(u) || !u) return ui.toast('Adresse invalide.', 'error');
         C.images.importUrl(u).then(function (ref) { it.photos.push(ref); ctx.touch(); ctx.render(); draw(); ui.toast('Image récupérée et enregistrée localement.', 'ok'); url.value = ''; })
-          .catch(function () { it.photos.push(u); ctx.touch(); ctx.render(); draw(); ui.toast('Le site source bloque la copie (CORS) : l’image est liée mais pourra manquer à l’export. Préférez l’import de fichier.', 'error'); });
+          .catch(function () { it.photos.push(u); ctx.touch(); ctx.render(); draw(); ui.toast('Image liée pour l’aperçu, mais le site bloque son intégration au PowerPoint. Copiez-collez l’image (Ctrl+V) ou importez-la depuis un fichier.', 'error'); });
       } }, 'Ajouter');
       box.appendChild(h('h3', {}, it.type === 'partner' ? 'Logo et visuels' : 'Photos'));
       box.appendChild(list); box.appendChild(dz);
+      var pasteZone = h('div', { class: 'pastezone', tabindex: '0', role: 'textbox', 'aria-label': 'Zone de collage d’une image Web' }, '📋 Coller une image copiée : cliquer ici puis Ctrl+V');
+      pasteZone.addEventListener('paste', function (e) {
+        var items = Array.prototype.slice.call(e.clipboardData && e.clipboardData.items || []);
+        var files = items.filter(function (i) { return i.kind === 'file' && /^image\//.test(i.type); }).map(function (i) { return i.getAsFile(); }).filter(Boolean);
+        if (files.length) { e.preventDefault(); addFiles(files); }
+        else { e.preventDefault(); ui.toast('Le presse-papiers ne contient pas d’image. Copiez l’image elle-même, pas son adresse.', 'error'); }
+      });
+      box.appendChild(pasteZone);
+      box.appendChild(h('p', { class: 'small muted' }, 'Les URL d’images peuvent être bloquées par les règles CORS. Dans ce cas, copiez puis collez l’image, ou importez le fichier ; cela permet de l’intégrer au PowerPoint.'));
       box.appendChild(h('div', { class: 'row', style: { marginTop: '10px' } }, h('div', { style: { flex: 1, minWidth: '200px' } }, ui.field('Ou importer depuis une adresse web', url)), addUrl));
       draw();
       box.appendChild(h('h3', { style: { marginTop: '8px' } }, 'Lien de destination'));
@@ -396,12 +436,38 @@
               if (brush.state === 'special') { if (String(brush.hours).trim()) cal.dayHours[day] = brush.hours.trim(); }
               else delete cal.dayHours[day];
             }
-            ctx.touch(); ctx.render(); ctx.redraw();
+            ctx.touch(); ctx.render(); (ctx.redrawKeepScroll || ctx.redraw)();
           });
           grid.appendChild(b);
         })(d);
       }
       box.appendChild(grid);
+      // Modification en masse des jours ouvrés : mêmes couleurs / horaires que le pinceau unitaire.
+      var dateRange = h('fieldset', { class: 'cal-range' }, h('legend', {}, '3. Appliquer à une plage de dates'));
+      var range = state.calRange = state.calRange && state.calRange.month === month ? state.calRange : { month: month, from: month + '-01', to: month + '-01' };
+      var fromDate = h('input', { type: 'date', value: range.from, min: month + '-01', max: month + '-' + D.pad(new Date(Date.UTC(+month.slice(0, 4), +month.slice(5), 0)).getUTCDate()), 'aria-label': 'Début de plage' });
+      var toDate = h('input', { type: 'date', value: range.to, min: fromDate.min, max: fromDate.max, 'aria-label': 'Fin de plage' });
+      fromDate.addEventListener('change', function () { range.from = fromDate.value; toDate.min = fromDate.value || fromDate.min; if (!toDate.value || toDate.value < fromDate.value) toDate.value = fromDate.value; range.to = toDate.value; });
+      toDate.addEventListener('change', function () { range.to = toDate.value; });
+      var applyRange = h('button', { type: 'button', class: 'btn small primary', onclick: function () {
+        var from = fromDate.value, to = toDate.value;
+        if (!from || !to || from > to || from.slice(0, 7) !== month || to.slice(0, 7) !== month) return ui.toast('Choisir deux dates du mois, dans l’ordre.', 'error');
+        if (brush.state === 'special' && !String(brush.hours || '').trim()) return ui.toast('Indiquer les horaires particuliers avant de les appliquer.', 'error');
+        var count = 0;
+        for (var cursor = from; cursor <= to; cursor = D.addDays(cursor, 1)) {
+          var wd = D.weekday(cursor);
+          if (wd === 0 || wd === 6) continue;
+          count++;
+          if (brush.state === 'none') { delete cal.days[cursor]; delete cal.dayHours[cursor]; }
+          else { cal.days[cursor] = brush.state; if (brush.state === 'special') cal.dayHours[cursor] = brush.hours.trim(); else delete cal.dayHours[cursor]; }
+        }
+        ctx.touch(); ctx.render(); (ctx.redrawKeepScroll || ctx.redraw)();
+        ui.toast(count + ' jour(s) ouvré(s) mis à jour.', 'ok');
+      } }, 'Appliquer aux jours ouvrés');
+      dateRange.appendChild(h('div', { class: 'cols' }, ui.field('Du', fromDate), ui.field('Au', toDate)));
+      dateRange.appendChild(applyRange);
+      dateRange.appendChild(h('p', { class: 'help' }, 'Les samedis et dimanches sont ignorés. Les jours déjà renseignés dans la plage sont remplacés.'));
+      box.appendChild(dateRange);
       var specials = Object.keys(cal.days).filter(function (k) { return k.slice(0, 7) === month && cal.days[k] === 'special'; }).sort();
       if (specials.length) {
         var fs = h('fieldset', {}, h('legend', {}, 'Horaires particuliers du mois'));

@@ -1,5 +1,18 @@
 # Notes de version
 
+## V9.2 — Stabilisation du partage Supabase (7 novembre 2026)
+
+**Aucune modification du rendu des diapositives ni du moteur tarifaire.**
+
+- **Premier raccordement** : si une fiche locale partage l’identifiant métier `payload.id` avec une fiche existante sur Supabase, les deux sont rattachées sans création supplémentaire. Si leurs contenus divergent, la version locale est sauvegardée comme copie de conflit dans la bibliothèque ; la version distante est affichée dans la fiche d’origine. Les photos `img:` et les photos encodées sont comparées avec leur contenu quand celui-ci est disponible.
+- **Conflits MEL** : une version locale divergente est copiée sous un nouvel identifiant **avant** d’appliquer la version distante. La copie figure dans « Composer le MEL » avec la mention « COPIE LOCALE EN CONFLIT » et n’est **jamais publiée automatiquement**. Le bénévole peut la consulter et autoriser explicitement son partage comme nouveau MEL depuis « Paramètres → Espace partagé ».
+- **Conflits de paramètres** : les paramètres et catégories locaux sont conservés dans `project.cloud.settingsBackups` (10 versions au maximum). Dans les paramètres de l’espace partagé, le bouton « Restaurer ici » rétablit la copie sur cet appareil après création d’un instantané de sécurité.
+- **Conflit de version au moment d’un PATCH** : si l’écriture est refusée, les modifications locales restent sur cet appareil. La synchronisation suivante peut les comparer avec la nouvelle version distante.
+- **Sécurité** : aucune copie de récupération n’est envoyée à Supabase sans action explicite ; les règles RLS serveur ne changent pas.
+- **Récupération** : avant de tester le partage, exportez une sauvegarde JSON complète depuis « Sauvegardes & exports ». Les données locales restent sous la clé V9 existante : aucune migration destructive.
+- **Tests** : `node tests/run.js` (10 fichiers), dont `cloud-regressions.test.js` : attachement identique ou divergent, copies de MEL, premier raccordement, paramètres, persistance et absence de publication implicite. Exécution réelle contre une instance Supabase et essais à plusieurs navigateurs encore requis avant déploiement collectif.
+
+
 ## V9.1 — Refonte graphique adaptative (novembre 2026)
 
 **Objectif : des diapositives plus lisibles et plus sobres, une diapositive supplémentaire plutôt qu’une diapositive illisible.**

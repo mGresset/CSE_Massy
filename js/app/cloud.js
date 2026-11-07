@@ -1,4 +1,4 @@
-/* CSE Studio V9 · Espace partagé Supabase (facultatif). Sans configuration, l'application reste 100 % locale.
+/* CSE Studio V9.2 · Espace partagé Supabase (facultatif). Sans configuration, l'application reste 100 % locale.
  * Seules des valeurs PUBLIQUES sont utilisées ici (URL du projet, clé publishable/anon). Jamais de clé service_role. */
 (function (root) {
   'use strict';
@@ -89,6 +89,7 @@
     }).finally(function () { busy = false; });
   }
 
+  function canShareIssue(r) { return r === 'editor' || r === 'admin'; }
   function settingsPanel() {
     loadConfig();
     var box = h('div');
@@ -108,7 +109,7 @@
       box.appendChild(h('details', { open: !config }, h('summary', {}, 'Configuration (administrateur)'),
         h('div', { style: { marginTop: '10px' } }, ui.field('URL du projet Supabase', url), ui.field('Clé publique (publishable / anon)', key, { help: 'Clé publique uniquement. Appliquer d’abord supabase/schema.sql puis supabase/v9_migration.sql (voir README).' }), save,
           config ? h('button', { class: 'btn ghost', type: 'button', onclick: function () { localStorage.removeItem(CONFIG_KEY); signOut(true); loadConfig(); notice = 'Configuration supprimée.'; draw(); } }, 'Retirer') : null)));
-      if (!config) return;
+      if (!config) { renderRecovery(); return; }
       if (!session) {
         var email = h('input', { type: 'email', placeholder: 'prenom.nom@…', autocomplete: 'email' });
         box.appendChild(h('div', { class: 'row', style: { marginTop: '12px' } }, h('div', { style: { flex: 1, minWidth: '220px' } }, ui.field('Adresse e-mail d’un bénévole autorisé', email)),
@@ -117,6 +118,7 @@
             e.currentTarget.disabled = true;
             signIn(email.value.trim()).then(function () { notice = 'Lien de connexion envoyé : ouvrez l’e-mail sur cet appareil.'; draw(); }, function (err) { ui.toast('Envoi impossible : ' + err.message, 'error'); draw(); });
           } }, '✉ Recevoir un lien de connexion')));
+        renderRecovery();
         return;
       }
       box.appendChild(h('div', { class: 'row', style: { marginTop: '12px' } },
@@ -129,10 +131,59 @@
         var r = lastReport;
         box.appendChild(h('ul', { class: 'issues' },
           h('li', { class: 'ok' }, h('span', { class: 'ic' }, '✓'), h('span', {}, 'Fiches : ' + r.items.pulled + ' reçue(s), ' + (r.items.pushed + r.items.created) + ' envoyée(s)' + (r.items.orphaned ? ', ' + r.items.orphaned + ' supprimée(s) en ligne (conservées ici)' : '') + '. Documents : ' + r.docs.pulled + ' reçu(s), ' + r.docs.pushed + ' envoyé(s).')),
-          r.items.conflicts.concat(r.docs.conflicts).map(function (c) { return h('li', { class: 'warn' }, h('span', { class: 'ic' }, '!'), h('span', {}, 'Conflit : « ' + c + ' » modifié(e) par quelqu’un d’autre. La version en ligne a été reprise ; votre version locale est conservée en copie « (version locale en conflit) ».')); }),
+          r.items.conflicts.map(function (c) { return h('li', { class: 'warn' }, h('span', { class: 'ic' }, '!'), h('span', {}, 'Fiche « ' + c + ' » en conflit : retrouvez sa version locale dans la Bibliothèque, sous « (version locale en conflit) ».')); }),
+          r.docs.conflicts.map(function (c) { return h('li', { class: 'warn' }, h('span', { class: 'ic' }, '!'), h('span', {}, 'Document « ' + c + ' » en conflit : consultez les copies locales ci-dessous. Si le serveur a refusé l’envoi, les changements restent locaux jusqu’à la prochaine synchronisation.')); }),
           r.items.errors.concat(r.docs.errors).map(function (c) { return h('li', { class: 'block' }, h('span', { class: 'ic' }, '✕'), h('span', {}, c)); })));
       }
+      renderRecovery();
       if (!user) whoami().then(draw);
+    }
+    function renderRecovery() {
+      var p = App.p();
+      // Les versions de récupération ne doivent jamais être envoyées en arrière-plan.
+      // L'utilisateur peut les consulter et décider explicitement de leur publication.
+      var localCopies = (p.issues || []).filter(function (is) { return is.cloudConflict && is.cloudConflict.localOnly; });
+      if (localCopies.length) {
+        var recover = h('div', { class: 'card', style: { marginTop: '12px', padding: '12px' } },
+          h('h3', {}, 'MEL locaux récupérés après conflit'),
+          h('p', { class: 'small muted' }, 'Ces copies sont conservées sur cet appareil et incluses dans les sauvegardes JSON. Elles ne sont pas envoyées à Supabase tant que vous ne choisissez pas de les partager.'));
+        localCopies.forEach(function (is) {
+          recover.appendChild(h('div', { class: 'row', style: { marginBottom: '8px' } },
+            h('a', { href: '#/mel/' + encodeURIComponent(is.id), class: 'btn small' }, 'Ouvrir : ' + (is.title || 'MEL')), 
+            canShareIssue(role) ? h('button', { class: 'btn small', type: 'button', onclick: function () {
+              ui.confirm('Partager cette copie comme un nouveau MEL ?', 'Le MEL original en ligne ne sera pas remplacé. Cette copie sera envoyée comme un document distinct lors de la prochaine synchronisation.', 'Autoriser le partage').then(function (ok) {
+                if (!ok) return;
+                delete is.cloudConflict;
+                C.store.set(p, 'replace');
+                notice = 'Copie prête pour la prochaine synchronisation. Elle sera publiée comme un nouveau MEL.';
+                draw();
+              });
+            } }, 'Autoriser le partage') : null));
+        });
+        box.appendChild(recover);
+      }
+      var settingsBackups = p.cloud && p.cloud.settingsBackups || [];
+      if (settingsBackups.length) {
+        var settingsRecover = h('div', { class: 'card', style: { marginTop: '12px', padding: '12px' } },
+          h('h3', {}, 'Paramètres locaux récupérés après conflit'),
+          h('p', { class: 'small muted' }, 'La version distante reste active. Choisissez une sauvegarde pour rétablir localement les anciens paramètres et catégories. Une synchronisation administrateur pourra ensuite les envoyer.'));
+        settingsBackups.forEach(function (entry) {
+          settingsRecover.appendChild(h('div', { class: 'row', style: { marginBottom: '8px' } },
+            h('span', { class: 'small' }, 'Copie du ' + new Date(entry.savedAt).toLocaleString('fr-FR')),
+            h('button', { class: 'btn small', type: 'button', onclick: function () {
+              ui.confirm('Restaurer les paramètres locaux ?', 'Les paramètres et catégories actuels de cet appareil seront remplacés par cette copie. Un instantané de sécurité sera créé avant la restauration.', 'Restaurer').then(function (ok) {
+                if (!ok) return;
+                C.store.snapshot('Avant restauration des paramètres locaux après conflit');
+                p.settings = C.model.normalizeSettings(entry.settings);
+                p.categories = C.model.normalizeCategories(entry.categories);
+                C.store.set(p, 'replace');
+                notice = 'Paramètres restaurés sur cet appareil. Aucune donnée n’a été publiée automatiquement.';
+                draw();
+              });
+            } }, 'Restaurer ici')));
+        });
+        box.appendChild(settingsRecover);
+      }
     }
     draw();
     return box;

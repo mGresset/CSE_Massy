@@ -563,7 +563,7 @@
     if (photos[0]) b.image(photos[0], lx + 14, top + 14, lw - 28, (photos[1] ? 250 : bottom - top - 50) - 28, { fit: 'contain' });
     else b.text(it.title || 'Partenaire', lx + 20, top + 20, lw - 40, (photos[1] ? 250 : bottom - top - 50) - 40, { size: 36, min: 16, bold: true, color: C.purple, align: 'center', valign: 'middle', role: 'deco', noScale: true, maxLines: 3 });
     if (photos[1]) b.photo(photos[1], lx, top + 262, lw, bottom - top - 262 - 50);
-    b.pill('Offre partenaire', lx, bottom - 38, { size: 14, h: 32, fill: C.purple });
+    b.statusLabel('new', 'Partenaire CSE', lx + 12, bottom - 38, { size: 13, h: 26 });
     var rx = 1160;
     if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, 192, { align: 'right' }); rx = nl.x - 10; }
     var x = lx + lw + 30, y = top - 4;
@@ -595,7 +595,15 @@
     }
     if (rowH) y += rowH + 14;
     var paras = bodyParas(ctx);
-    if (paras.length) b.text(paras, x, y, w2, 590 - y, { size: 19, min: L().MIN.body, field: 'conditions de l’offre' });
+    if (paras.length) {
+      var remaining = Math.max(55, 590 - y);
+      // Si le descriptif est court, utiliser une taille confortable plutôt que laisser la moitié de la page vide.
+      var font = 19;
+      for (var fs = 28; fs >= 19; fs -= 1) {
+        if (b.measure(paras, w2, fs) <= remaining - 4) { font = fs; break; }
+      }
+      b.text(paras, x, y, w2, remaining, { size: font, min: L().MIN.body, field: 'conditions de l’offre', noScale: true, valign: 'middle' });
+    }
     itemFooter(b, ctx);
     return [b.result()];
   }
@@ -695,7 +703,7 @@
     if (note) b.text(note, gx, Math.min(gridBottom + 8, 590), gw, 20, { size: 12.5, min: 10, color: C.muted, maxLines: 1, field: 'mention', role: 'label', noScale: true, important: false });
     if (!used.open.length && !used.special.length && !used.closed.length) b.warn('Calendrier vide : cliquer sur les jours pour indiquer Ouvert, Horaire particulier ou Fermé.', 'warn');
     if (used.special.some(function (x) { return !hasText(x.hours); })) b.warn('Des jours « Horaire particulier » n’ont pas d’horaire saisi.', 'warn');
-    b.footer({ link: '', note: ctx.settings.footerNote });
+    b.footer({ link: CO().linkOf(it, ctx.settings), ctaLabel: it.link && it.link.label, note: ctx.settings.footerNote });
     return [b.result()];
   }
   /** Légende du calendrier : [{state, paras}] uniquement pour les états présents. */
@@ -735,7 +743,8 @@
     var probe = new (L().Builder)(ctx);
     // Taille unique : la plus grande qui tient sur une page ; sinon 15 px avec pagination.
     var maxS = 18 * probe.scale, minS = probe.density === 'compact' ? 12.5 : 13.5;
-    var top0 = alert ? 268 + 84 : 268, colH = 590 - top0, cw = (1120 - 36) / 2;
+    var titleSub = hasText(it.subtitle);
+    var top0 = (titleSub ? 302 : 268) + (alert ? 84 : 0), colH = 590 - top0, cw = (1120 - 36) / 2;
     var chosen = null;
     for (var s = maxS; s >= minS; s -= 0.5) { if (!flow(paras, [{ w: cw, h: colH }, { w: cw, h: colH }], s).rest.length) { chosen = s; break; } }
     var size = chosen || Math.max(minS, 15 * probe.scale);
@@ -747,6 +756,10 @@
       b.icon('info', 40, 192, 50, C.blue);
       b.text((it.title || 'Modalités d’inscription') + (part ? ' (suite)' : ''), 104, y, 1056, 70, { size: 30, min: 20, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.1 });
       y = 262;
+      if (titleSub && part === 0) {
+        b.text(it.subtitle, 104, 257, 1040, 32, { size: 20, min: 14, bold: true, color: C.purple, maxLines: 1, field: 'sous-titre', noScale: true });
+        y += 34;
+      }
       if (alert && part === 0) {
         b.rect(40, y, 1120, 74, { fill: '#FFF1F0', stroke: '#F3C1BE', r: 12 });
         b.icon('alert', 56, y + 18, 38, C.red);
@@ -801,15 +814,27 @@
     var news = data.news;
     if (news.length) blocks.push('news');
     var editorial = String(o.editorial || '').trim();
+    var extraNotes = (Array.isArray(o.extraNotes) ? o.extraNotes : []).map(function (s) { return String(s || '').trim(); }).filter(Boolean).slice(0, 4);
+    if (extraNotes.length) blocks.push('extra');
     var link = s.planningUrl && CO().validUrl(s.planningUrl) ? s.planningUrl : s.portalUrl;
     var showLink = o.showPlanning !== false && !!link;
-    var top = 256, bottom = 636 - (showLink ? 40 : 0) - (editorial ? 30 : 0);
-    var avail = bottom - top, gap = 12;
+    var top = 256, bottom = 636 - (showLink ? 40 : 0) - (editorial ? 30 : 0), gap = 12;
+    // Conserver des tailles minimales pour les messages importants. Quand la couverture est
+    // chargée, les nouveautés passent en bandeau compact et le surplus de notes sur une page dédiée.
+    var fullAvail = bottom - top;
+    var baseMin = (blocks.indexOf('important') >= 0 ? 66 + gap : 0) + (blocks.indexOf('must') >= 0 ? 62 + gap : 0) + (news.length ? 150 : 0);
+    var compactNews = !!news.length && !!extraNotes.length && (baseMin + 8 + 10 + extraNotes.length * 27 > fullAvail);
+    if (compactNews) baseMin -= 150 - 70;
+    var slots = Math.max(0, Math.floor((fullAvail - baseMin - 18) / 27));
+    var visibleNotes = extraNotes.filter(function (s) { return s.length <= 110; }).slice(0, Math.min(extraNotes.length, slots));
+    var remainingNotes = extraNotes.filter(function (s) { return visibleNotes.indexOf(s) < 0; });
+    var extraH = visibleNotes.length ? 10 + visibleNotes.length * 27 : 0;
+    var avail = fullAvail - extraH - (extraH ? 8 : 0);
     // Hauteurs naturelles puis répartition de l'espace restant au bloc nouveautés.
     var impParas = hasText(imp.title) ? [{ runs: [{ text: imp.title.trim(), bold: true }] }].concat(hasText(imp.text) ? rich(imp.text) : []) : rich(imp.text);
     var mustParas = mustRuns ? [{ runs: mustRuns }] : rich(mustText, { bold: true });
     var hasImp = blocks.indexOf('important') >= 0, hasMust = blocks.indexOf('must') >= 0;
-    var newsMin = news.length ? 150 : 0, hImp = 0, hMust = 0;
+    var newsMin = news.length ? (compactNews ? 70 : 150) : 0, hImp = 0, hMust = 0;
     // Hauteurs naturelles à une taille commune, réduite si nécessaire pour laisser place aux nouveautés.
     for (var fs = 21; fs >= 14; fs -= 1) {
       hImp = hasImp ? Math.max(66, b.measure(impParas, 836, fs) + 22) : 0;
@@ -818,7 +843,7 @@
     }
     var used = hImp + hMust + (hImp ? gap : 0) + (hMust ? gap : 0);
     if (used + newsMin > avail) { var k = (avail - newsMin - (hImp ? gap : 0) - (hMust ? gap : 0)) / Math.max(1, hImp + hMust); hImp *= k; hMust *= k; used = avail - newsMin; }
-    var hNews = news.length ? Math.min(260, avail - used) : 0;
+    var hNews = news.length ? Math.min(compactNews ? 74 : 260, Math.max(newsMin, avail - used)) : 0;
     var spare = avail - used - hNews;
     if (spare > 0) { var share = (hImp ? 1 : 0) + (hMust ? 1 : 0); if (share) { if (hImp) hImp += Math.min(90, spare / share); if (hMust) hMust += Math.min(90, spare / share); } }
     var totalH = hImp + hMust + hNews + (hImp ? gap : 0) + (hMust ? gap : 0);
@@ -833,7 +858,14 @@
     }
     if (hImp) row('message important', hImp, '#EAF2FE', '#C9DBF6', C.blue, imp.label || 'Important', impParas, 'mail');
     if (hMust) row('à ne pas manquer', hMust, C.lastBg, C.lastBorder, C.lastText, 'À ne pas manquer', mustParas, 'calendar');
-    if (hNews) {
+    if (hNews && compactNews) {
+      var ny = y, nh = hNews - 8;
+      b.rect(40, ny, 1120, nh, { fill: '#EDF7F0', stroke: C.newBorder, r: 10 });
+      b.pill('Nouveautés', 56, ny + 14, { size: 14, h: 26, fill: C.newText });
+      var compactList = news.slice(0, 4).map(function (it) { return it.title; }).join('  ·  ');
+      b.text(compactList, 210, ny + 8, 920, nh - 12, { size: 18, min: 13, color: C.navy, bold: true, valign: 'middle', maxLines: 2, field: 'nouveautés', noScale: true });
+      y += hNews + gap;
+    } else if (hNews) {
       var ny = y + 14, nh = hNews - 14;
       b.rect(40, ny, 1120, nh, { fill: C.white, stroke: C.newBorder, sw: 2, r: 14 });
       var lab = data.newsTotal > 1 ? 'Les nouveautés de la semaine' : 'La nouveauté de la semaine';
@@ -855,7 +887,16 @@
       if (data.newsTotal > news.length) b.text('+ ' + (data.newsTotal - news.length) + ' autre(s) nouveauté(s) dans ce MEL', 760, ny + nh - 22, 380, 18, { size: 13, color: C.green, bold: true, align: 'right', role: 'label', noScale: true });
       y += hNews + gap;
     }
-    if (!hImp && !hMust && !hNews) b.text('Ajoutez un message important ou des activités : la couverture se remplit automatiquement.', 80, 320, 1040, 120, { size: 24, color: C.muted, align: 'center', valign: 'middle', field: 'couverture', important: false });
+    if (extraH) {
+      var extraY = Math.min(bottom - extraH, y + 2);
+      b.rect(40, extraY, 1120, extraH, { fill: '#F3F6FD', stroke: '#DCE5F2', r: 9 });
+      var lineY = extraY + 6;
+      visibleNotes.forEach(function (note) {
+        b.text('• ' + note, 58, lineY, 1080, 26, { size: 15, min: 12, color: C.navy, maxLines: 1, role: 'label', noScale: true, field: 'information complémentaire' });
+        lineY += 27;
+      });
+    }
+    if (!hImp && !hMust && !hNews && !extraH) b.text('Ajoutez un message important ou des activités : la couverture se remplit automatiquement.', 80, 320, 1040, 120, { size: 24, color: C.muted, align: 'center', valign: 'middle', field: 'couverture', important: false });
     var ey = 636 - (showLink ? 40 : 0) - (editorial ? 30 : 0) + 2;
     if (editorial) { b.text(editorial, 40, ey, 1120, 26, { size: 16, min: 12, bold: true, color: C.navy, align: 'center', maxLines: 1, field: 'message éditorial', noScale: true }); ey += 30; }
     if (showLink) {
@@ -863,7 +904,22 @@
       b.text((s.planningLabel || 'Vue d’ensemble des activités du CSE') + ' →', 160, ey, 880, 34, { size: 16, min: 11, bold: true, color: C.blue, align: 'center', valign: 'middle', maxLines: 1, link: link, role: 'label', noScale: true });
     }
     b.footer({ link: '', note: s.footerNote });
-    return [b.result()];
+    var result = [b.result()];
+    if (remainingNotes.length) {
+      var next = new (L().Builder)(nth(ctx, 1));
+      next.banner();
+      next.glyph('info', 56, 194, 36, C.blue);
+      next.text('Informations complémentaires du MEL', 110, 190, 1030, 54, { size: 30, min: 20, color: C.navy, bold: true, role: 'label', noScale: true });
+      remainingNotes.forEach(function (note, i) {
+        var yy = 260 + i * 80;
+        next.rect(44, yy, 1112, 66, { fill: '#F3F6FD', stroke: '#DCE5F2', r: 10 });
+        next.text(note, 66, yy + 5, 1064, 56, { size: 19, min: 14, color: C.navy, valign: 'middle', maxLines: 3, field: 'information complémentaire' });
+      });
+      next.footer({ link: '', note: s.footerNote });
+      result.push(next.result());
+      result[0].warnings.push({ level: 'info', code: 'cover-more', msg: 'Les informations complémentaires supplémentaires sont placées sur une diapositive lisible à la suite de la couverture.' });
+    }
+    return result;
   }
 
   /** Mosaïque de 1 à 6 cartes ; au-delà, pages supplémentaires. */

@@ -17,7 +17,7 @@
       App.composerSelect = null;
 
       /* ---------- En-tête ---------- */
-      var issueSel = ui.selectEl(p.issues.slice().sort(function (a, b) { return b.refDate.localeCompare(a.refDate); }).map(function (is) { return { id: is.id, label: 'Semaine ' + is.week + ' · ' + is.year + ' (' + D.fmtShort(is.refDate, true) + ')' }; }), issue.id, { 'aria-label': 'MEL affiché' });
+      var issueSel = ui.selectEl(p.issues.slice().sort(function (a, b) { return b.refDate.localeCompare(a.refDate); }).map(function (is) { return { id: is.id, label: 'Semaine ' + is.week + ' · ' + is.year + ' (' + D.fmtShort(is.refDate, true) + ')' + (is.cloudConflict && is.cloudConflict.localOnly ? ' · COPIE LOCALE EN CONFLIT' : '') }; }), issue.id, { 'aria-label': 'MEL affiché' });
       issueSel.addEventListener('change', function () { p.activeIssueId = issueSel.value; App.save('issues'); App.refresh(); });
       var exportBtn = h('button', { class: 'btn primary', type: 'button', onclick: function (e) { issue.numbering = numChk.checked; App.exportPptx(App.issueEntries(issue), 'CSE_MEL_S' + issue.week + '_' + issue.year + '.pptx', e.currentTarget); } }, '↓ Exporter le MEL (.pptx)');
       el.appendChild(h('div', { class: 'page-head' },
@@ -238,6 +238,28 @@
           var pl = h('input', { type: 'checkbox', checked: o.showPlanning !== false });
           pl.addEventListener('change', function () { o.showPlanning = pl.checked; changed(); });
           card.appendChild(ui.field('Ligne éditoriale', ed));
+          o.extraNotes = Array.isArray(o.extraNotes) ? o.extraNotes : [];
+          var noteWrap = h('fieldset', {}, h('legend', {}, 'Informations complémentaires sur la couverture'));
+          var noteRows = h('div');
+          function drawCoverNotes() {
+            ui.clear(noteRows);
+            o.extraNotes.forEach(function (txt, i) {
+              var inp = h('textarea', { rows: 2, maxlength: 280, 'aria-label': 'Information complémentaire ' + (i + 1) });
+              inp.value = txt;
+              inp.addEventListener('input', function () { o.extraNotes[i] = inp.value; changedDeb(); });
+              noteRows.appendChild(h('div', { class: 'row', style: { alignItems: 'flex-start', marginBottom: '6px' } },
+                h('div', { style: { flex: '1' } }, ui.field('Information ' + (i + 1), inp)),
+                h('button', { type: 'button', class: 'btn small danger', onclick: function () { o.extraNotes.splice(i, 1); changed(); drawCoverNotes(); } }, 'Supprimer')));
+            });
+          }
+          drawCoverNotes();
+          noteWrap.appendChild(noteRows);
+          noteWrap.appendChild(h('button', { class: 'btn small', type: 'button', onclick: function () {
+            if (o.extraNotes.length >= 4) return ui.toast('4 informations complémentaires maximum.', 'error');
+            o.extraNotes.push(''); changed(); drawCoverNotes();
+          } }, '+ Ajouter une information'));
+          noteWrap.appendChild(h('p', { class: 'small muted' }, 'Modifiables après la création du MEL. Si la couverture est trop chargée, allégez les textes ou créez une diapositive Informations.'));
+          card.appendChild(noteWrap);
           card.appendChild(h('label', { class: 'check' }, pl, 'Afficher le lien « vue d’ensemble des activités »'));
           card.appendChild(pickBlock('Nouveautés en couverture (4 max)', o, 'newsAuto', 'newsIds', 4, function (it) { var c = C.compose.classify(it, issue.refDate, p.settings); return c.isNew; }));
         },

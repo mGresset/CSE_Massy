@@ -196,7 +196,7 @@
       photos: [],
       pricing: { enabled: false, mode: 'tranches', outside: '', percent: '', fixed: '', manual: [], overrides: {}, label: '', notes: '' },
       points: { value: '', counter: '' },
-      link: { type: 'portal', url: '', label: 'Plus d’infos' },
+      link: { type: type === 'calendar' ? 'none' : 'portal', url: '', label: 'Plus d’infos' },
       partner: { offer: '', amount: '', code: '', validUntil: '' },
       calendar: { month: '', days: {}, dayHours: {}, openHours: '13h–16h', statuses: DEFAULT_STATUSES.map(function (s) { return Object.assign({}, s); }), service: '', hours: '', catalogUrl: '', catalogLabel: 'Catalogue', note: '' },
       template: 'auto', density: 'auto',
@@ -233,7 +233,7 @@
     var pt = isObj(o.points) ? o.points : {};
     it.points = { value: str(pt.value, 10).replace(/[^\d.,]/g, ''), counter: oneOf(pt.counter, COUNTERS, '') };
     var ln = isObj(o.link) ? o.link : {};
-    it.link = { type: oneOf(ln.type, ['portal', 'custom', 'none'], 'portal'), url: str(ln.url, 600).trim(), label: str(ln.label === undefined ? 'Plus d’infos' : ln.label, 60) };
+    it.link = { type: oneOf(ln.type, ['portal', 'custom', 'none'], it.type === 'calendar' ? 'none' : 'portal'), url: str(ln.url, 600).trim(), label: str(ln.label === undefined ? 'Plus d’infos' : ln.label, 60) };
     var pa = isObj(o.partner) ? o.partner : {};
     it.partner = { offer: str(pa.offer, 300), amount: str(pa.amount, 40), code: str(pa.code, 60), validUntil: /^\d{4}-\d{2}-\d{2}$/.test(str(pa.validUntil)) ? pa.validUntil : '' };
     var ca = isObj(o.calendar) ? o.calendar : {};
@@ -271,7 +271,7 @@
   var PAGE_KINDS = ['cover', 'item', 'news', 'last', 'upcoming'];
   function blankPage(kind, extra) {
     var p = { id: uid('page'), kind: oneOf(kind, PAGE_KINDS, 'item'), itemId: '', template: 'auto', density: 'auto', included: true, split: 'auto', opts: {} };
-    if (p.kind === 'cover') p.opts = { important: { label: 'Important', title: '', text: '' }, mustSee: { auto: true, text: '' }, newsAuto: true, newsIds: [], editorial: '', showPlanning: true };
+    if (p.kind === 'cover') p.opts = { important: { label: 'Important', title: '', text: '' }, mustSee: { auto: true, text: '' }, newsAuto: true, newsIds: [], editorial: '', extraNotes: [], showPlanning: true };
     if (p.kind === 'news') p.opts = { auto: true, ids: [], categoryId: '', title: 'Les nouveautés de la semaine', subtitle: '' };
     if (p.kind === 'last') p.opts = { auto: true, ids: [], categoryId: '', title: 'Dernière chance !', subtitle: '' };
     if (p.kind === 'upcoming') p.opts = { style: 'list', auto: true, categoryId: '', from: '', to: '', rows: [], title: 'Programme des prochaines activités', subtitle: '', note: '' };
@@ -289,6 +289,7 @@
     p.included = o.included !== false;
     p.split = o.split === true || o.split === 'force' ? 'force' : o.split === 'off' ? 'off' : 'auto';
     p.opts = Object.assign({}, b.opts, isObj(o.opts) ? o.opts : {});
+    if (p.kind === 'cover') p.opts.extraNotes = (Array.isArray(p.opts.extraNotes) ? p.opts.extraNotes : []).slice(0, 4).map(function (s) { return str(s, 280).trim(); }).filter(Boolean);
     if (Array.isArray(p.opts.ids)) p.opts.ids = p.opts.ids.map(String).slice(0, 6);
     if (Array.isArray(p.opts.newsIds)) p.opts.newsIds = p.opts.newsIds.map(String).slice(0, 4);
     if (Array.isArray(p.opts.rows)) p.opts.rows = p.opts.rows.slice(0, 60).map(function (r) { r = isObj(r) ? r : {}; return { date: str(r.date, 10), title: str(r.title, 160), location: str(r.location, 120), type: str(r.type || r.status, 80) }; });

@@ -1,4 +1,14 @@
-# CSE Studio V9.1 — fiches d’activités et MEL hebdomadaire du CSE Thales LAS Massy
+# CSE Studio V9.3 — Correctifs de l’éditeur et du MEL
+
+Cette version est construite sur la **V9.2** et conserve les corrections de synchronisation ainsi que les sauvegardes locales. Elle répond aux retours d’utilisation sur les voyages, permanences, partenaires, règlements et couvertures.
+
+Consultez `NOTES_V9_3.md` pour le détail des changements, les limites CORS et la procédure de déploiement.
+
+**Important :** ne collez jamais une clé privée Supabase ou des données internes dans un dépôt public. Effectuez une sauvegarde JSON avant de remplacer les fichiers. La publication automatique dans Canva n’est pas activée.
+
+---
+
+# CSE Studio V9.2 — fiches d’activités et MEL hebdomadaire du CSE Thales LAS Massy
 
 Application web statique (aucun serveur requis) publiée sur **GitHub Pages** :
 
@@ -9,6 +19,8 @@ Application web statique (aucun serveur requis) publiée sur **GitHub Pages** :
 **Principe : chaque activité est saisie une seule fois dans la bibliothèque.** Le MEL de chaque semaine se compose ensuite automatiquement à partir de la date de référence : couverture, permanences, informations, dernières chances, nouveautés, activités en cours, partenaires, programmes à venir et règlement en fin de MEL. L’export PowerPoint (.pptx) est modifiable et s’importe dans Canva.
 
 Up Expert / Kalidea reste l’outil des activités et des inscriptions. CSE Studio ne fait que préparer les supports de communication et ne collecte aucune donnée personnelle des bénéficiaires.
+
+> **V9.2 — correctifs collaboratifs :** premier raccordement de fiches sans doublons lorsque l’identifiant métier existe déjà ; copies de MEL créées avant remplacement d’une version locale divergente ; copies non partagées automatiquement ; paramètres locaux en conflit sauvegardés et restaurables. Les tests dédiés sont dans `tests/cloud-regressions.test.js`. Voir [NOTES-VERSION.md](NOTES-VERSION.md).
 
 > **Nouveau en V9.1** : diapositives plus lisibles (corps ≥ 12 pt, suite automatique sur une autre diapositive plutôt qu’un texte minuscule), tarifs en bandeau compact, statuts « Nouveauté » / « Dernière chance » sobres en pastel, pictogrammes de catégorie, contacts cliquables (`mailto:`) sans e-mail affiché, permanences avec horaires particuliers par jour et légende automatique. Détails et captures avant/après : [NOTES-VERSION.md](NOTES-VERSION.md).
 
@@ -132,7 +144,7 @@ Le dépôt reste en **Settings → Pages → Deploy from a branch → `main` →
 1. Fusionner la branche `feature/cse-studio-v9` dans `main` (pull request), ou déposer le contenu du dépôt à la racine de `main`.
 2. Attendre la publication (onglet *Actions → pages build and deployment*), puis ouvrir `https://mgresset.github.io/CSE_Massy/`.
 3. Au premier lancement sur un navigateur qui contient la V8, la migration s’effectue automatiquement. Un bandeau indique ce qui a été repris.
-4. Les fichiers sont versionnés (`?v=9.1.0`, à incrémenter à chaque publication) pour éviter les anciennes versions en cache ; en cas de doute, appuyer sur `Ctrl+Maj+R`.
+4. Les fichiers sont versionnés (`?v=9.2.0`, à incrémenter à chaque publication) pour éviter les anciennes versions en cache ; en cas de doute, appuyer sur `Ctrl+Maj+R`.
 
 Tous les chemins sont relatifs : le site fonctionne sous le préfixe `/CSE_Massy/`, en local via un petit serveur, et même en ouvrant `index.html` directement depuis le disque. Dans ce dernier cas, le bandeau de l’export utilise une copie embarquée (`assets/bandeau-cse.data.js`).
 
@@ -150,7 +162,7 @@ puis ouvrir `http://localhost:8765/CSE_Massy/`.
 node tests/run.js
 ```
 
-Neuf fichiers de tests en Node, sans dépendance à installer :
+Onze fichiers de tests en Node, sans dépendance à installer :
 
 - `pricing` : barème (2 400 € → T1 720 €, T10 1 800 €), arrondis, modes, prix forcés, contrôles.
 - `dates` : semaines ISO, formats français, absence de J−1 sous UTC, Los Angeles, Kiritimati et Paris.
@@ -175,6 +187,8 @@ Neuf fichiers de tests en Node, sans dépendance à installer :
   - textes Arial modifiables ;
   - liens cliquables, numéros, formes natives.
 - `cloud` : synchronisation Supabase contre un faux serveur (conflits entre deux bénévoles, rôles, suppression en ligne).
+- `cloud-regressions` : premier raccordement sans doublon, photos portables, copies de MEL récupérables, sauvegardes des paramètres en conflit.
+- `cloud-panel` : accès hors ligne aux récupérations de MEL et paramètres même sans Supabase configuré.
 - `v91` : critères d’acceptation V9.1 (tarifs compacts ou absents, textes de 120/400/900 mots, corps ≥ 12 pt, titres, contacts `mailto:`, pictogrammes, statuts pastel, permanences, mosaïques, export d’un MEL de 65 diapositives).
 - `security` :
   - aucun secret ;

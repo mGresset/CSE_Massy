@@ -257,7 +257,7 @@
     var one = w >= 1060 && n <= 10;
     var cols = one ? n : w >= 440 ? Math.min(5, n) : 2;
     var rows = Math.ceil(n / cols);
-    var h = (one ? 26 + 24 : 28 + rows * 24) + 8 + (pr.notes ? 18 : 0);
+    var h = 17 + rows * 18 + (pr.notes ? 14 : 0) + 3;
     return { h: h, cols: cols, rows: rows, one: one };
   };
   /** Bandeau compact des tarifs : fond très clair, accent fin, « Extérieur » discret. */
@@ -268,18 +268,18 @@
     this.rect(x, y + 6, 3, g.h - 12, { fill: C.purple });
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var ow = outside ? M().width(outside, 12.5, false) * 1.06 + 6 : 0;
-    this.text(head, x + 14, y + 6, w - 28 - ow, 18, { size: 12.5, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    if (outside) this.text(outside, x + w - 12 - ow, y + 6, ow, 18, { size: 12.5, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    var cw = (w - 26) / g.cols, top = y + (g.one ? 26 : 28), self = this;
+    var ow = outside ? M().width(outside, 11.5, false) * 1.06 + 6 : 0;
+    this.text(head, x + 14, y + 3, w - 28 - ow, 14, { size: 11.5, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    if (outside) this.text(outside, x + w - 12 - ow, y + 3, ow, 14, { size: 11.5, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    var cw = (w - 26) / g.cols, top = y + 16, self = this;
     pr.rows.forEach(function (r, i) {
       var col = i % g.cols, row = Math.floor(i / g.cols);
-      var cx = x + 14 + col * cw, cy = top + row * 24;
-      self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple }, { text: P.money(r.price), bold: true }] }], cx, cy, cw - 8, 22,
-        { size: 15, min: 12, color: C.dark, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-      if (col > 0) self.rect(cx - 5, cy + 5, 1, 13, { fill: C.priceBorder });
+      var cx = x + 14 + col * cw, cy = top + row * 18;
+      self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple }, { text: P.money(r.price), bold: true }] }], cx, cy, cw - 8, 18,
+        { size: 13.2, min: 11.5, color: C.dark, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      if (col > 0) self.rect(cx - 5, cy + 3, 1, 12, { fill: C.priceBorder });
     });
-    if (pr.notes) this.text(pr.notes, x + 14, y + g.h - 22, w - 28, 16, { size: 12, min: 10, color: C.muted, maxLines: 1, field: 'notes tarifs', noScale: true, role: 'label', important: false });
+    if (pr.notes) this.text(pr.notes, x + 14, y + g.h - 15, w - 28, 14, { size: 11, min: 9.5, color: C.muted, maxLines: 1, field: 'notes tarifs', noScale: true, role: 'label', important: false });
     return g.h;
   };
   /** Informations pratiques : liste compacte (libellé + valeur), hauteur ajustée au contenu. */
