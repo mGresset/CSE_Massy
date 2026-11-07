@@ -270,22 +270,36 @@
     this.rect(x, y + 5, 3, g.h - 10, { fill: C.purple });
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var ow = outside ? M().width(outside, 11, false) * 1.08 + 5 : 0;
-    this.text(head, x + 12, y + 2, Math.max(70, w - 24 - ow), 13,
+    this.text(head, x + 12, y + 2, w - 24, 13,
       { size: 11, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    if (outside) this.text(outside, x + w - 10 - ow, y + 2, ow, 13,
-      { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
     var cw = (w - 24) / g.cols, top = y + 17, self = this;
+    var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols, lastRowCount = Math.min(g.cols, pr.rows.length - lastRowStart);
     pr.rows.forEach(function (r, i) {
       var row = Math.floor(i / g.cols), col = i % g.cols;
-      var nLast = Math.min(g.cols, pr.rows.length - row * g.cols);
-      var rowOffset = (g.cols - nLast) * cw / 2;
-      var cx = x + 12 + rowOffset + col * cw, cy = top + row * 15.5;
-      self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple },
+      var cy = top + row * 15.5;
+      var cx;
+      if (row === lastRow && outside && g.cols >= 4 && lastRowCount <= 2) {
+        cx = x + 12 + col * cw;
+      } else {
+        var nLast = Math.min(g.cols, pr.rows.length - row * g.cols);
+        var rowOffset = (g.cols - nLast) * cw / 2;
+        cx = x + 12 + rowOffset + col * cw;
+      }
+      self.text([{ runs: [{ text: r.label + ' ', bold: true, color: C.purple },
         { text: P.money(r.price), bold: true }] }], cx, cy, cw - 4, 15.5,
         { size: 12.2, min: 11, color: C.dark, valign: 'middle', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
     });
+    if (outside) {
+      if (g.cols >= 4 && lastRowCount <= 2) {
+        self.text(outside, x + 12 + 2 * cw, top + lastRow * 15.5, 2 * cw - 4, 15.5,
+          { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      } else {
+        var ow = M().width(outside, 11, false) * 1.08 + 5;
+        self.text(outside, x + w - 10 - ow, y + 2, ow, 13,
+          { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      }
+    }
     if (pr.notes) this.text(pr.notes, x + 12, y + g.h - 14, w - 24, 13,
       { size: 10.7, min: 9.5, color: C.muted, maxLines: 1,
         field: 'notes tarifs', noScale: true, role: 'label', important: false });
