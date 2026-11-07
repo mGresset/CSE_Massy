@@ -284,16 +284,17 @@
       var x0 = 40, right = 1160 - (asideW ? asideW + gap : 0);
       var stripH = asideMode === 'strip' ? 46 + 12 : 0;
       var panelH = asideW ? probe.infoPanelSize(rows, asideW) : 0;
-      var fullG = probe.priceGridSize(pr, 1120);
-      var priceFull = !!fullG.h && (!asideW || top + panelH + 12 <= bottom - stripH - fullG.h - 12);
-      var g = priceFull ? fullG : probe.priceGridSize(pr, right - x0);
-      var priceH = g.h ? g.h + 12 : 0;
+      // Le rectangle T1–T10 reste en bas à gauche, pas sur toute la largeur.
+      // Le moteur réserve uniquement sa hauteur pour ne pas masquer le contenu.
+      var compactPriceW = Math.min(610, right - x0);
+      var g = probe.priceGridSize(pr, compactPriceW);
+      var priceH = g.h ? g.h + 8 : 0;
       var bodyBottom = bottom - stripH - priceH;
       var tx = x0 + (pw ? Math.abs(pw) + gap : 0), tw = right - tx;
       if (cols === 2 && tw < 620) return null;
       var bh = bodyBottom - top;
       if (bh < 80) return null;
-      return { pw: pw, cols: cols, top: top, bodyBottom: bodyBottom, right: right, priceFull: priceFull, priceW: priceFull ? 1120 : right - x0, priceY: bodyBottom + 12, stripY: bottom - 46,
+      return { pw: pw, cols: cols, top: top, bodyBottom: bodyBottom, right: right, priceW: compactPriceW, priceY: bodyBottom + 8, stripY: bottom - 46,
         panel: asideW ? { x: right + gap, y: top, w: asideW } : null, boxes: columns(tx, top, tw, bh, cols, 30) };
     }
     var best = null;
@@ -1114,7 +1115,12 @@
   /** Rend une page du MEL : renvoie une liste de diapositives. */
   function renderPage(page, project, issue, opts) {
     opts = opts || {};
-    var item = page.kind === 'item' ? CO().findItem(project, page.itemId) : null;
+    var sourceItem = page.kind === 'item' ? CO().findItem(project, page.itemId) : null;
+    var edits = page.opts && page.opts.useOverrides && page.opts.override;
+    var item = sourceItem && edits ? Object.assign({}, sourceItem, ['title', 'subtitle', 'summary', 'description', 'highlights', 'program', 'notes'].reduce(function (o, k) {
+      if (Object.prototype.hasOwnProperty.call(edits, k)) o[k] = String(edits[k] || '');
+      return o;
+    }, {})) : sourceItem;
     var settings = project.settings;
     var ref = issue.refDate;
     var tid = templateIdFor(page, item, project);
@@ -1160,7 +1166,7 @@
   /** Rend tout le MEL (pages incluses), avec numérotation facultative. */
   function renderIssue(project, issue, opts) {
     opts = opts || {};
-    var pages = CO().enforceOrder(issue.pages, project);
+    var pages = CO().enforceOrder(issue.pages, project, issue);
     var out = [], n = 1;
     pages.forEach(function (p) {
       if (!p.included && !opts.all) { out.push({ page: p, slides: [], excluded: true }); return; }

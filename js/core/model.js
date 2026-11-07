@@ -186,7 +186,7 @@
     return {
       id: uid('fiche'), type: oneOf(type, TYPES, 'activity'),
       title: '', subtitle: '', categoryId: type === 'info' || type === 'rules' || type === 'calendar' || type === 'page' ? 'cat-informations' : '',
-      editorial: 'auto', regStatus: 'auto', forceLast: false, excludeLast: false,
+      editorial: 'auto', melSection: 'auto', regStatus: 'auto', forceLast: false, excludeLast: false,
       summary: '', description: '', program: '', highlights: '',
       location: '', address: '',
       dateStart: '', dateEnd: '', timeStart: '', timeEnd: '',
@@ -219,6 +219,8 @@
     DATE_FIELDS.forEach(function (k) { it[k] = /^\d{4}-\d{2}-\d{2}$/.test(str(o[k])) ? o[k] : ''; });
     it.categoryId = str(o.categoryId).trim() || b.categoryId;
     it.editorial = oneOf(o.editorial, EDITORIAL, 'auto');
+    // Placement éditorial optionnel, distinct de la catégorie d'activité.
+    it.melSection = oneOf(o.melSection, ['auto', 'important', 'announcements', 'planning'], 'auto');
     it.regStatus = oneOf(o.regStatus, REG_STATUS, 'auto');
     it.forceLast = bool(o.forceLast); it.excludeLast = bool(o.excludeLast);
     it.contacts = normalizeContacts(o.contacts);
@@ -300,7 +302,7 @@
     var ref = refDate || (D ? D.todayParis() : new Date().toISOString().slice(0, 10));
     var wk = D ? D.isoWeek(ref) : { week: 1, year: 2026 };
     var now = new Date().toISOString();
-    return { id: uid('mel'), refDate: ref, week: wk.week, year: wk.year, title: '', numbering: false, status: 'draft', pages: [], createdAt: now, updatedAt: now, version: 1 };
+    return { id: uid('mel'), refDate: ref, week: wk.week, year: wk.year, title: '', numbering: false, status: 'draft', pages: [], suppressed: [], createdAt: now, updatedAt: now, version: 1 };
   }
   function normalizeIssue(raw) {
     var o = isObj(raw) ? raw : {};
@@ -313,6 +315,7 @@
     is.title = str(o.title, 120);
     is.numbering = bool(o.numbering);
     is.pages = (Array.isArray(o.pages) ? o.pages : []).slice(0, 300).map(normalizePage);
+    is.suppressed = (Array.isArray(o.suppressed) ? o.suppressed : []).slice(0, 300).map(function (x) { return str(x, 150); });
     is.version = clampInt(o.version, 1, 1e9, 1);
     return is;
   }

@@ -12,7 +12,12 @@
       if (args[0]) { var target = p.issues.find(function (i) { return i.id === args[0]; }); if (target) p.activeIssueId = target.id; }
       var issue = App.activeIssue();
       if (!issue) { renderEmpty(el); return; }
-      issue.pages = C.compose.enforceOrder(issue.pages, p);
+      if (!issue.pages.some(function (pg) { return pg.kind === 'cover' && !(pg.opts || {}).extraCover; })) {
+        issue.pages.unshift(C.model.blankPage('cover')); App.save('issues');
+      }
+      var mandatoryCover = issue.pages.find(function (pg) { return pg.kind === 'cover' && !(pg.opts || {}).extraCover; });
+      if (mandatoryCover && !mandatoryCover.included) { mandatoryCover.included = true; App.save('issues'); }
+      issue.pages = C.compose.enforceOrder(issue.pages, p, issue);
       var selected = App.composerSelect && issue.pages.some(function (pg) { return pg.id === App.composerSelect; }) ? App.composerSelect : (issue.pages[0] && issue.pages[0].id);
       App.composerSelect = null;
 
@@ -21,7 +26,7 @@
       issueSel.addEventListener('change', function () { p.activeIssueId = issueSel.value; App.save('issues'); App.refresh(); });
       var exportBtn = h('button', { class: 'btn primary', type: 'button', onclick: function (e) { issue.numbering = numChk.checked; App.exportPptx(App.issueEntries(issue), 'CSE_MEL_S' + issue.week + '_' + issue.year + '.pptx', e.currentTarget); } }, '↓ Exporter le MEL (.pptx)');
       el.appendChild(h('div', { class: 'page-head' },
-        h('div', {}, h('h1', {}, 'Composer le MEL'), h('p', { class: 'lead' }, 'Ordonnez les pages, choisissez les modèles, prévisualisez puis exportez un PowerPoint modifiable.')),
+        h('div', {}, h('h1', {}, 'Composer le MEL'), h('p', { class: 'lead' }, 'Pages modifiables à tout moment · classement automatique par rubriques · export PowerPoint modifiable.')), 
         h('div', { class: 'btn-group' },
           h('div', { style: { minWidth: '230px' } }, issueSel),
           h('button', { class: 'btn', type: 'button', onclick: newIssueDialog }, '+ Nouveau MEL'),
@@ -49,21 +54,28 @@
       left.appendChild(h('label', { class: 'check' }, numChk, 'Numéroter les pages'));
       left.appendChild(h('div', { class: 'row', style: { marginBottom: '10px' } },
         h('button', { class: 'btn small', type: 'button', onclick: addPageDialog }, '+ Ajouter une page'),
-        h('button', { class: 'btn small', type: 'button', onclick: regenerate }, '↻ Recomposer automatiquement')));
+        h('button', { class: 'btn small', type: 'button', onclick: regenerate }, '↻ Actualiser sans perdre mes modifications')));
       var count = h('p', { class: 'small muted', style: { margin: '0 0 6px' } });
       left.appendChild(count);
       var list = h('ol', { class: 'pages', 'aria-label': 'Pages du MEL' });
       left.appendChild(list);
-      left.appendChild(h('p', { class: 'small muted' }, 'Glisser-déposer ou flèches ↑ ↓ pour réordonner. La couverture reste en tête et le règlement en fin de MEL.'));
+      left.appendChild(h('p', { class: 'small muted' }, 'Rubriques dans un ordre fixe. Glissez-déposez ou utilisez ↑ ↓ pour réordonner les pages d’une même rubrique. Modifiez chaque fiche à tout moment.')); 
 
       /* ---------- Liste des pages ---------- */
       var dragId = null;
+      var isMainCover = function (pg) { return pg.kind === 'cover' && !(pg.opts || {}).extraCover; };
       function drawList() {
         ui.clear(list);
         var rendered = C.templates.renderIssue(p, issue, { all: true });
-        var n = 1, totalSlides = 0;
+        var n = 1, totalSlides = 0, lastSection = '';
         rendered.forEach(function (r, idx) {
           var pg = r.page;
+          var section = C.compose.sectionForPage(pg, p, issue);
+          if (section !== lastSection) {
+            var sec = C.compose.SECTIONS.find(function (s) { return s.id === section; });
+            list.appendChild(h('li', { class: 'section-heading', role: 'presentation' }, sec ? sec.label : section));
+            lastSection = section;
+          }
           var nb = r.slides.length;
           var label = pg.included ? (nb > 1 ? n + '–' + (n + nb - 1) : String(n)) : '—';
           if (pg.included) { n += nb; totalSlides += nb; }
@@ -73,23 +85,26 @@
           var warn = r.slides.some(function (s) { return s.overflow || s.warnings.some(function (w) { return w.level === 'block'; }); });
           var mini = h('div', { class: 'mini' });
           if (r.slides[0]) mini.appendChild(ui.slideFrame(r.slides[0], { lazy: true, checkOverflow: false }).frame);
-          var li = h('li', { class: 'pg' + (pg.id === selected ? ' active' : '') + (pg.included ? '' : ' excluded'), draggable: 'true', dataset: { id: pg.id }, tabindex: '0', 'aria-label': 'Page ' + label + ' : ' + App.pageLabel(pg) },
+          var canMoveUp = idx > 0 && C.compose.sectionForPage(issue.pages[idx - 1], p, issue) === section;
+          var canMoveDown = idx < issue.pages.length - 1 && C.compose.sectionForPage(issue.pages[idx + 1], p, issue) === section;
+          var li = h('li', { class: 'pg' + (pg.id === selected ? ' active' : '') + (pg.included ? '' : ' excluded'), draggable: section !== 'cover', dataset: { id: pg.id }, tabindex: '0', 'aria-label': 'Page ' + label + ' : ' + App.pageLabel(pg) },
             h('span', { class: 'num' }, label), mini,
             h('div', { class: 'txt' }, h('b', {}, (warn ? '⚠ ' : '') + App.pageLabel(pg)), h('small', {}, sub + (it && it.archived ? ' · archivée' : ''))),
             h('div', { class: 'ops' },
-              h('button', { type: 'button', title: pg.included ? 'Exclure du MEL (sans supprimer)' : 'Inclure dans le MEL', 'aria-label': pg.included ? 'Exclure la page' : 'Inclure la page', onclick: function (e) { e.stopPropagation(); pg.included = !pg.included; App.save('issues'); refreshAll(); } }, pg.included ? '👁' : '◌'),
-              h('button', { type: 'button', title: 'Monter', 'aria-label': 'Monter la page', onclick: function (e) { e.stopPropagation(); move(idx, -1); } }, '↑'),
-              h('button', { type: 'button', title: 'Descendre', 'aria-label': 'Descendre la page', onclick: function (e) { e.stopPropagation(); move(idx, 1); } }, '↓'),
-              h('button', { type: 'button', title: 'Retirer du MEL (la fiche reste dans la bibliothèque)', 'aria-label': 'Retirer la page', onclick: function (e) { e.stopPropagation(); removePage(pg); } }, '✕')));
+              h('button', { type: 'button', disabled: isMainCover(pg), title: isMainCover(pg) ? 'La couverture reste toujours en première page' : pg.included ? 'Exclure du MEL (sans supprimer)' : 'Inclure dans le MEL', 'aria-label': pg.included ? 'Exclure la page' : 'Inclure la page', onclick: function (e) { e.stopPropagation(); if (isMainCover(pg)) return; pg.included = !pg.included; App.save('issues'); refreshAll(); } }, pg.included ? '👁' : '◌'),
+              h('button', { type: 'button', disabled: !canMoveUp, title: 'Monter dans cette rubrique', 'aria-label': 'Monter la page', onclick: function (e) { e.stopPropagation(); move(idx, -1); } }, '↑'),
+              h('button', { type: 'button', disabled: !canMoveDown, title: 'Descendre dans cette rubrique', 'aria-label': 'Descendre la page', onclick: function (e) { e.stopPropagation(); move(idx, 1); } }, '↓'),
+              h('button', { type: 'button', disabled: isMainCover(pg), title: 'Retirer du MEL (la fiche reste dans la bibliothèque)', 'aria-label': 'Retirer la page', onclick: function (e) { e.stopPropagation(); removePage(pg); } }, '✕')));
           li.addEventListener('click', function () { select(pg.id); });
           li.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(pg.id); if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); move(idx, -1); } if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); move(idx, 1); } });
-          li.addEventListener('dragstart', function (e) { dragId = pg.id; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', pg.id); });
+          li.addEventListener('dragstart', function (e) { if (section === 'cover') { e.preventDefault(); return; } dragId = pg.id; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', pg.id); });
           li.addEventListener('dragend', function () { li.classList.remove('dragging'); list.querySelectorAll('.drop-before').forEach(function (x) { x.classList.remove('drop-before'); }); });
           li.addEventListener('dragover', function (e) { e.preventDefault(); list.querySelectorAll('.drop-before').forEach(function (x) { x.classList.remove('drop-before'); }); li.classList.add('drop-before'); });
           li.addEventListener('drop', function (e) {
             e.preventDefault();
             var from = issue.pages.findIndex(function (x) { return x.id === dragId; }), to = issue.pages.findIndex(function (x) { return x.id === pg.id; });
             if (from < 0 || to < 0 || from === to) return;
+            if (C.compose.sectionForPage(issue.pages[from], p, issue) !== C.compose.sectionForPage(pg, p, issue)) { ui.toast('Le déplacement est limité à une même rubrique. Modifiez le placement éditorial de la fiche pour changer sa rubrique.'); return; }
             var m = issue.pages.splice(from, 1)[0];
             issue.pages.splice(from < to ? to - 1 : to, 0, m);
             afterReorder();
@@ -98,27 +113,34 @@
         });
         // Dépôt en fin de liste
         list.ondragover = function (e) { e.preventDefault(); };
-        list.ondrop = function (e) { if (e.target !== list) return; e.preventDefault(); var from = issue.pages.findIndex(function (x) { return x.id === dragId; }); if (from < 0) return; issue.pages.push(issue.pages.splice(from, 1)[0]); afterReorder(); };
+        list.ondrop = function (e) { if (e.target !== list) return; e.preventDefault(); ui.toast('Déplacez les pages sur une autre page de la même rubrique.'); };
         count.textContent = issue.pages.filter(function (x) { return x.included; }).length + ' page(s) incluse(s) sur ' + issue.pages.length + ' · ' + totalSlides + ' diapositive(s) exportée(s)';
       }
       function afterReorder() {
         var before = issue.pages.map(function (x) { return x.id; }).join();
-        issue.pages = C.compose.enforceOrder(issue.pages, p);
-        if (before !== issue.pages.map(function (x) { return x.id; }).join()) ui.toast('La couverture reste en tête et le règlement en fin de MEL.');
+        issue.pages = C.compose.enforceOrder(issue.pages, p, issue);
+        if (before !== issue.pages.map(function (x) { return x.id; }).join()) ui.toast('Ordre éditorial rétabli automatiquement.');
         App.save('issues'); drawList();
       }
       function move(idx, delta) {
         var j = idx + delta;
         if (j < 0 || j >= issue.pages.length) return;
+        if (C.compose.sectionForPage(issue.pages[idx], p, issue) !== C.compose.sectionForPage(issue.pages[j], p, issue)) return ui.toast('Les rubriques ont un ordre fixe.');
         var t = issue.pages[idx]; issue.pages[idx] = issue.pages[j]; issue.pages[j] = t;
         afterReorder();
         var li = list.querySelector('[data-id="' + t.id + '"]'); if (li) li.focus();
       }
       function removePage(pg) {
+        if (pg.kind === 'cover' && !(pg.opts || {}).extraCover) return ui.toast('La couverture est obligatoire et doit rester la première page.');
         ui.confirm('Retirer la page', '« ' + App.pageLabel(pg) + ' » sera retirée de ce MEL. ' + (pg.kind === 'item' ? 'La fiche reste dans la bibliothèque.' : '') + '\nAstuce : « Exclure » (👁) la garde sans la publier.', 'Retirer', true).then(function (ok) {
           if (!ok) return;
           var i = issue.pages.indexOf(pg);
           issue.pages.splice(i, 1);
+          if (pg.kind !== 'cover' || (pg.opts || {}).extraCover) {
+            issue.suppressed = issue.suppressed || [];
+            var key = C.compose.pageKey(pg);
+            if (issue.suppressed.indexOf(key) < 0) issue.suppressed.push(key);
+          }
           if (selected === pg.id) selected = (issue.pages[Math.min(i, issue.pages.length - 1)] || {}).id;
           App.save('issues'); refreshAll();
         });
@@ -130,12 +152,13 @@
       function drawCenter() {
         ui.clear(center);
         var pg = currentPage();
-        if (!pg) { center.appendChild(h('div', { class: 'empty' }, 'Ce MEL ne contient aucune page. Utilisez « Recomposer automatiquement » ou « Ajouter une page ».')); return; }
+        if (!pg) { center.appendChild(h('div', { class: 'empty' }, 'Ce MEL ne contient aucune page. Utilisez « Actualiser sans perdre mes modifications » ou « Ajouter une page ».')); return; }
         var slides = C.templates.renderPage(pg, p, issue, { pageNumber: issue.numbering ? firstNumber(pg) : 0 });
         var idx = issue.pages.indexOf(pg);
         center.appendChild(h('div', { class: 'stage-head' },
           h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Page précédente', disabled: idx <= 0, onclick: function () { select(issue.pages[idx - 1].id); } }, '‹'),
           h('h2', {}, App.pageLabel(pg)),
+          pg.kind === 'item' && App.item(pg.itemId) ? h('a', { class: 'btn small primary', href: '#/fiche/' + pg.itemId + '?mel=' + encodeURIComponent(issue.id) + '&page=' + encodeURIComponent(pg.id), title: 'Modifier la fiche source puis revenir à cette diapositive' }, '✎ Modifier la fiche') : null,
           pg.included ? null : h('span', { class: 'chip closed' }, 'Exclue de l’export'),
           h('button', { class: 'btn small', type: 'button', onclick: function () { App.fullscreen(slides); } }, '⤢ Plein écran'),
           h('button', { class: 'btn small', type: 'button', onclick: function (e) { App.exportPptx(slides.map(function (s) { var it = App.item(pg.itemId); return { slide: s, title: App.pageLabel(pg), notes: App.notesFor(pg, it, s) }; }), 'CSE_' + ui.slug(App.pageLabel(pg)) + '.pptx', e.currentTarget); } }, '↓ Cette page (.pptx)'),
@@ -186,8 +209,10 @@
         right.appendChild(card);
         if (pg) {
           card.appendChild(h('h2', {}, 'Options de la page'));
-          var inc = h('input', { type: 'checkbox', checked: pg.included });
-          inc.addEventListener('change', function () { pg.included = inc.checked; App.save('issues'); refreshAll(); });
+          var sec = C.compose.SECTIONS.find(function (s) { return s.id === C.compose.sectionForPage(pg, p, issue); });
+          card.appendChild(h('p', { class: 'small muted' }, sec ? 'Rubrique : ' + sec.label : ''));
+          var inc = h('input', { type: 'checkbox', checked: pg.included, disabled: isMainCover(pg) });
+          inc.addEventListener('change', function () { if (isMainCover(pg)) return; pg.included = inc.checked; App.save('issues'); refreshAll(); });
           card.appendChild(h('label', { class: 'check' }, inc, 'Inclure dans le MEL exporté'));
           (OPTS[pg.kind] || function () { })(card, pg);
         }
@@ -198,7 +223,31 @@
         item: function (card, pg) {
           var it = App.item(pg.itemId);
           if (!it) { card.appendChild(h('div', { class: 'alert error' }, 'Fiche introuvable : retirez cette page.')); return; }
-          card.appendChild(h('p', {}, h('a', { class: 'btn small primary', href: '#/fiche/' + it.id }, '✎ Modifier la fiche'), ' ', h('span', { class: 'small muted' }, 'Les modifications valent pour tous les MEL.')));
+          card.appendChild(h('p', {}, h('a', { class: 'btn small primary', href: '#/fiche/' + it.id + '?mel=' + encodeURIComponent(issue.id) + '&page=' + encodeURIComponent(pg.id) }, '✎ Modifier la fiche source'), ' ', h('span', { class: 'small muted' }, 'Modifie tous les MEL qui utilisent cette fiche.')));
+          var overrides = pg.opts = pg.opts || {};
+          var use = h('input', { type: 'checkbox', checked: !!overrides.useOverrides });
+          use.addEventListener('change', function () { overrides.useOverrides = use.checked; changed(); drawOptions(); });
+          card.appendChild(h('fieldset', {}, h('legend', {}, 'Personnaliser uniquement cette diapositive'),
+            h('label', { class: 'check' }, use, 'Activer un texte propre à ce MEL'),
+            h('p', { class: 'small muted' }, 'Les autres MEL gardent la fiche d’origine. Modifications conservées après actualisation automatique.')));
+          if (overrides.useOverrides) {
+            var target = overrides.override = overrides.override || {};
+            var fields = [
+              ['title', 'Titre', 1], ['subtitle', 'Sous-titre / dates', 1],
+              ['summary', 'Résumé', 2], ['description', 'Description', 4],
+              ['highlights', 'Temps forts', 3], ['program', 'Programme', 3], ['notes', 'Remarques', 2]
+            ];
+            var editBox = h('fieldset', {}, h('legend', {}, 'Textes personnalisés de cette page'));
+            fields.forEach(function (f) {
+              var val = Object.prototype.hasOwnProperty.call(target, f[0]) ? target[f[0]] : String(it[f[0]] || '');
+              var input = f[2] === 1 ? h('input', { value: val }) : h('textarea', { rows: f[2] });
+              if (f[2] !== 1) input.value = val;
+              input.addEventListener('input', function () { target[f[0]] = input.value; changedDeb(); });
+              editBox.appendChild(ui.field(f[1], input));
+            });
+            editBox.appendChild(h('button', { class: 'btn small', type: 'button', onclick: function () { delete overrides.override; overrides.useOverrides = false; changed(); drawOptions(); } }, 'Réutiliser les textes de la fiche'));
+            card.appendChild(editBox);
+          }
           var opts = [{ id: 'auto', label: 'Celui de la fiche (' + (C.templates.TEMPLATES.find(function (t) { return t.id === C.templates.templateIdFor(C.model.blankPage('item', { itemId: it.id }), it, p); }) || {}).name + ')' }]
             .concat((C.templates.ITEM_TEMPLATES[it.type] || []).map(function (id) { return { id: id, label: C.templates.TEMPLATES.find(function (t) { return t.id === id; }).name }; }));
           var tpl = ui.selectEl(opts, pg.template);
@@ -353,15 +402,13 @@
 
       /* ---------- Actions ---------- */
       function regenerate() {
-        ui.confirm('Recomposer automatiquement', 'L’ordre des pages de ce MEL sera recalculé à partir de la bibliothèque (date de référence ' + D.fmtLong(issue.refDate) + ').\nLes options personnalisées des pages (couverture, sélections) seront réinitialisées. Les fiches ne sont pas modifiées.', 'Recomposer').then(function (ok) {
+        ui.confirm('Actualiser les rubriques', 'Les activités récentes seront ajoutées et les pages seront rangées par rubrique.\nLes diapositives déjà présentes, leurs réglages, textes personnalisés et exclusions seront CONSERVÉS. Rien ne sera effacé.', 'Actualiser').then(function (ok) {
           if (!ok) return;
-          var oldCover = issue.pages.find(function (x) { return x.kind === 'cover'; });
-          issue.pages = C.compose.autoCompose(p, issue);
-          var nc = issue.pages.find(function (x) { return x.kind === 'cover'; });
-          if (oldCover && nc) nc.opts = oldCover.opts; // le message de couverture saisi est conservé
-          selected = issue.pages[0] && issue.pages[0].id;
+          var previous = selected;
+          issue.pages = C.compose.refreshPreservingEdits(p, issue);
+          selected = issue.pages.some(function (pg) { return pg.id === previous; }) ? previous : issue.pages[0] && issue.pages[0].id;
           App.save('issues'); refreshAll();
-          ui.toast('MEL recomposé : ' + issue.pages.length + ' page(s).', 'ok');
+          ui.toast('MEL actualisé sans perdre vos modifications : ' + issue.pages.length + ' page(s).', 'ok');
         });
       }
       function addPageDialog() {
@@ -395,8 +442,9 @@
           if (!ids.length) return;
           var pos = Math.max(0, issue.pages.findIndex(function (x) { return x.id === selected; }) + 1);
           var newPages = ids.map(function (id) { return C.model.blankPage('item', { itemId: id }); });
+          issue.suppressed = (issue.suppressed || []).filter(function (k) { return newPages.every(function (pg) { return C.compose.pageKey(pg) !== k; }); });
           issue.pages.splice.apply(issue.pages, [pos, 0].concat(newPages));
-          issue.pages = C.compose.enforceOrder(issue.pages, p);
+          issue.pages = C.compose.enforceOrder(issue.pages, p, issue);
           selected = newPages[0].id;
           App.save('issues'); refreshAll();
           ui.toast(ids.length + ' page(s) ajoutée(s).', 'ok');
@@ -435,6 +483,7 @@
       var prev = App.activeIssue();
       var is = App.newIssue(ref.value, mode.value === 'auto');
       is.numbering = !!p.settings.numbering;
+      if (mode.value === 'empty') is.pages = [C.model.blankPage('cover')];
       if (mode.value === 'copy' && prev) {
         is.pages = prev.pages.filter(function (pg) {
           if (pg.kind !== 'item') return true;
@@ -443,6 +492,8 @@
           return ['expired', 'closed', 'cancelled'].indexOf(c.rubric) < 0;
         }).map(function (pg) { var c = JSON.parse(JSON.stringify(pg)); c.id = C.model.uid('page'); return C.model.normalizePage(c); });
       }
+      is.pages = C.compose.enforceOrder(is.pages, p, is);
+      if (!is.pages.some(function (pg) { return pg.kind === 'cover'; })) is.pages.unshift(C.model.blankPage('cover'));
       App.save('issues');
       App.go('#/mel/' + is.id);
       ui.toast('MEL de la semaine ' + is.week + ' créé.', 'ok');

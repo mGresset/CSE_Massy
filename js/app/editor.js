@@ -21,6 +21,10 @@
     title: 'Fiche',
     render: function (el, args) {
       var p = App.p(), it;
+      var from = new URLSearchParams((location.hash.split('?')[1] || ''));
+      var returnIssue = p.issues.find(function (x) { return x.id === from.get('mel'); });
+      var returnPage = returnIssue && returnIssue.pages.find(function (x) { return x.id === from.get('page'); });
+      function returnToMel() { if (returnPage) App.composerSelect = returnPage.id; App.go('#/mel/' + returnIssue.id); }
       if (args[0] === 'nouvelle') {
         it = C.model.blankItem(args[1] || 'activity');
         if (args[2]) it.template = args[2];
@@ -45,6 +49,7 @@
       el.appendChild(h('div', { class: 'page-head' },
         h('div', {}, h('p', { class: 'muted small', style: { margin: 0 } }, h('a', { href: '#/bibliotheque' }, '← Bibliothèque'), ' · ', ui.typeLabel(it.type)), titleEl),
         h('div', { class: 'btn-group' },
+          returnIssue ? h('button', { class: 'btn', type: 'button', onclick: returnToMel }, '← Retour à cette diapositive') : null,
           h('button', { class: 'btn', type: 'button', onclick: function () { var c = App.duplicateItem(it); App.go('#/fiche/' + c.id); } }, 'Dupliquer'),
           h('button', { class: 'btn', type: 'button', onclick: function () { it.archived = !it.archived; touch(); ui.toast(it.archived ? 'Fiche archivée.' : 'Fiche réactivée.'); App.refresh(); } }, it.archived ? 'Désarchiver' : 'Archiver'),
           h('button', { class: 'btn primary', type: 'button', onclick: function () { App.addToIssue(it); } }, '+ Ajouter au MEL en cours'))));
@@ -151,7 +156,7 @@
         fn(stepBody, it, p, { touch: touch, render: renderPreview, redraw: drawStep, redrawKeepScroll: redrawStepKeepingScroll });
         var i = steps.indexOf(state.step);
         stepNav.appendChild(i > 0 ? h('button', { class: 'btn', type: 'button', onclick: function () { state.step = steps[i - 1]; drawStep(); } }, '← ' + STEP_LABELS[steps[i - 1]]) : h('span'));
-        stepNav.appendChild(i < steps.length - 1 ? h('button', { class: 'btn primary', type: 'button', onclick: function () { state.step = steps[i + 1]; drawStep(); } }, STEP_LABELS[steps[i + 1]] + ' →') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'));
+        stepNav.appendChild(i < steps.length - 1 ? h('button', { class: 'btn primary', type: 'button', onclick: function () { state.step = steps[i + 1]; drawStep(); } }, STEP_LABELS[steps[i + 1]] + ' →') : returnIssue ? h('button', { class: 'btn primary', type: 'button', onclick: returnToMel }, 'Terminer et revenir au MEL') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'));
       }
       drawStep();
       renderPreview();
@@ -201,6 +206,12 @@
       box.appendChild(h('div', { class: 'cols' },
         bindSelect(it, 'categoryId', cats, ctx, { label: 'Catégorie' }),
         it.type === 'activity' || it.type === 'info' || it.type === 'partner' ? bindSelect(it, 'editorial', C.model.EDITORIAL, ctx, { label: 'Rubrique éditoriale', help: 'Automatique : nouveauté si créée depuis moins de ' + p.settings.newDays + ' j, dernière chance si clôture sous ' + p.settings.lastDays + ' j.' }) : null));
+      if (it.type === 'activity' || it.type === 'page') box.appendChild(bindSelect(it, 'melSection', [
+        { id: 'auto', label: 'Automatique selon la fiche et les inscriptions' },
+        { id: 'announcements', label: 'Annonces / concerts / événements' },
+        { id: 'important', label: 'Informations importantes' },
+        { id: 'planning', label: 'Plannings / activités à venir' }
+      ], ctx, { label: 'Placement dans le MEL', help: 'Indépendant de la catégorie : permet de placer un concert dans « Annonces ». Une dernière chance automatique reste disponible si le mode automatique est choisi.' }));
       box.appendChild(h('p', { class: 'small' }, h('a', { href: '#/parametres' }, 'Gérer les catégories (créer, renommer, réordonner)…')));
       box.appendChild(bindSelect(it, 'editorialStatus', [{ id: 'draft', label: 'Brouillon' }, { id: 'review', label: 'À relire' }, { id: 'approved', label: 'Validée pour diffusion' }], ctx, { label: 'Validation interne', help: 'Indication de travail en local. Une validation sécurisée (rôles Rédacteur / Relecteur) nécessite l’espace partagé Supabase.' }));
     },

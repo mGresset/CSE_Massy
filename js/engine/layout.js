@@ -250,36 +250,43 @@
     });
     return cy - gap - y;
   };
-  /** Dimensions du bandeau des tarifs T1–T10 : une ligne si la largeur le permet, sinon deux rangées de cinq. */
+  /** Cartouche tarifs inférieur gauche : toujours deux rangées de cinq au maximum,
+   *  pour garder une largeur inférieure à 55 % de la diapositive et une police lisible. */
   B.priceGridSize = function (pr, w) {
     if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0 };
     var n = pr.rows.length;
-    var one = w >= 1060 && n <= 10;
-    var cols = one ? n : w >= 440 ? Math.min(5, n) : 2;
+    // La largeur du cartouche est volontairement plafonnée par le modèle Classique.
+    // Cinq tarifs par rangée restent lisibles au-delà de 560 px.
+    var cols = w >= 540 ? Math.min(5, n) : w >= 350 ? Math.min(3, n) : Math.min(2, n);
     var rows = Math.ceil(n / cols);
-    var h = 17 + rows * 18 + (pr.notes ? 14 : 0) + 3;
-    return { h: h, cols: cols, rows: rows, one: one };
+    var h = 17 + rows * 16 + (pr.notes ? 14 : 0);
+    return { h: h, cols: cols, rows: rows };
   };
-  /** Bandeau compact des tarifs : fond très clair, accent fin, « Extérieur » discret. */
+  /** Petit rectangle horizontal de tarifs : 5 colonnes × 2 lignes, en bas à gauche. */
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
-    this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 8 });
-    this.rect(x, y + 6, 3, g.h - 12, { fill: C.purple });
+    this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
+    this.rect(x, y + 5, 3, g.h - 10, { fill: C.purple });
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
-    var ow = outside ? M().width(outside, 11.5, false) * 1.06 + 6 : 0;
-    this.text(head, x + 14, y + 3, w - 28 - ow, 14, { size: 11.5, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    if (outside) this.text(outside, x + w - 12 - ow, y + 3, ow, 14, { size: 11.5, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    var cw = (w - 26) / g.cols, top = y + 16, self = this;
+    var ow = outside ? M().width(outside, 11, false) * 1.07 + 4 : 0;
+    this.text(head, x + 12, y + 2, Math.max(70, w - 25 - ow), 13,
+      { size: 11.5, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    if (outside) this.text(outside, x + w - 10 - ow, y + 2, ow, 13,
+      { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+    var cw = (w - 24) / g.cols, top = y + 16, self = this;
     pr.rows.forEach(function (r, i) {
       var col = i % g.cols, row = Math.floor(i / g.cols);
-      var cx = x + 14 + col * cw, cy = top + row * 18;
-      self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple }, { text: P.money(r.price), bold: true }] }], cx, cy, cw - 8, 18,
-        { size: 13.2, min: 11.5, color: C.dark, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-      if (col > 0) self.rect(cx - 5, cy + 3, 1, 12, { fill: C.priceBorder });
+      var cx = x + 12 + col * cw, cy = top + row * 16;
+      self.text([{ runs: [{ text: r.label + '\u00a0', bold: true, color: C.purple },
+        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 7, 16,
+        { size: 12.6, min: 11.2, color: C.dark, valign: 'middle', maxLines: 1,
+          role: 'label', noScale: true, field: 'tarifs' });
     });
-    if (pr.notes) this.text(pr.notes, x + 14, y + g.h - 15, w - 28, 14, { size: 11, min: 9.5, color: C.muted, maxLines: 1, field: 'notes tarifs', noScale: true, role: 'label', important: false });
+    if (pr.notes) this.text(pr.notes, x + 12, y + g.h - 14, w - 24, 13,
+      { size: 10.7, min: 9.5, color: C.muted, maxLines: 1,
+        field: 'notes tarifs', noScale: true, role: 'label', important: false });
     return g.h;
   };
   /** Informations pratiques : liste compacte (libellé + valeur), hauteur ajustée au contenu. */

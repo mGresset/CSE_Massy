@@ -141,13 +141,71 @@
     });
   }
 
-  /** Remet la couverture en tête et le règlement en fin, sans changer l'ordre relatif du reste. */
-  function enforceOrder(pages, project) {
-    var isRules = function (p) { var it = p.kind === 'item' ? findItem(project, p.itemId) : null; return !!(it && it.type === 'rules'); };
-    var covers = pages.filter(function (p) { return p.kind === 'cover'; });
-    var rules = pages.filter(isRules);
-    var rest = pages.filter(function (p) { return p.kind !== 'cover' && !isRules(p); });
-    return covers.concat(rest, rules);
+  /* Ordre éditorial fixe du MEL, avec liberté de tri à l'intérieur des rubriques.
+   * Le groupe d'une page dépend de sa fiche et de la date de RÉFÉRENCE du MEL,
+   * jamais de la date actuelle : un ancien numéro ne change donc pas d'ordre. */
+  var SECTIONS = [
+    { id: 'cover', label: '1 · Couverture' },
+    { id: 'opening', label: '2 · Ouvertures et permanences' },
+    { id: 'important', label: '3 · Informations importantes' },
+    { id: 'last', label: '4 · Dernières chances' },
+    { id: 'new', label: '5 · Nouvelles activités' },
+    { id: 'ongoing', label: '6 · Inscriptions en cours' },
+    { id: 'announcements', label: '7 · Annonces et événements' },
+    { id: 'partners', label: '8 · Partenaires et offres' },
+    { id: 'planning', label: '9 · Plannings et activités à venir' },
+    { id: 'rules', label: '10 · Règlement et inscriptions' }
+  ];
+  function sectionForPage(page, project, issue) {
+    if (page.kind === 'cover') return page.opts && page.opts.extraCover ? 'important' : 'cover';
+    if (page.kind === 'last') return 'last';
+    if (page.kind === 'news') return 'new';
+    if (page.kind === 'upcoming') return 'planning';
+    var it = page.kind === 'item' ? findItem(project, page.itemId) : null;
+    if (!it) return 'important'; // page devenue orpheline : visible dans les alertes
+    if (it.type === 'calendar') return 'opening';
+    if (it.type === 'rules') return 'rules';
+    if (it.type === 'partner') return 'partners';
+    if (it.type === 'info') return 'important';
+    if (it.melSection && it.melSection !== 'auto' && ['important', 'announcements', 'planning'].indexOf(it.melSection) >= 0) return it.melSection;
+    if (it.type === 'page') return 'important';
+    var ref = issue && issue.refDate || D().todayParis();
+    var cls = classify(it, ref, project.settings);
+    if (cls.rubric === 'last') return 'last';
+    if (cls.rubric === 'new') return 'new';
+    if (cls.rubric === 'upcoming') return 'planning';
+    return 'ongoing';
+  }
+  function enforceOrder(pages, project, issue) {
+    var buckets = {};
+    SECTIONS.forEach(function (s) { buckets[s.id] = []; });
+    (pages || []).forEach(function (pg) { buckets[sectionForPage(pg, project, issue)].push(pg); });
+    // Une seule couverture à la première position. Une couverture historique
+    // supplémentaire reste accessible, mais se range dans Informations.
+    if (buckets.cover.length > 1) {
+      var extraCovers = buckets.cover.splice(1);
+      extraCovers.forEach(function (pg) { pg.opts = pg.opts || {}; pg.opts.extraCover = true; });
+      buckets.important.unshift.apply(buckets.important, extraCovers);
+    }
+    return SECTIONS.reduce(function (out, s) { return out.concat(buckets[s.id]); }, []);
+  }
+  function pageKey(pg) {
+    return pg.kind === 'item' ? 'item:' + pg.itemId : pg.kind + (pg.kind === 'upcoming' ? ':' + ((pg.opts || {}).categoryId || '') + ':' + ((pg.opts || {}).style || 'list') : '');
+  }
+  /** Ne détruit jamais une page existante lors de l'actualisation automatique :
+   * identifiants, choix de modèle, surcharge locale et exclusion sont conservés.
+   * Les pages ajoutées manuellement restent dans le MEL. */
+  function refreshPreservingEdits(project, issue) {
+    var generated = autoCompose(project, issue), old = (issue.pages || []).slice();
+    var keyOf = pageKey;
+    var used = new Set();
+    var pages = generated.map(function (pg) {
+      var oldPg = old.find(function (x) { return !used.has(x.id) && keyOf(x) === keyOf(pg); });
+      if (oldPg) { used.add(oldPg.id); return oldPg; }
+      return pg;
+    });
+    old.forEach(function (pg) { if (!used.has(pg.id)) pages.push(pg); });
+    return enforceOrder(pages, project, issue);
   }
 
   /** Compose automatiquement un numéro. opts.detailPages : une page détaillée par activité. */
@@ -160,21 +218,30 @@
     var of = function (rub) { return live.filter(function (it) { return cls[it.id].rubric === rub; }); };
     var pages = [M_.blankPage('cover')];
     var add = function (it) { pages.push(M_.blankPage('item', { itemId: it.id })); };
-    of('calendar').forEach(add);
-    of('info').sort(function (a, b) { return (cls[b.id].isNew ? 1 : 0) - (cls[a.id].isNew ? 1 : 0); }).forEach(add);
-    var last = of('last').sort(byDeadline);
+    var eligible = function (it) { return ['expired', 'closed', 'cancelled', 'archived'].indexOf(cls[it.id].rubric) < 0; };
+    function sectionItems(sec) {
+      return live.filter(function (it) {
+        return eligible(it) && sectionForPage({ kind: 'item', itemId: it.id }, project, issue) === sec;
+      });
+    }
+    sectionItems('opening').sort(byDate).forEach(add);
+    sectionItems('important').sort(function (a, b) { return (cls[b.id].isNew ? 1 : 0) - (cls[a.id].isNew ? 1 : 0) || byDate(a, b); }).forEach(add);
+    var last = sectionItems('last').sort(byDeadline);
     if (last.length) { pages.push(M_.blankPage('last')); if (opts.detailPages) last.forEach(add); }
-    var news = of('new').sort(byDate);
+    var news = sectionItems('new').sort(byDate);
     if (news.length) { pages.push(M_.blankPage('news')); if (opts.detailPages) news.forEach(add); }
-    of('ongoing').sort(byDeadline).forEach(add);
-    of('partner').sort(function (a, b) { return (cls[b.id].isNew ? 1 : 0) - (cls[a.id].isNew ? 1 : 0) || String(a.title).localeCompare(String(b.title), 'fr'); }).forEach(add);
+    sectionItems('ongoing').sort(byDeadline).forEach(add);
+    sectionItems('announcements').sort(byDate).forEach(add);
+    sectionItems('partners').sort(function (a, b) { return (cls[b.id].isNew ? 1 : 0) - (cls[a.id].isNew ? 1 : 0) || String(a.title).localeCompare(String(b.title), 'fr'); }).forEach(add);
+    // Les annonces « à venir » peuvent aussi être présentées par une fiche propre.
+    sectionItems('planning').sort(byDate).forEach(add);
     if (opts.upcoming) {
       var upc = live.filter(function (it) { return it.type === 'activity' && it.dateStart && D().diffDays(it.dateStart, ref) >= 0 && ['upcoming', 'ongoing', 'new', 'last', 'full'].indexOf(cls[it.id].rubric) >= 0; });
       if (upc.length >= 3) pages.push(M_.blankPage('upcoming', { opts: Object.assign(M_.blankPage('upcoming').opts, { style: 'list' }) }));
     }
-    of('permanent').forEach(add);
-    of('rules').forEach(add);
-    return enforceOrder(pages, project);
+    sectionItems('rules').forEach(add);
+    var suppressed = issue.suppressed || [];
+    return enforceOrder(pages.filter(function (pg) { return suppressed.indexOf(pageKey(pg)) < 0; }), project, issue);
   }
 
   /* ---------- Contrôles ---------- */
@@ -253,13 +320,13 @@
       used[it.id] = 1;
       checkItem(it, project, ref).forEach(function (x) { if (x[0] !== 'info') out.push({ level: x[0], msg: '« ' + (it.title || 'Sans titre') + ' » : ' + x[1], pageId: p.id, itemId: it.id }); });
     });
-    var order = enforceOrder(issue.pages, project);
-    if (order.some(function (p, i) { return p !== issue.pages[i]; })) out.push({ level: 'info', msg: 'Le règlement sera replacé en fin de MEL et la couverture en tête.' });
+    var order = enforceOrder(issue.pages, project, issue);
+    if (order.some(function (p, i) { return p !== issue.pages[i]; })) out.push({ level: 'info', msg: 'Les pages seront replacées dans l’ordre éditorial : couverture, ouvertures, informations, dernières chances, nouveautés, inscriptions, annonces, partenaires, plannings et règlement.' });
     if (!issue.pages.some(function (p) { return p.included; })) out.push({ level: 'block', msg: 'Aucune page incluse dans ce MEL.' });
     return out;
   }
 
-  return { RUBRICS: RUBRICS, classify: classify, selection: selection, coverData: coverData, upcomingRows: upcomingRows, enforceOrder: enforceOrder,
+  return { RUBRICS: RUBRICS, SECTIONS: SECTIONS, sectionForPage: sectionForPage, pageKey: pageKey, refreshPreservingEdits: refreshPreservingEdits, classify: classify, selection: selection, coverData: coverData, upcomingRows: upcomingRows, enforceOrder: enforceOrder,
     autoCompose: autoCompose, checkItem: checkItem, duplicates: duplicates, audit: audit, validUrl: validUrl, linkOf: linkOf, findItem: findItem,
     byDate: byDate, byDeadline: byDeadline, itemsWith: itemsWith };
 });

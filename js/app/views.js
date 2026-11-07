@@ -192,7 +192,8 @@
     var issue = App.ensureIssue();
     if (issue.pages.some(function (pg) { return pg.itemId === it.id; })) { ui.toast('Cette fiche figure déjà dans le MEL de la semaine ' + issue.week + '.'); return; }
     issue.pages.push(C.model.blankPage('item', { itemId: it.id }));
-    issue.pages = C.compose.enforceOrder(issue.pages, App.p());
+    issue.suppressed = (issue.suppressed || []).filter(function (k) { return k !== 'item:' + it.id; });
+    issue.pages = C.compose.enforceOrder(issue.pages, App.p(), issue);
     App.save('issues');
     ui.toast('Ajoutée au MEL de la semaine ' + issue.week + '.', 'ok');
   };
@@ -250,7 +251,8 @@
     else if (tid === 'news' || tid === 'last') pg = M.blankPage(tid);
     else pg = M.normalizePage({ kind: 'upcoming', opts: { style: tid === 'upcoming-table' ? 'table' : 'list' } });
     issue.pages.push(pg);
-    issue.pages = C.compose.enforceOrder(issue.pages, App.p());
+    issue.suppressed = (issue.suppressed || []).filter(function (k) { return k !== C.compose.pageKey(pg); });
+    issue.pages = C.compose.enforceOrder(issue.pages, App.p(), issue);
     App.composerSelect = pg.id;
     App.save('issues');
     App.go('#/mel');

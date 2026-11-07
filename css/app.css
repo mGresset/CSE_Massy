@@ -266,3 +266,10 @@ dialog.full .dlg-body{max-height:none;height:calc(100vh - 64px);display:flex;ali
 .pastezone:focus {outline:3px solid #80a7e3; outline-offset:2px; background:#fff}
 .cal-range {margin-top:14px; border:1px solid #d8e3f4; border-radius:10px; padding:12px}
 .cal-range .cols {margin-bottom:8px}
+
+/* V9.4 — sections éditoriales du compositeur MEL. */
+.pages .section-heading { list-style: none; display: block; margin: 14px 0 6px; padding: 8px 10px;
+  background: #eaf0fa; color: #243b72; border-left: 3px solid #3b4ba3;
+  border-radius: 6px; font-weight: 750; font-size: 13px; letter-spacing: .01em; cursor: default; }
+.pages .section-heading:first-child { margin-top: 0; }
+.pages .pg button:disabled { opacity: .3; cursor: not-allowed; }

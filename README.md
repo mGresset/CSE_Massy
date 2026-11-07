@@ -1,4 +1,33 @@
-# CSE Studio V9.3 — Correctifs de l’éditeur et du MEL
+
+## V9.4.1 — Cartouche des tarifs T1–T10
+
+Sur les fiches **Activité classique**, les dix tarifs sont maintenant répartis en deux lignes de cinq dans un rectangle discret, aligné en bas à gauche (largeur maximale 610 px). Les prix extérieurs et suppléments restent visibles. Les tarifs facultatifs ne réservent aucun espace lorsqu’ils sont désactivés. Voir `MISE_A_JOUR_V9_4_1.md`.
+
+# CSE Studio V9.4 — Ordre éditorial et diapositives modifiables
+
+## Nouveautés V9.4 — Composer un MEL sans perdre les personnalisations
+
+- **10 rubriques fixes** : 1. Couverture, 2. Ouvertures et permanences, 3. Informations importantes, 4. Dernières chances, 5. Nouveautés, 6. Inscriptions en cours, 7. Annonces et événements, 8. Partenaires, 9. Plannings et prochaines activités, 10. Règlement. Une rubrique sans page n'est pas affichée.
+- **Couverture obligatoire** : première diapositive conservée, non supprimable et non excluable ; les calendriers de permanences se rangent automatiquement juste après.
+- **Tri interne** : déplacements à la souris ou avec les flèches au sein de la même rubrique ; impossible de désorganiser le classement principal.
+- **Affectation dédiée aux annonces** : dans « Fiche → Essentiel → Placement dans le MEL », choisir *Annonces / concerts / événements* (ou la rubrique voulue). Cela ne change pas la catégorie.
+- **Retouches de diapositive** : depuis le compositeur, le bouton « Modifier la fiche » renvoie à la fiche source puis retourne à la page. Dans « Options de la page », « Personnaliser uniquement cette diapositive » permet de changer titre, sous-titre, résumé, description, temps forts, programme et remarques pour **ce MEL uniquement**. Les autres MEL et la fiche source restent inchangés.
+- **Actualisation non destructive** : « Actualiser sans perdre mes modifications » ajoute les nouvelles activités de la bibliothèque, réordonne les rubriques et **conserve** les ID, options, textes surchargés, exclusions et pages insérées manuellement. Les pages retirées ne sont pas réintroduites automatiquement : un ajout explicite permet de les récupérer.
+- **Compatibilité JSON V9.1/V9.2/V9.3** : champs optionnels `melSection`, `pages[].opts.useOverrides`, `pages[].opts.override` et `issue.suppressed` ; l'ancien contenu est conservé.
+- **Github Pages** : application statique, aucun serveur supplémentaire.
+
+### Utilisation recommandée
+
+1. Saisir et mettre à jour les fiches dans « Bibliothèque ».
+2. Pour les concerts et événements, sélectionner « Placement dans le MEL : Annonces ».
+3. Dans « Composer le MEL », créer le MEL ou cliquer sur « Actualiser sans perdre mes modifications ».
+4. Relire les dix rubriques ; adapter les textes d'une seule diapositive dans les options de page ou modifier la fiche source.
+5. Exporter le PowerPoint en conservant les liens.
+
+### Tests V9.4
+
+`node tests/run.js` : 13 suites comprenant les tests V9.4 de l'ordre éditorial, du retour à l'édition, des surcharges de texte isolées, de la préservation des pages modifiées et du retrait persistant. Le rendu interactif dans le navigateur doit être validé une fois déployé sur GitHub Pages.
+
 
 Cette version est construite sur la **V9.2** et conserve les corrections de synchronisation ainsi que les sauvegardes locales. Elle répond aux retours d’utilisation sur les voyages, permanences, partenaires, règlements et couvertures.
 
