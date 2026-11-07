@@ -267,15 +267,23 @@
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
-    this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
-    this.rect(x, y + 5, 3, g.h - 10, { fill: C.purple });
     var head = 'Tarifs CSE' + (pr.label ? ' · ' + pr.label : '');
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
+    var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols, lastRowCount = Math.min(g.cols, pr.rows.length - lastRowStart);
+    var outsideOnLastRow = !!outside && g.cols === 4 && lastRowCount === 2;
+    var maxPriceW = pr.rows.reduce(function (maxW, r) {
+      var line = r.label + ' ' + P.money(r.price);
+      return Math.max(maxW, M().width(line, 12.1, true) * 1.04 + 8);
+    }, 0);
+    var outsideNeed = outsideOnLastRow ? (M().width(outside, 12.4, true) * 1.04 + 12) / 2 : 0;
+    var idealCw = Math.max(86, maxPriceW, outsideNeed);
+    w = Math.min(w, 24 + idealCw * g.cols);
+
+    this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
+    this.rect(x, y + 5, 3, g.h - 10, { fill: C.purple });
     this.text(head, x + 12, y + 2, w - 24, 13,
       { size: 11, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
     var cw = (w - 24) / g.cols, top = y + 16.5, rowH = 14.6, self = this;
-    var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols, lastRowCount = Math.min(g.cols, pr.rows.length - lastRowStart);
-    var outsideOnLastRow = !!outside && g.cols === 4 && lastRowCount === 2;
     pr.rows.forEach(function (r, i) {
       var row = Math.floor(i / g.cols), col = i % g.cols;
       var cy = top + row * rowH;
@@ -288,29 +296,18 @@
         cx = x + 12 + rowOffset + col * cw;
       }
       self.text([{ runs: [{ text: r.label + ' ', bold: true, color: C.purple },
-        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 4, rowH,
-        { size: 12.1, min: 11, color: C.dark, valign: 'middle', maxLines: 1,
+        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 6, rowH,
+        { size: 12.1, min: 11, color: C.dark, valign: 'middle', align: 'right', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
     });
     if (outside) {
       if (outsideOnLastRow) {
-        // Aligner la FIN du prix extérieur sur la fin des montants T4/T8,
-        // et non sur le bord du cartouche (trop éloigné visuellement).
-        // Les longueurs varient selon le barème : calculer l'ancrage sur les
-        // montants réellement affichés dans la dernière colonne remplie.
-        var finalCol = g.cols - 1;
-        var refW = pr.rows.reduce(function (maxW, r, i) {
-          if (i % g.cols !== finalCol || i >= lastRowStart) return maxW;
-          var line = r.label + '\u00a0' + P.money(r.price);
-          return Math.max(maxW, M().width(line, 12.1, true) * 1.04);
-        }, 0);
-        var priceRight = Math.min(x + w - 15, x + 12 + finalCol * cw + Math.min(cw - 5, refW));
         var extX = x + 12 + 2 * cw;
-        self.text(outside, extX, top + lastRow * rowH, Math.max(20, priceRight - extX), rowH,
+        self.text(outside, extX, top + lastRow * rowH, 2 * cw - 6, rowH,
           { size: 12.4, min: 11.2, bold: true, color: C.muted, valign: 'middle', align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
       } else {
-        var ow = M().width(outside, 11, false) * 1.08 + 5;
-        self.text(outside, x + w - 10 - ow, y + 2, ow, 13,
+        var ow = Math.min(w - 24, M().width(outside, 12.4, true) * 1.06 + 8);
+        self.text(outside, x + w - 12 - ow, y + 2, ow, 13,
           { size: 12.4, min: 11.2, bold: true, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
       }
     }
@@ -319,6 +316,7 @@
         field: 'notes tarifs', noScale: true, role: 'label', important: false });
     return g.h;
   };
+
   /** Informations pratiques : liste compacte (libellé + valeur), hauteur ajustée au contenu. */
   B.infoRowHeight = function (r, w) {
     var lines = Math.min(3, M().countLines(M().toParas(r.value, { bold: true }), w - 24, 15.5));
