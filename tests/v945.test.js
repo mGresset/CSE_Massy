@@ -4,6 +4,7 @@ const {assert, test, done} = require('./lib/assert-ext');
 const {load} = require('./lib/env');
 const C = load(), M = C.model;
 const project = M.blankProject();
+const { tiers } = require('./lib/price-grid');
 function render(outside, notes) {
   project.items = [M.normalizeItem({
     id:'v945', type:'activity', title:'Circuit Costa Rica',
@@ -16,9 +17,9 @@ function render(outside, notes) {
 const plain = (t) => C.metrics.plain(t.paras);
 test('T9, T10 et prix extérieur sur la dernière ligne, sans débordement', () => {
   const s=render('3000');
-  const tier=s.items.filter(x=>x.t==='text'&&x.field==='tarifs'&&/^T\d+\s/.test(plain(x)));
-  const t9=tier.find(x=>/^T9\s/.test(plain(x)));
-  const t10=tier.find(x=>/^T10\s/.test(plain(x)));
+  const tier=tiers(s,C.metrics);
+  const t9=tier.find(x=>x.label==='T9').labelNode;
+  const t10=tier.find(x=>x.label==='T10').labelNode;
   const ext=s.items.find(x=>x.t==='text'&&x.field==='tarifs'&&plain(x).includes('Extérieur'));
   const box=s.items.find(x=>x.t==='rect'&&x.fill==='#F8F6FE');
   assert.ok(box&&t9&&t10&&ext);

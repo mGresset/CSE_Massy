@@ -7,6 +7,7 @@ const C = loadExport(null);
 const M = C.model, T = C.templates, Mx = C.metrics;
 const REF = '2026-11-09';
 const JSZip = globalThis.JSZip;
+const { tiers } = require('./lib/price-grid');
 
 function project(items) { const p = M.blankProject(); p.items = items.map((o) => M.normalizeItem(Object.assign({ createdAt: '2026-09-01T00:00:00.000Z' }, o))); return p; }
 function render(p, id, extra) { return T.renderPage(M.blankPage('item', Object.assign({ itemId: id }, extra || {})), p, M.blankIssue(REF)); }
@@ -34,7 +35,7 @@ test('1. Tarifs : bandeau compact, absent ou prix unique ; le texte reprend la p
   const band = g.items.find((i) => i.t === 'rect' && i.fill === '#F8F6FE');
   assert.ok(band && band.h <= 100, 'bandeau tarifs ≤ 100 px (' + (band && band.h) + ')');
   assert.ok(band.w * band.h < 1200 * 675 * 0.12, 'bandeau tarifs < 12 % de la diapositive');
-  ['T1', 'T10'].forEach((t) => assert.ok(new RegExp(t + '\\u00a0').test(texts(g))));
+  ['T1', 'T10'].forEach((t) => assert.ok(tiers(g, Mx).some(x => x.label === t && /€/.test(x.amount))));
   assert.ok(/Extérieur : 2 400 €/.test(texts(g)));
   assert.ok(!n.items.some((i) => i.fill === '#F8F6FE'), 'aucune zone tarifs réservée');
   const boxArea = (s) => body(s).reduce((a, t) => a + t.w * t.h, 0);

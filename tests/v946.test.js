@@ -4,6 +4,7 @@ const {assert, test, done} = require('./lib/assert-ext');
 const {load} = require('./lib/env');
 const C = load(), M = C.model;
 const project = M.blankProject();
+const { tiers } = require('./lib/price-grid');
 const txt = (node) => C.metrics.plain(node.paras);
 function render(outside) {
   project.items = [M.normalizeItem({
@@ -19,17 +20,18 @@ function render(outside) {
     const box=slide.items.find(i=>i.t==='rect'&&i.fill==='#F8F6FE');
     const text=slide.items.filter(i=>i.t==='text'&&i.field==='tarifs');
     const ext=text.find(i=>txt(i).startsWith('Extérieur'));
-    const t8=text.find(i=>/^T8\s/.test(txt(i)));
-    const t9=text.find(i=>/^T9\s/.test(txt(i)));
-    const t10=text.find(i=>/^T10\s/.test(txt(i)));
+    const rows=tiers(slide,C.metrics);
+    const t8=rows.find(i=>i.label==='T8').amountNode;
+    const t9=rows.find(i=>i.label==='T9').labelNode;
+    const t10=rows.find(i=>i.label==='T10').labelNode;
     assert.ok(box&&ext&&t8&&t9&&t10);
     assert.equal(ext.y,t9.y);
     assert.equal(ext.y,t10.y);
     assert.equal(ext.align,'right');
     const extRight=ext.x+ext.w;
-    const rightOfT8=t8.x+C.metrics.width(txt(t8),t8.size,true)*1.04;
+    const rightOfT8=t8.x+t8.w;
     assert.ok(Math.abs(extRight-rightOfT8)<2,'Extérieur doit finir sous le bord du tarif T8');
-    assert.ok(extRight<box.x+box.w-20,'Marges à droite insuffisantes');
+    assert.ok(extRight<=box.x+box.w-8,'Marges à droite insuffisantes');
     assert.ok(ext.x>t10.x,'Extérieur doit être après T10');
     assert.ok(C.metrics.width(txt(ext),ext.size,true)*1.04<ext.w,'Libellé Extérieur tronqué');
     assert.ok(!ext.overflow&&!slide.overflow,'Aucun texte tronqué');

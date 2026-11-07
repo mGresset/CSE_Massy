@@ -52,7 +52,7 @@
     return { cover: 'Couverture', news: (pg.opts && pg.opts.title) || 'Nouveautés', last: (pg.opts && pg.opts.title) || 'Dernières chances', upcoming: (pg.opts && pg.opts.title) || 'Programme à venir' }[pg.kind] || pg.kind;
   };
   App.notesFor = function (pg, it, s) {
-    var lines = ['CSE Studio V9.5 · ' + (C.templates.TEMPLATES.find(function (t) { return t.id === s.templateId; }) || { name: s.templateId }).name];
+    var lines = ['CSE Studio V9.6 · ' + (C.templates.TEMPLATES.find(function (t) { return t.id === s.templateId; }) || { name: s.templateId }).name];
     if (it) lines.push('Fiche : ' + App.pageLabel(pg) + (it.regEnd ? ' · inscriptions jusqu’au ' + C.dates.fmtLong(it.regEnd) : ''));
     var link = it ? C.compose.linkOf(it, App.p().settings) : '';
     if (link) lines.push('Lien : ' + link);
@@ -180,7 +180,7 @@
     currentView = view;
     try { view.render(el, parts.slice(1)); }
     catch (e) { console.error(e); el.appendChild(h('div', { class: 'alert error' }, 'Erreur d’affichage : ' + e.message)); }
-    document.title = (view.title || 'CSE Studio') + ' · CSE Studio V9.5';
+    document.title = (view.title || 'CSE Studio') + ' · CSE Studio V9.6';
     el.focus({ preventScroll: true });
   }
   App.refresh = function () { route(); };

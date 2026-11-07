@@ -289,3 +289,74 @@ button:disabled{opacity:.48;cursor:not-allowed}
 @media(max-width:900px){.workflow{grid-template-columns:1fr}.workflow-step{padding:10px 12px}}
 @media(max-width:860px){.pages{max-height:410px}.pg{grid-template-columns:20px 80px minmax(0,1fr) auto}.pg .mini{width:80px}}
 @media(prefers-reduced-motion:reduce){.workflow-step{transition:none}.workflow-step:hover{transform:none}}
+
+/* V9.6 — harmonisation des écrans de production du MEL.
+   Styles applicatifs uniquement : aucune géométrie des slides exportées n'est altérée. */
+:root{--radius:14px;--shadow:0 1px 2px rgba(21,42,83,.04),0 6px 20px rgba(21,42,83,.045)}
+.app-main{padding-top:22px}
+.page-head{padding-bottom:14px;border-bottom:1px solid #E4E9F2}
+.page-head h1{letter-spacing:-.55px;line-height:1.18}
+.page-head .lead{margin:5px 0 0;line-height:1.48}
+.card{padding:18px}
+.card h2{line-height:1.25}
+.field{gap:6px;margin-bottom:14px}
+.field>label,.field>.label{font-size:13.5px}
+.field small,.help{line-height:1.45}
+.btn{transition:background-color .12s ease,border-color .12s ease,box-shadow .12s ease}
+.btn:active:not(:disabled){box-shadow:inset 0 1px 3px rgba(20,35,70,.12)}
+.steps{gap:6px;margin-bottom:16px}
+.steps button{padding:8px 12px;background:#FAFCFF;border-color:#DCE4F0}
+.steps button[aria-selected="true"]{box-shadow:0 2px 8px rgba(28,52,116,.17)}
+.steps button .n{background:#E8EEF8;color:var(--navy)}
+.steps button[aria-selected="true"] .n{background:rgba(255,255,255,.18);color:#fff}
+.preview-tools{padding-top:4px}
+.preview-tools .btn{min-height:40px}
+.preview-col>.card{border-color:#D7E0EF}
+.readability{border:1px solid rgba(0,0,0,.045)}
+.chip.last{background:#FFF1E5;color:#A75B2C}
+.chip.new{background:#EAF5ED;color:#3E7657}
+.fcard{border-color:#DBE3F0;transition:border-color .14s ease,box-shadow .14s ease}
+.fcard:hover{border-color:#B9CBE5;box-shadow:0 2px 4px rgba(20,35,70,.05),0 9px 24px rgba(20,35,70,.08)}
+.fcard .body{padding:13px 14px 10px;gap:8px}
+.fcard .body h3{font-size:16px}
+.fcard .actions{padding:0 14px 14px}
+.pg{min-height:70px;gap:10px;padding:8px;border-color:#E0E7F0;transition:background-color .12s ease,border-color .12s ease}
+.pg:hover{background:#F8FAFE}
+.pg.active{border-color:#6B8AC8;background:#F5F8FE;box-shadow:0 0 0 2px rgba(47,93,168,.12)}
+.pg .txt b{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.3}
+.pg .txt small{margin-top:3px}
+.pg .ops button{min-height:27px;min-width:27px}
+.pages .section-heading{background:#F0F4FB;border-left-width:4px;margin-top:18px}
+.pages .section-heading:first-child{margin-top:0}
+.mel-review{line-height:1.5}
+.cal-range{background:#FBFCFF}
+.cal-editor button:hover:not(.out){border-color:#6E90C7;box-shadow:inset 0 0 0 1px #A6BBDA}
+.cal-editor button:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+@media(max-width:960px){
+  .appbar{gap:10px;padding:0 12px}
+  .mainnav a{padding:8px 9px}
+  .appbar-right .save-status{max-width:130px;overflow:hidden;text-overflow:ellipsis}
+  .card{padding:14px}
+}
+@media(max-width:620px){
+  .app-main{padding:12px 10px 28px}
+  .brand-text small{display:none}
+  .brand-text strong{font-size:14px}
+  .brand-mark{width:34px;height:34px}
+  .appbar{height:58px}
+  .toolbar .field{width:100%;min-width:0}
+  .btn-group{gap:5px}
+  .page-head .btn-group .btn{white-space:normal}
+  .editor{grid-template-columns:minmax(0,1fr)}
+  .steps button{padding:7px 10px}
+  .composer{grid-template-columns:minmax(0,1fr)}
+  .composer .opts-col{grid-column:auto}
+  .pg{grid-template-columns:20px 72px minmax(0,1fr) auto;gap:6px}
+  .pg .mini{width:72px}
+  .pg .ops{grid-template-columns:repeat(2,25px)}
+  .rates{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cat-row{grid-template-columns:26px 38px minmax(0,1fr) auto}
+}
+@media(prefers-reduced-motion:reduce){
+  .btn,.fcard,.pg{transition:none}
+}

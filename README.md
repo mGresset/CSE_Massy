@@ -1,3 +1,13 @@
+# CSE Studio V9.6 — Finition visuelle et fiabilisation
+
+**Version actuelle : 9.6 (7 novembre 2026).** Application statique à publier sur GitHub Pages, sans changement de structure des sauvegardes V9.5.2.
+
+Les **20 suites de tests** passent. Les améliorations comprennent l'alignement des tranches, la suppression des doublons de dates, l'équilibrage des fiches sans photo et partenaires, des pages de planning plus lisibles, ainsi que des corrections de pagination pour les règlements volumineux.
+
+Voir **[MISE_A_JOUR_V9_6.md](MISE_A_JOUR_V9_6.md)** pour la liste des changements et la procédure de mise à jour. L'accès à Canva reste manuel par export PowerPoint ; aucune insertion automatique n'est revendiquée.
+
+---
+
 
 ## V9.5.2
 - Affinage visuel du cartouche Tarifs CSE : alignement colonne par colonne et barre violette corrigée.
@@ -6,7 +16,7 @@ n## V9.5.1
 
 # CSE Studio V9.5 — Éditeur d'activités et compositeur du MEL
 
-**Version actuelle : 9.5 (7 novembre 2026).** Application statique pour GitHub Pages : bibliothèque d'activités réutilisables, composition des MEL selon dix rubriques fixes, retouches propres à un MEL, treize modèles, tarifs CSE facultatifs T1 à T10, export PowerPoint modifiable et sauvegardes JSON.
+**Historique : V9.5 (7 novembre 2026).** Application statique pour GitHub Pages : bibliothèque d'activités réutilisables, composition des MEL selon dix rubriques fixes, retouches propres à un MEL, treize modèles, tarifs CSE facultatifs T1 à T10, export PowerPoint modifiable et sauvegardes JSON.
 
 Cette version améliore la fiabilité, la navigation et les contrôles avant export sans modifier les données enregistrées. Voir **[MISE_A_JOUR_V9_5.md](MISE_A_JOUR_V9_5.md)** pour les changements, les tests et l'installation.
 

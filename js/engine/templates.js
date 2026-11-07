@@ -64,7 +64,13 @@
     if (times.length) parts.push(times.length === 2 ? times[0] + ' – ' + times[1] : 'à ' + times[0]);
     if (hasText(it.location)) parts.push(it.location.trim());
     var line = parts.join(' · ');
-    if (hasText(it.subtitle)) line = line ? line + ' — ' + it.subtitle.trim() : it.subtitle.trim();
+    if (hasText(it.subtitle)) {
+      var subtitle = it.subtitle.trim();
+      // Éviter « Du 15 au 20 février — Du 15 au 20 février » lorsque le sous-titre
+      // répète déjà exactement la période remplie dans les champs de date.
+      var normalized = function (v) { return String(v || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr'); };
+      if (!range || normalized(subtitle) !== normalized(range)) line = line ? line + ' — ' + subtitle : subtitle;
+    }
     return line;
   }
   var EMAIL_RE = /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[A-Za-z]{2,}$/;
@@ -279,7 +285,7 @@
     var asideMode = rows.length >= 3 ? 'column' : rows.length ? 'strip' : 'none';
     var asideW = asideMode === 'column' ? 240 : 0;
     var plainLen = Mx().plain(paras).length;
-    var photoOpts = photos.length ? [200, 250, 300, 360, 420] : (plainLen < 420 && pr.kind !== 'grid' ? [-300, 0] : [0]);
+    var photoOpts = photos.length ? [200, 250, 300, 360, 420] : (plainLen < 560 ? [-280, 0] : [0]);
     function geometry(pw, cols) {
       var x0 = 40, right = 1160 - (asideW ? asideW + gap : 0);
       var stripH = asideMode === 'strip' ? 46 + 12 : 0;
@@ -562,7 +568,16 @@
     var lx = 40, lw = 390, top = 196, bottom = 592;
     b.rect(lx, top, lw, photos[1] ? 250 : bottom - top - 50, { fill: C.white, stroke: C.border, r: 14 });
     if (photos[0]) b.image(photos[0], lx + 14, top + 14, lw - 28, (photos[1] ? 250 : bottom - top - 50) - 28, { fit: 'contain' });
-    else b.text(it.title || 'Partenaire', lx + 20, top + 20, lw - 40, (photos[1] ? 250 : bottom - top - 50) - 40, { size: 36, min: 16, bold: true, color: C.purple, align: 'center', valign: 'middle', role: 'deco', noScale: true, maxLines: 3 });
+    else {
+      // En l'absence de logo, ne pas répéter le titre en très grand :
+      // pictogramme et signature de partenariat discrète, exportables en vectoriel.
+      var photoH = (photos[1] ? 250 : bottom - top - 50) - 28;
+      b.rect(lx + 14, top + 14, lw - 28, photoH, { fill: C.lighter, r: 12 });
+      var iconY = top + 14 + (photoH - 110) / 2;
+      b.glyph(CSE.icons ? CSE.icons.iconFor(ctx.cat || { name: 'Partenaire' }) : 'star', lx + (lw - 76) / 2, iconY, 76, C.purple);
+      b.text('AVANTAGE PARTENAIRE', lx + 30, iconY + 78, lw - 60, 26,
+        { size: 14, min: 12, bold: true, color: C.blue, align: 'center', valign: 'middle', role: 'label', noScale: true, maxLines: 1 });
+    }
     if (photos[1]) b.photo(photos[1], lx, top + 262, lw, bottom - top - 262 - 50);
     b.statusLabel('new', 'Partenaire CSE', lx + 12, bottom - 38, { size: 13, h: 26 });
     var rx = 1160;
@@ -574,6 +589,14 @@
     y += 6;
     var w2 = 1160 - x;
     var hasAmount = hasText(pa.amount);
+    // Une fiche partenaire très courte ne doit pas laisser une grande plage vide
+    // sous l'offre : centrer modérément l'ensemble offre / code / échéance.
+    var hasLongBody = bodyParas(ctx).length > 0;
+    if (!hasLongBody && (hasText(pa.offer) || hasAmount)) {
+      var reserved = (hasAmount ? 124 : 85) + 12 + ((hasText(pa.code) || pa.validUntil || it.regEnd) ? 54 : 0);
+      var spare = 590 - y - reserved;
+      if (spare > 70) y += Math.min(78, Math.round(spare * 0.38));
+    }
     if (hasText(pa.offer) || hasAmount) {
       var offerParas = rich(pa.offer || '', { bold: true });
       var ow = w2 - (hasAmount ? 150 : 0) - 36;
@@ -583,7 +606,11 @@
         b.ellipse(x + 16, y + oh / 2 - 56, 112, 112, { fill: C.purple });
         b.text(pa.amount, x + 22, y + oh / 2 - 56, 100, 112, { size: 32, min: 14, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 2, role: 'deco', noScale: true, field: 'remise' });
       }
-      if (offerParas.length) b.text(offerParas, x + (hasAmount ? 150 : 18), y + 12, ow, oh - 24, { size: 27, min: 15, bold: true, color: C.purple, valign: 'middle', field: 'offre', noScale: true });
+      if (offerParas.length) {
+        var offerSize = Mx().plain(offerParas).length <= 110 ? 30 : 25;
+        b.text(offerParas, x + (hasAmount ? 150 : 18), y + 12, ow, oh - 24,
+          { size: offerSize, min: 15, bold: true, color: C.purple, valign: 'middle', field: 'offre', noScale: true });
+      }
       y += oh + 12;
     }
     var rowH = 0, rx2 = x;
@@ -749,7 +776,7 @@
     var chosen = null;
     for (var s = maxS; s >= minS; s -= 0.5) { if (!flow(paras, [{ w: cw, h: colH }, { w: cw, h: colH }], s).rest.length) { chosen = s; break; } }
     var size = chosen || Math.max(minS, 15 * probe.scale);
-    while (rest.length && guard++ < 8) {
+    while (rest.length && guard++ < 60) {
       var part = slides.length;
       var b = new (L().Builder)(nth(ctx, part));
       b.banner();
@@ -778,7 +805,7 @@
       slides.push(b.result({ part: part + 1 }));
       if (!f.chunks.some(function (c) { return c.length; })) break;
     }
-    if (rest.length) slides[slides.length - 1].warnings.push({ level: 'block', msg: 'Règlement trop long : plus de 8 diapositives.' });
+    if (rest.length) slides[slides.length - 1].warnings.push({ level: 'block', msg: 'Règlement très long : la limite de sécurité des 60 diapositives est atteinte. Vérifier le contenu.' });
     if (slides.length > 1) slides[0].warnings.push({ level: 'info', msg: 'Règlement réparti automatiquement sur ' + slides.length + ' diapositives.' });
     return slides;
   }
@@ -1050,7 +1077,7 @@
         }
       } else {
         var left = rows.length - i, avail = bottom - y;
-        var rh2 = Math.max(36, Math.min(58, avail / left));
+        var rh2 = Math.max(46, Math.min(66, avail / left));
         var count = Math.floor((avail + 6) / rh2);
         var showCat = !cat && new Set(rows.map(function (r) { return r.type; })).size > 1;
         for (var k = 0; k < count && i < rows.length; k++, i++) {
@@ -1066,7 +1093,7 @@
           }
           var detail = [r2.location, r2.status].filter(hasText).join(' · ');
           var dw = detail ? Math.min(360, Mx().width(detail, 15, false) * 1.06 + 10) : 0;
-          b.text(r2.title, x2, y, 1150 - x2 - dw - 16, hh, { size: 20, min: 12, bold: true, color: C.navy, valign: 'middle', maxLines: 1, field: 'activité', noScale: true });
+          b.text(r2.title, x2, y, 1150 - x2 - dw - 16, hh, { size: 19, min: 14, bold: true, color: C.navy, valign: 'middle', maxLines: 2, field: 'activité', noScale: true });
           if (detail) b.text(detail, 1150 - dw, y, dw, hh, { size: 15, min: 11, color: C.muted, align: 'right', valign: 'middle', maxLines: 1, role: 'label', noScale: true });
           y += rh2;
         }
@@ -1074,7 +1101,8 @@
       if (note) b.text(note, 40, 594, 1120, 20, { size: 13, min: 10, color: C.muted, maxLines: 1, role: 'label', noScale: true, field: 'mention' });
       b.footer({ link: CO().validUrl(ctx.settings.portalUrl) ? ctx.settings.portalUrl : M().PORTAL, ctaLabel: 'Portail CSE', note: ctx.settings.footerNote });
       slides.push(b.result({ part: slides.length + 1 }));
-    } while (i < rows.length && guard++ < 10);
+    } while (i < rows.length && guard++ < 60);
+    if (i < rows.length) slides[slides.length - 1].warnings.push({ level: 'block', msg: 'Programme incomplet : limite de sécurité atteinte. Réduire les lignes ou fractionner le programme.' });
     if (slides.length > 1) slides[0].warnings.push({ level: 'info', msg: 'Programme réparti automatiquement sur ' + slides.length + ' diapositives.' });
     return slides;
   }

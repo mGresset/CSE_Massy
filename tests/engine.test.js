@@ -5,6 +5,7 @@ const { load } = require('./lib/env');
 const C = load();
 const M = C.model, T = C.templates;
 const REF = '2026-11-09';
+const { tiers } = require('./lib/price-grid');
 
 function inBounds(slide, label) {
   for (const it of slide.items) {
@@ -42,7 +43,7 @@ test('sans tarifs, le texte récupère la place ; avec T1–T10, tarifs lisibles
   const area = (s) => { const t = textItem(s, 'description'); return t.w * t.h; };
   assert.ok(area(noP) > area(withP) * 1.07, 'sans tarifs, la zone de texte récupère la place');
   assert.ok(withP.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 67), 'tarifs très compacts (≤ 67 px)');
-  assert.ok(/T1 720 €/.test(texts(withP)) && /T10 1 800 €/.test(texts(withP)), 'T1 et T10 affichés');
+  assert.ok(tiers(withP, C.metrics).some(x => x.label === 'T1' && /720/.test(x.amount)) && tiers(withP, C.metrics).some(x => x.label === 'T10' && /1\s*800/.test(x.amount.replace(/\u00a0/g, ' '))), 'T1 et T10 affichés');
   assert.ok(!/Tarifs CSE/i.test(texts(noP)), 'aucun bloc tarif');
   const priceTexts = withP.items.filter((i) => i.t === 'text' && i.field === 'tarifs');
   assert.ok(priceTexts.every((i) => i.size >= 11), 'tarifs ≥ 11 px (8,8 pt)');

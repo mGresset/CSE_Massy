@@ -4,6 +4,7 @@ const { assert, test, done } = require('./lib/assert-ext');
 const { load } = require('./lib/env');
 const C = load(), M = C.model;
 const project = M.blankProject();
+const { tiers } = require('./lib/price-grid');
 function render(pricing) {
   project.items = [M.normalizeItem({
     id: 'voyage-compact', type: 'activity', title: 'Circuit découverte au Costa Rica',
@@ -28,10 +29,10 @@ test('10 tranches : petit rectangle en bas à gauche, trois rangées et aucune t
   assert.ok(b.y >= 450, 'ancré en bas');
   assert.ok(b.h <= 67, 'hauteur compacte sans notes');
   assert.ok(b.y + b.h <= 590, 'la grille ne touche pas le pied de page');
-  const tiers = priceText(s).filter(x => /^T\d+\s/.test(C.metrics.plain(x.paras)));
-  assert.equal(tiers.length, 10, '10 tarifs affichés');
-  assert.equal(new Set(tiers.map(x => x.y)).size, 3, 'exactement trois rangées');
-  assert.ok(tiers.every(x => !x.overflow && x.size >= 11), 'montants lisibles et complets');
+  const rows = tiers(s, C.metrics);
+  assert.equal(rows.length, 10, '10 tarifs affichés');
+  assert.equal(new Set(rows.map(x => x.y)).size, 3, 'exactement trois rangées');
+  assert.ok(rows.every(x => x.amountNode && !x.labelNode.overflow && !x.amountNode.overflow && x.amountNode.size >= 11), 'montants lisibles et complets');
   assert.ok(!s.overflow, 'aucun texte hors cadre');
 });
 test('notes de tarifs, prix extérieur : toutes les informations sont préservées', () => {

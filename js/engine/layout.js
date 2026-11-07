@@ -279,13 +279,14 @@
       return Math.max(maxW, M().width(P.money(r.price), 12.1, true));
     }, 0) + 4;
     var cellGap = 6;
-    var cellW = Math.max(98, labelW + amountW + cellGap + 6);
+    var cellW = Math.max(103, labelW + amountW + cellGap + 14);
     var outsideNeed = outsideOnLastRow ? (M().width(outside, 12.4, true) * 1.03 + 12) / 2 : 0;
     if (outsideNeed > cellW) cellW = outsideNeed;
 
     var innerW = cellW * g.cols;
     var padL = 14, padR = 14;
     w = Math.min(w, padL + padR + innerW);
+    if (w < padL + padR + innerW - 2) this.warn('Tarifs exceptionnellement élevés : vérifiez leur lisibilité dans le cartouche.', 'warn', 'price-grid-width');
 
     this.rect(x, y, w, g.h, { fill: C.priceBg, stroke: C.priceBorder, r: 7 });
     // Barre violette plus équilibrée, avec marges haute et basse constantes.
@@ -300,7 +301,7 @@
       self.text([{ runs: [{ text: String(r.label || ''), bold: true, color: C.purple }] }], cx, cy, labelW, rowH,
         { size: 12.1, min: 11, color: C.purple, valign: 'middle', align: 'left', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
-      self.text(P.money(r.price), cx + labelW + cellGap, cy, cellW - labelW - cellGap - 2, rowH,
+      self.text(P.money(r.price), cx + labelW + cellGap, cy, cellW - labelW - cellGap - 14, rowH,
         { size: 12.1, min: 11, color: C.dark, bold: true, valign: 'middle', align: 'right', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
     }
@@ -322,7 +323,7 @@
     if (outside) {
       if (outsideOnLastRow) {
         var extX = gridX + 2 * cellW;
-        self.text(outside, extX, top + lastRow * rowH, 2 * cellW - 2, rowH,
+        self.text(outside, extX, top + lastRow * rowH, 2 * cellW - 14, rowH,
           { size: 12.4, min: 11.2, bold: true, color: C.muted, valign: 'middle', align: 'right', maxLines: 1,
             role: 'label', noScale: true, field: 'tarifs' });
       } else {
