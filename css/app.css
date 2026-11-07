@@ -444,3 +444,11 @@ button:disabled{opacity:.48;cursor:not-allowed}
 .final-cell figcaption{display:flex;align-items:center;gap:6px;font-size:12px;margin-top:5px}
 .final-cell figcaption .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .step-body{min-height:120px}
+
+/* V10 : liste des pages plus lisible dans la colonne étroite */
+.pages-col .pg{grid-template-columns:18px 76px minmax(0,1fr) auto;gap:7px;padding:6px}
+.pages-col .pg .mini{width:76px}
+.pages-col .pg .txt b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;font-size:12.5px}
+.pages-col .pg .ops{grid-template-columns:repeat(2,24px)}
+.photo .badge{max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.photo .badge.first{top:auto;bottom:auto;top:26px;left:4px;right:auto;background:var(--navy)}

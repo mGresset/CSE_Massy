@@ -1,4 +1,28 @@
-## CSE Studio V9.6.2
+# CSE Studio V10 — MEL hebdomadaire du CSE Thales LAS Massy
+
+**Version actuelle : V10 (7 novembre 2026).** Application statique pour GitHub Pages : bibliothèque de fiches, composition du MEL hebdomadaire en dix rubriques fixes, édition de toutes les diapositives, export PowerPoint modifiable (importable dans Canva), sauvegardes JSON avec photos. Les données V6 à V9.6.2 sont reprises sans perte.
+
+- **Site** : https://mgresset.github.io/CSE_Massy/ · **Compositeur** : https://mgresset.github.io/CSE_Massy/mel.html · **Démonstration sans enregistrement** : https://mgresset.github.io/CSE_Massy/?demo=1
+- **Nouveautés V10, guide bénévoles, documentation technique, rapport de tests, limites et retour arrière** : [MISE_A_JOUR_V10.md](MISE_A_JOUR_V10.md)
+- **Notes de version** : [NOTES-VERSION.md](NOTES-VERSION.md)
+
+| Chaque semaine | Où |
+|---|---|
+| Créer le MEL à partir de la semaine précédente (rien n'est ressaisi, le précédent reste intact) | *Mes MEL → Nouveau MEL à partir de la semaine N* |
+| Corriger n'importe quelle diapositive, pour toutes les semaines ou pour cette semaine uniquement | *Composer le MEL* (clic sur l'aperçu → champ) |
+| Vérifier photos, textes, validations et ordre | *✓ Contrôle final* |
+| Exporter `CSE_MEL_AAAA_Semaine_NN.pptx` puis l'importer dans Canva | *↓ Exporter le MEL* · *↗ Ouvrir Canva* |
+| Figer le MEL diffusé | Statut *Publié (figé)* |
+
+![MEL témoin V10 (33 diapositives fictives, rendu PowerPoint)](docs/v10-mel-temoin-planche.jpg)
+
+Tests : `node tests/run.js` (23 fichiers) · parcours navigateur : `node tests/e2e/ui-check.js` · MEL témoin : `node tests/export-v10-demo.js`.
+
+---
+
+## Historique (V9.x)
+
+### CSE Studio V9.6.2
 
 Corrections du rendu des images dans les PowerPoint et finitions graphiques des fiches activités. Voir `MISE_A_JOUR_V9_6_2.md`.
 

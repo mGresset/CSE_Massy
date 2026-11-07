@@ -1,5 +1,33 @@
 # Notes de version
 
+## V10 — Version de référence pour le MEL hebdomadaire (7 novembre 2026)
+
+Voir [MISE_A_JOUR_V10.md](MISE_A_JOUR_V10.md) pour le détail, le guide bénévoles, la documentation technique, le rapport de tests et le retour arrière.
+
+- **Réemploi hebdomadaire** : « Mes MEL » (recherche, statuts brouillon → publié figé → archivé) ; dupliquer vers la semaine suivante avec rapport de différences ; MEL publié figé par instantané ; nouveautés non réannoncées au-delà de N semaines ; actualisation non destructive.
+- **Édition de toutes les diapositives** : compositeur 3 zones ; clic sur l'aperçu → champ ; portée « fiche source » ou « cette semaine uniquement » sur tous les champs, avec repères et retour à la fiche par champ ; couverture, mosaïques (ordre des cartes), programmes et règlement modifiables ; annuler / rétablir.
+- **Mise en page** :
+  - cartouche T1–T10 à géométrie calculée (colonnes et € alignés, 10,8 pt, filet intérieur, supplément intégré sans troncature) ;
+  - compositions comparées et suites seulement sous 12 pt (coupe logique, nombre minimal de diapositives, suites équilibrées) ;
+  - demi-ligne entre paragraphes ;
+  - partenaire agrandi et centré ;
+  - programmes à 10 lignes par diapositive ;
+  - contrôles géométriques automatiques ;
+  - densité Compacte (11 pt) proposée quand elle suffit.
+- **Images** :
+  - état prête / non importée / introuvable ;
+  - diagnostic CORS, 404, page HTML ou faux fichier ;
+  - contrôle du contenu réel ;
+  - cadrage par point focal et texte alternatif ;
+  - export bloqué ou recomposé sans les photos sur choix explicite ;
+  - vérification de `ppt/media` ;
+  - nettoyage des images orphelines, sans toucher celles des MEL publiés.
+- **Tests** :
+  - `node tests/run.js` : 23 fichiers réussis, dont `v10.test.js` (29 vérifications, MEL de 70 diapositives) ;
+  - `tests/e2e/ui-check.js` : 12 parcours dans Edge réussis ;
+  - MEL témoin de 33 diapositives : `docs/demo/`.
+
+
 ## V9.5 — Fiabilité et ergonomie du compositeur (7 novembre 2026)
 
 Voir [MISE_A_JOUR_V9_5.md](MISE_A_JOUR_V9_5.md) : déplacement des pages, sélection manuelle stable, contrôles avant export, sauvegarde dans le MEL, chargement des images avant PDF, liens sécurisés, guidage des bénévoles et 19 suites de tests réussies.

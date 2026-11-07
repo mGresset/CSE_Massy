@@ -64,10 +64,13 @@
         document.body.replaceChildren();
         var host = document.createElement('div'); host.style.cssText = 'position:relative;width:1200px;height:675px;overflow:hidden';
         document.body.appendChild(host);
-        C.renderHTML.render(all[only - 1], host, { checkOverflow: false });
-        host.querySelector('.cse-slide').classList.add('cse-print');
-        window.__ready = true;
-        return;
+        // Capture déterministe : toutes les images de la diapositive sont décodées AVANT le rendu.
+        var srcs = all[only - 1].items.filter(function (i) { return i.t === 'image'; }).map(function (i) { return C.renderHTML.resolve(i.src); }).filter(Boolean);
+        return Promise.all(srcs.map(function (s) { var im = new Image(); im.src = s; return (im.decode ? im.decode() : Promise.resolve()).catch(function () {}); })).then(function () {
+          C.renderHTML.render(all[only - 1], host, { checkOverflow: false });
+          host.querySelector('.cse-slide').classList.add('cse-print');
+          return Promise.all(Array.prototype.map.call(host.querySelectorAll('img'), function (im) { return im.decode ? im.decode().catch(function () {}) : null; }));
+        }).then(function () { window.__ready = true; });
       }
       var grid = document.getElementById('grid'); grid.replaceChildren();
       var n = 0;

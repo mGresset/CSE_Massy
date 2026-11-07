@@ -363,7 +363,8 @@
             delete draft.overridden;
             currentDraft = { page: pg, item: draft };
             var n = Object.keys((pg.opts && pg.opts.override) || {}).length;
-            card.appendChild(h('div', { class: 'scope-banner scope-page' }, h('b', {}, 'Modification de cette diapositive uniquement'), ' (MEL semaine ' + issue.week + ') : la fiche de la bibliothèque et les autres MEL ne changent pas. ' + (n ? n + ' champ(s) personnalisé(s), marqués « cette semaine ».' : 'Aucun champ personnalisé pour l’instant.'),
+            var countEl = h('span', {}, n ? n + ' champ(s) personnalisé(s), marqués « cette semaine ».' : 'Aucun champ personnalisé pour l’instant.');
+            card.appendChild(h('div', { class: 'scope-banner scope-page' }, h('b', {}, 'Modification de cette diapositive uniquement'), ' (MEL semaine ' + issue.week + ') : la fiche de la bibliothèque et les autres MEL ne changent pas. ', countEl,
               n ? h('button', { class: 'btn small', type: 'button', onclick: function () {
                 ui.confirm('Annuler la personnalisation', 'Tous les champs personnalisés de cette page reprendront les valeurs de la fiche « ' + src.title + ' ».', 'Annuler la personnalisation', true).then(function (ok) {
                   if (!ok) return; C.compose.resetOverride(pg); App.save('issues'); drawOptions(); pageChanged(pg, true); ui.toast('Personnalisation annulée : la page suit à nouveau la fiche.', 'ok');
@@ -372,7 +373,7 @@
             card.appendChild(host);
             formApi = App.itemForm.mount(host, draft, {
               project: App.p(), scope: 'page',
-              touch: function () { C.compose.setOverrides(pg, src, draft); App.save('issues'); },
+              touch: function () { var ov = C.compose.setOverrides(pg, src, draft); App.save('issues'); var k = Object.keys(ov).length; countEl.textContent = k ? k + ' champ(s) personnalisé(s), marqués « cette semaine ».' : 'Aucun champ personnalisé pour l’instant.'; },
               render: function () { pageChanged(pg); },
               isOverridden: function (key) { return !!(pg.opts && pg.opts.useOverrides && pg.opts.override && Object.prototype.hasOwnProperty.call(pg.opts.override, key)); },
               resetField: function (key) { C.compose.resetOverride(pg, key); draft[key] = JSON.parse(JSON.stringify(src[key] === undefined ? null : src[key])); App.save('issues'); pageChanged(pg, true); }

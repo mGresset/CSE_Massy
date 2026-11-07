@@ -364,7 +364,7 @@
               changedPhotos();
             });
           }
-          var fitSel = ui.selectEl([{ id: 'cover', label: 'Remplir le cadre (recadrage)' }, { id: 'contain', label: 'Image entière (sans recadrage)' }], m.fit || 'cover', { 'aria-label': 'Cadrage de la photo ' + (i + 1) });
+          var fitSel = ui.selectEl([{ id: 'cover', label: 'Recadrer' }, { id: 'contain', label: 'Image entière' }], m.fit || 'cover', { 'aria-label': 'Cadrage de la photo ' + (i + 1), title: 'Recadrer : remplit le cadre (cliquez sur l’image pour choisir la zone gardée). Image entière : sans recadrage.' });
           fitSel.addEventListener('change', function () { meta(ref).fit = fitSel.value; changedPhotos(); });
           var alt = h('input', { value: m.alt || '', placeholder: 'Texte alternatif (facultatif)', 'aria-label': 'Texte alternatif de la photo ' + (i + 1), maxlength: 200 });
           alt.addEventListener('change', function () { meta(ref).alt = alt.value.trim(); ctx.touch(); });
@@ -376,7 +376,7 @@
             st === 'remote' ? h('a', { class: 'btn small', href: ref, target: '_blank', rel: 'noopener noreferrer' }, 'Ouvrir l’URL') : null);
           list.appendChild(h('div', { class: 'photo' + (st === 'ready' ? '' : ' bad') },
             img,
-            h('span', { class: 'badge st-' + st }, (st === 'ready' ? '✓ ' : '⚠ ') + STATUS_LABEL[st]),
+            h('span', { class: 'badge st-' + st, title: STATUS_LABEL[st] }, st === 'ready' ? '✓ Prête' : st === 'remote' ? '⚠ Non importée' : '⚠ Introuvable'),
             i === 0 ? h('span', { class: 'badge first' }, it.type === 'partner' ? 'Logo' : 'Principale') : null,
             h('div', { class: 'tools' },
               i > 0 ? h('button', { type: 'button', 'aria-label': 'Placer en premier', title: 'Placer en premier', onclick: function () { it.photos.splice(i, 1); it.photos.unshift(ref); changedPhotos(); } }, '★') : null,

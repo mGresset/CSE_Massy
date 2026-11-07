@@ -424,7 +424,8 @@
       var cw = Math.min(INFO.maxCard, (w - INFO.gap * (cols - 1)) / cols);
       if (cw < 150 && cols > 1) continue;
       var lines = rows.map(function (r) { return M().countLines(M().toParas(cardValue(r, cw), { bold: true }), cw - 2 * INFO.padX, INFO.value); });
-      var fits = lines.every(function (l) { return l <= 2; });
+      var labelsFit = rows.every(function (r) { return M().width(String(r.label).toLocaleUpperCase('fr'), 11, true) * M().SAFETY + 2 * INFO.padX <= cw; });
+      var fits = labelsFit && lines.every(function (l) { return l <= 2; });
       var nr = Math.ceil(n / cols), rowH = [];
       for (var k = 0; k < nr; k++) rowH.push(INFO.padY * 2 + 17 + Math.min(2, Math.max.apply(null, lines.slice(k * cols, k * cols + cols))) * INFO.value * 1.2);
       var h = rowH.reduce(function (a, b) { return a + b; }, 0) + INFO.gap * (nr - 1);

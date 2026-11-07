@@ -285,11 +285,35 @@
     var out = [], guard = 0, C = L().C;
     var photos = (ctx.item.photos || []).filter(Boolean);
     var visual = photos.length > 1 ? photos[photos.length - 1] : null;
+    // Plusieurs suites nécessaires : texte réparti à parts égales (même taille, même hauteur de colonnes),
+    // au lieu d'une dernière diapositive presque vide.
+    var probe = new (L().Builder)(nth(ctx, firstIndex, { part: firstIndex + 1 }));
+    var ctop = itemHeader(probe, nth(ctx, firstIndex, { part: firstIndex + 1 }), { dateLine: '', noStatus: true }), cbottom = L().T.bodyBottom;
+    var RR = sizeRange(probe);
+    var full = columns(40, ctop, 1120, cbottom - ctop - 22, 2, 28);
+    var pagesAt = function (sz, hgt) { var n = 0, r = rest, bx = full.map(function (x) { return Object.assign({}, x, { h: hgt }); }); while (r.length && n < 9) { r = flow(r, bx, sz).rest; n++; } return r.length ? 99 : n; };
+    var need = pagesAt(RR.min, full[0].h), balanced = null;
+    if (need >= 2 && need < 9) {
+      var bs = RR.min;
+      for (var sz = Math.max(RR.max, 20); sz >= RR.min; sz -= 0.5) if (pagesAt(sz, full[0].h) === need) { bs = sz; break; }
+      var lo = bs * 1.2 * 3, hi = full[0].h;
+      for (var it2 = 0; it2 < 12; it2++) { var mid = (lo + hi) / 2; if (pagesAt(bs, mid) <= need) hi = mid; else lo = mid; }
+      balanced = { s: bs, h: Math.ceil(hi) + 2 };
+    }
     while (rest.length && guard++ < 8) {
       var cctx = nth(ctx, firstIndex + out.length, { part: firstIndex + out.length + 1 });
       var b = new (L().Builder)(cctx);
       var top = itemHeader(b, cctx, { dateLine: '', noStatus: true }), bottom = L().T.bodyBottom;
       var R = sizeRange(b), best = null;
+      if (balanced) {
+        // Pages équilibrées : 2 colonnes, même taille et même hauteur utile sur chaque suite.
+        var bb = full.map(function (x) { return Object.assign({}, x, { y: top, h: balanced.h }); });
+        rest = drawFlow(b, rest, bb, balanced.s, 'suite de la description');
+        if (rest.length) b.text('Suite page suivante →', 760, bottom - 18, 400, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+        itemFooter(b, cctx);
+        out.push(b.result({ part: firstIndex + out.length + 1 }));
+        continue;
+      }
       [[0, 2], [0, 1], [300, 1], [300, 2]].forEach(function (o) {
         var pw = o[0], cols = o[1], tx = 40 + (pw ? pw + 20 : 0), tw = 1160 - tx;
         if (cols === 2 && tw < 600) return;
@@ -468,7 +492,23 @@
         if (!bestSplit || sc > bestSplit.sc) bestSplit = { c: c, sc: sc, s1: s1 };
       });
       gm = bestSplit ? bestSplit.c : { boxes: columns(x0, top, 1120, bottom - top, 2, 28), top: top, bodyBottom: bottom, cols: 2, pw: 0 };
-      if (bestSplit && bestSplit.s1 !== null) { s = bestSplit.s1; gm.headingSplit = { first: firstPart, rest: paras.slice(hIdx) }; }
+      // Nombre total de diapositives minimal : estimation des suites (2 colonnes pleine page au corps minimal).
+      var contPages = function (restParas) {
+        var n = 0, r = restParas, cb = columns(40, 262, 1120, 590 - 262 - 22, 2, 28);
+        while (r.length && n < 9) { r = flow(r, cb, R.min).rest; n++; }
+        return n;
+      };
+      var firstBoxes = gm.boxes.map(function (x) { return Object.assign({}, x); });
+      firstBoxes[firstBoxes.length - 1].h -= 22;
+      var plan = null;
+      if (bestSplit && bestSplit.s1 !== null) plan = { pages: 1 + contPages(paras.slice(hIdx)), s: bestSplit.s1, heading: true };
+      // Coupe classique : taille de la 1re diapositive entre 17 et le minimum, au nombre de diapositives le plus faible.
+      for (var sz = Math.min(R.max, 17); sz >= R.min - 0.001; sz -= 0.5) {
+        var pages = 1 + contPages(flow(paras, firstBoxes, sz).rest);
+        if (!plan || pages < plan.pages) plan = { pages: pages, s: sz, heading: false };
+      }
+      s = plan.s;
+      if (plan.heading) gm.headingSplit = { first: firstPart, rest: paras.slice(hIdx) };
     }
     if (gm.photo && gm.pw > 0) photoStack(b, photos, gm.photo.x, gm.photo.y, gm.photo.w, gm.photo.h, color);
     else if (gm.photo && gm.pw < 0) decoPanel(b, ctx, gm.photo.x, gm.photo.y, gm.photo.w, gm.photo.h);
