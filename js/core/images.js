@@ -6,6 +6,7 @@
   var mod = factory(root.CSE || {});
   root.CSE = root.CSE || {};
   root.CSE.images = mod;
+  if (typeof module === 'object' && module.exports) module.exports = mod;
 })(typeof window !== 'undefined' ? window : globalThis, function (CSE) {
   'use strict';
   var DB = 'cse-studio-massy-images', STORE = 'images';
@@ -78,7 +79,8 @@
   /** Images réellement utilisées par un projet. */
   function refsOf(project) {
     var set = {};
-    (project.items || []).forEach(function (it) { (it.photos || []).forEach(function (p) { if (/^img:/.test(p)) set[p] = 1; }); });
+    // Les fiches de la corbeille gardent leurs images : une restauration après sauvegarde ne doit rien perdre.
+    (project.items || []).concat((project.trash || []).map(function (t) { return t && t.item; }).filter(Boolean)).forEach(function (it) { (it.photos || []).forEach(function (p) { if (/^img:/.test(p)) set[p] = 1; }); });
     return Object.keys(set);
   }
   function exportMap(refs) { var o = {}; refs.forEach(function (r) { if (mem[r]) o[r] = mem[r]; }); return o; }
