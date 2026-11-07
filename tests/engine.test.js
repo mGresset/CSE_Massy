@@ -40,9 +40,10 @@ test('sans tarifs, le texte récupère la place ; avec T1–T10, tarifs lisibles
   const issue = M.blankIssue(REF);
   const withP = T.renderPage(M.blankPage('item', { itemId: 'a', template: 'classic' }), p, issue)[0];
   const noP = T.renderPage(M.blankPage('item', { itemId: 'b', template: 'classic' }), p, issue)[0];
-  const area = (s) => { const t = textItem(s, 'description'); return t.w * t.h; };
-  assert.ok(area(noP) > area(withP) * 1.07, 'sans tarifs, la zone de texte récupère la place');
-  assert.ok(withP.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 67), 'tarifs très compacts (≤ 67 px)');
+  // V10 : sans tarifs, la composition entière se recompose (texte et/ou photo plus grands).
+  const area = (s) => s.items.filter((i) => (i.t === 'text' && i.field === 'description') || (i.t === 'image' && i.role === 'photo')).reduce((n, i) => n + i.w * i.h, 0);
+  assert.ok(area(noP) > area(withP) * 1.07, 'sans tarifs, texte et photo récupèrent la place');
+  assert.ok(withP.items.some((i) => i.t === 'rect' && i.fill === '#F8F6FE' && i.h <= 92), 'tarifs compacts (≤ 92 px)');
   assert.ok(tiers(withP, C.metrics).some(x => x.label === 'T1' && /720/.test(x.amount)) && tiers(withP, C.metrics).some(x => x.label === 'T10' && /1\s*800/.test(x.amount.replace(/\u00a0/g, ' '))), 'T1 et T10 affichés');
   assert.ok(!/Tarifs CSE/i.test(texts(noP)), 'aucun bloc tarif');
   const priceTexts = withP.items.filter((i) => i.t === 'text' && i.field === 'tarifs');

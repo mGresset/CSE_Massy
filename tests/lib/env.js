@@ -51,6 +51,8 @@ function loadExport(canvasModulePath) {
     return 'data:image/' + mime + ';base64,' + buf.toString('base64');
   };
   if (canvasModulePath) {
+    // Canvas Node disponible : même recadrage que le navigateur (cover / contain / point focal).
+    delete CSE.env.prepareImage;
     const cv = require(canvasModulePath);
     CSE.env.createCanvas = (w, h) => cv.createCanvas(w, h);
     CSE.env.loadImage = (src) => cv.loadImage(src);

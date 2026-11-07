@@ -16,6 +16,7 @@
   var Mx = function () { return CSE.metrics; };
   var P = function () { return CSE.pricing; };
   var CO = function () { return CSE.compose; };
+  var M = function () { return CSE.model; };
 
   var TEMPLATES = [
     { id: 'cover', name: 'Couverture du MEL', family: 'Numéro', for: ['cover'], desc: 'Semaine, message important, dernières chances et nouveautés, alimentés automatiquement.' },
@@ -106,7 +107,7 @@
   function practicalRows(ctx, opts) {
     opts = opts || {};
     var it = ctx.item, cls = ctx.cls || {}, pr = ctx.prices, C = L().C, d = D(), rows = [];
-    if (it.regEnd && it.type !== 'partner' && !showLastBox(ctx)) rows.push({ label: 'Inscriptions jusqu’au', value: d.capital(d.fmtDay(it.regEnd)) });
+    if (it.regEnd && it.type !== 'partner' && !showLastBox(ctx)) rows.push({ label: 'Inscriptions jusqu’au', value: d.capital(d.fmtDay(it.regEnd)), short: d.fmtLong(it.regEnd) });
     if (cls.regLabel && it.regStatus !== 'auto' && it.regStatus !== 'open') rows.push({ label: 'Inscriptions', value: cls.regLabel, color: C.lastText });
     if (!opts.noPrice && pr && pr.kind === 'single') rows.push({ label: pr.rows[0].label + (pr.outside !== null ? ' · ext. ' + P().money(pr.outside) : ''), value: P().money(pr.rows[0].price), color: C.purple });
     if (it.minPart || it.maxPart) rows.push({ label: 'Participants', value: [it.minPart ? 'Min. ' + it.minPart : '', it.maxPart ? 'Max. ' + it.maxPart : ''].filter(Boolean).join(' · ') });
@@ -142,13 +143,14 @@
     var M = Mx(), chunks = boxes.map(function () { return []; }), q = paras.slice(), bi = 0, used = 0;
     lh = lh || M.LINE_HEIGHT;
     while (q.length && bi < boxes.length) {
-      var p = q.shift(), box = boxes[bi], cap = Math.floor((box.h + 0.5) / (size * lh));
+      var p = q.shift(), box = boxes[bi], cap = (box.h + 0.5) / (size * lh);
       var empty = M.isEmpty(p);
       if (empty && used === 0) continue;
-      var n = empty ? 1 : M.wrapPara(p, box.w, size).length;
-      if (p.heading && used + n >= cap && q.length) { bi++; used = 0; q.unshift(p); continue; }
-      if (used + n <= cap) { chunks[bi].push(p); used += n; continue; }
-      var room = cap - used;
+      var n = empty ? M.PARA_GAP : M.lineCount(p, box.w, size);
+      // Un intertitre ne reste jamais seul en bas de colonne : il part avec au moins 2 lignes.
+      if (p.heading && used + n + 2 > cap + 1e-6 && q.length && used > 0) { bi++; used = 0; q.unshift(p); continue; }
+      if (used + n <= cap + 1e-6) { chunks[bi].push(p); used += n; continue; }
+      var room = Math.floor(cap - used + 1e-6);
       // Pas de ligne isolée : au moins 2 lignes de chaque côté d'une coupure.
       var minPart = 2;
       if (!empty && room >= minPart && n - room >= minPart) {
@@ -230,8 +232,15 @@
   /* ---------- Moteur de composition adaptatif ---------- */
   /** Plus grande taille (≥ minimum lisible) pour laquelle tout le texte tient dans les zones ; null sinon. */
   function bestSize(paras, boxes, max, min) {
-    for (var s = max; s >= min - 0.001; s -= 0.5) { if (!flow(paras, boxes, s).rest.length) return Math.round(s * 10) / 10; }
-    return null;
+    // Recherche dichotomique sur une grille de 0,5 px (la capacité décroît avec la taille).
+    var fits = function (s) { return !flow(paras, boxes, s).rest.length; };
+    var n = Math.floor((max - min) / 0.5 + 1e-6);
+    if (fits(max)) return Math.round(max * 10) / 10;
+    if (!fits(min)) return null;
+    var val = function (k) { return k > n ? max : min + k * 0.5; };
+    var lo = 0, hi = n + 1; // val(lo) tient, val(hi) ne tient pas
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (fits(val(mid))) lo = mid; else hi = mid; }
+    return Math.round(val(lo) * 10) / 10;
   }
   function usedHeight(paras, boxes, s) {
     var f = flow(paras, boxes, s);
@@ -241,7 +250,8 @@
   function balance(paras, boxes, s) {
     if (boxes.length < 2) return boxes;
     if (flow(paras, boxes, s).rest.length) return boxes;
-    var lo = s * 1.2, hi = boxes[0].h;
+    var lo = s * 1.2, hi = Math.min.apply(null, boxes.map(function (bx) { return bx.h; }));
+    if (flow(paras, boxes.map(function (bx) { return Object.assign({}, bx, { h: hi }); }), s).rest.length) return boxes;
     for (var i = 0; i < 12; i++) {
       var mid = (lo + hi) / 2;
       var test = boxes.map(function (bx) { return Object.assign({}, bx, { h: mid }); });
@@ -260,137 +270,282 @@
     var cw = (w - gutter) / 2;
     return [{ x: x, y: y, w: cw, h: h }, { x: x + cw + gutter, y: y, w: cw, h: h }];
   }
-  function sizeRange(b) { var L_ = L(); return { max: b.density === 'airy' ? 22 : b.density === 'compact' ? 17.5 : 20, min: L_.MIN.body }; }
+  /** Plage de tailles du corps selon la densité (px de diapositive, 1 px = 0,8 pt).
+   *  Aéré : 16–22 px · Automatique : 15–20 px (12–16 pt) · Compact : 13,75–17,5 px (11–14 pt, choix explicite). */
+  function sizeRange(b) {
+    var L_ = L();
+    if (b.density === 'compact') return { max: 17.5, min: L_.MIN.compactBody };
+    if (b.density === 'airy') return { max: 22, min: 16 };
+    return { max: 20, min: L_.MIN.body };
+  }
 
-  /** Diapositives de suite : en-tête allégé, texte sur deux colonnes, même taille de corps. */
+  /** Diapositives de suite : en-tête allégé, composition choisie selon la quantité de texte restante
+   *  (visuel + 1 colonne, ou 2 colonnes), taille de corps la plus grande possible, sans grand vide. */
   function continuation(ctx, rest, size, firstIndex) {
-    var out = [], guard = 0;
-    while (rest.length && guard++ < 6) {
+    var out = [], guard = 0, C = L().C;
+    var photos = (ctx.item.photos || []).filter(Boolean);
+    var visual = photos.length > 1 ? photos[photos.length - 1] : null;
+    // Plusieurs suites nécessaires : texte réparti à parts égales (même taille, même hauteur de colonnes),
+    // au lieu d'une dernière diapositive presque vide.
+    var probe = new (L().Builder)(nth(ctx, firstIndex, { part: firstIndex + 1 }));
+    var ctop = itemHeader(probe, nth(ctx, firstIndex, { part: firstIndex + 1 }), { dateLine: '', noStatus: true }), cbottom = L().T.bodyBottom;
+    var RR = sizeRange(probe);
+    var full = columns(40, ctop, 1120, cbottom - ctop - 22, 2, 28);
+    var pagesAt = function (sz, hgt) { var n = 0, r = rest, bx = full.map(function (x) { return Object.assign({}, x, { h: hgt }); }); while (r.length && n < 9) { r = flow(r, bx, sz).rest; n++; } return r.length ? 99 : n; };
+    var need = pagesAt(RR.min, full[0].h), balanced = null;
+    if (need >= 2 && need < 9) {
+      var bs = RR.min;
+      for (var sz = Math.max(RR.max, 20); sz >= RR.min; sz -= 0.5) if (pagesAt(sz, full[0].h) === need) { bs = sz; break; }
+      var lo = bs * 1.2 * 3, hi = full[0].h;
+      for (var it2 = 0; it2 < 12; it2++) { var mid = (lo + hi) / 2; if (pagesAt(bs, mid) <= need) hi = mid; else lo = mid; }
+      balanced = { s: bs, h: Math.ceil(hi) + 2 };
+    }
+    while (rest.length && guard++ < 8) {
       var cctx = nth(ctx, firstIndex + out.length, { part: firstIndex + out.length + 1 });
       var b = new (L().Builder)(cctx);
-      var top = itemHeader(b, cctx, { dateLine: '', noStatus: true });
-      var boxes = columns(40, top, 1120, 590 - top, 2, 32);
-      var s = bestSize(rest, boxes, Math.min(sizeRange(b).max, size + 3), L().MIN.body) || Math.max(L().MIN.body, size);
+      var top = itemHeader(b, cctx, { dateLine: '', noStatus: true }), bottom = L().T.bodyBottom;
+      var R = sizeRange(b), best = null;
+      if (balanced) {
+        // Pages équilibrées : 2 colonnes, même taille et même hauteur utile sur chaque suite.
+        var bb = full.map(function (x) { return Object.assign({}, x, { y: top, h: balanced.h }); });
+        rest = drawFlow(b, rest, bb, balanced.s, 'suite de la description');
+        if (rest.length) b.text('Suite page suivante →', 760, bottom - 18, 400, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+        itemFooter(b, cctx);
+        out.push(b.result({ part: firstIndex + out.length + 1 }));
+        continue;
+      }
+      [[0, 2], [0, 1], [300, 1], [300, 2]].forEach(function (o) {
+        var pw = o[0], cols = o[1], tx = 40 + (pw ? pw + 20 : 0), tw = 1160 - tx;
+        if (cols === 2 && tw < 600) return;
+        var boxes = columns(tx, top, tw, bottom - top, cols, 28);
+        var s = bestSize(rest, boxes, Math.max(R.max, 22), R.min);
+        if (s === null) return;
+        var area = boxes.reduce(function (a, x) { return a + x.w * x.h; }, 0);
+        var fill = usedHeight(rest, boxes, s) * boxes[0].w / area;
+        var cpl = boxes[0].w / (s * 0.5);
+        var sc = s * 10 + fill * 14 + (pw ? 5 : 0) - (cols === 1 && cpl > 88 ? (cpl - 88) * 0.5 : 0) - (cols === 2 && fill < 0.5 ? 12 : 0);
+        if (!best || sc > best.sc) best = { sc: sc, s: s, pw: pw, boxes: boxes, fill: fill };
+      });
+      var boxes, s;
+      if (best) {
+        boxes = best.boxes.map(function (x) { return Object.assign({}, x); }); s = best.s;
+        if (best.pw) {
+          if (visual) photoStack(b, [visual], 40, top, best.pw, bottom - top, ctx.cat ? ctx.cat.color : C.blue);
+          else decoPanel(b, cctx, 40, top, best.pw, bottom - top);
+        }
+        if (best.fill < 0.62) {
+          var bx0 = boxes[0], bxN = boxes[boxes.length - 1];
+          b.rect(bx0.x - 14, top - 4, bxN.x + bxN.w - bx0.x + 28, bottom - top + 8, { fill: '#F7F9FD', stroke: '#E3E9F5', r: 10 });
+          var shift = Math.max(0, Math.min(80, (boxes[0].h - usedHeight(rest, boxes, s) / boxes.length) / 2 - 6));
+          boxes = boxes.map(function (x) { return Object.assign({}, x, { y: x.y + shift, h: x.h - shift }); });
+        }
+      } else {
+        boxes = columns(40, top, 1120, bottom - top - 22, 2, 28); s = R.min;
+      }
       rest = drawFlow(b, rest, boxes, s, 'suite de la description');
-      if (rest.length) b.text('Suite page suivante →', 760, 572, 400, 18, { size: 13, color: L().C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+      if (rest.length) b.text('Suite page suivante →', 760, bottom - 18, 400, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
       itemFooter(b, cctx);
       out.push(b.result({ part: firstIndex + out.length + 1 }));
     }
-    if (rest.length) out[out.length - 1].warnings.push({ level: 'block', code: 'overflow', field: 'description', msg: 'Texte beaucoup trop long : plus de 6 diapositives de suite. Raccourcir la fiche.' });
+    if (rest.length) out[out.length - 1].warnings.push({ level: 'block', code: 'overflow', field: 'description', msg: 'Texte beaucoup trop long : plus de 8 diapositives de suite. Raccourcir la fiche.' });
     return out;
+  }
+  /** Coupe de préférence avant un intertitre (Programme, Temps forts) : la suite forme un bloc logique. */
+  function splitAtHeading(paras, boxes, s) {
+    var idx = -1;
+    for (var i = 1; i < paras.length; i++) if (paras[i].heading) { idx = i; break; }
+    if (idx < 0) return null;
+    var head = paras.slice(0, idx);
+    while (head.length && Mx().isEmpty(head[head.length - 1])) head.pop();
+    if (!head.length || flow(head, boxes, s).rest.length) return null;
+    var cap = boxes.reduce(function (a, x) { return a + x.h; }, 0), used = usedHeight(head, boxes, s);
+    if (used / cap < 0.55) return null; // première diapositive trop vide : coupe classique
+    return { first: head, rest: paras.slice(idx) };
   }
   function splitMode(ctx) { var s = ctx.page && ctx.page.split; return s === true || s === 'force' ? 'force' : s === 'off' ? 'off' : 'auto'; }
 
   /* ================= MODÈLES DE FICHE ================= */
 
-  /** Activité classique : compare plusieurs compositions (largeur photo, 1 ou 2 colonnes, position des infos et
-   * des tarifs) et retient la plus lisible ; si rien ne tient à 12 pt, la suite passe sur une autre diapositive. */
+  /** Activité classique (V10) : le contenu dicte la composition.
+   * 1. Les blocs vides (photo, tarifs, infos) disparaissent AVANT tout calcul d'espace.
+   * 2. Deux familles de compositions sont comparées :
+   *    - « bande basse » : photos à gauche, texte en 1–2 colonnes, puis une bande basse avec le
+   *      cartouche tarifs (bas-gauche) et les cartes d'informations à sa droite ;
+   *    - « colonne gauche » : photos au-dessus du cartouche, texte et informations à droite.
+   *    Les informations peuvent aussi former une colonne à droite. Largeurs de photo de 240 à 480.
+   * 3. Chaque composition reçoit la plus grande taille de corps qui tient (≥ 12 pt) et un score :
+   *    lisibilité, remplissage (peu de blanc), longueur de ligne, taille de photo.
+   * 4. Diapositive de suite uniquement si aucune composition ne tient à 12 pt. */
   function classic(ctx) {
-    var it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue;
+    var it = ctx.item, C = L().C, T = L().T, cat = ctx.cat, color = cat ? cat.color : C.blue;
     var probe = new (L().Builder)(ctx);
-    var top = itemHeader(probe, ctx), bottom = 590;
-    var paras = bodyParas(ctx), rows = practicalRows(ctx), pr = ctx.prices, photos = it.photos || [];
-    var R = sizeRange(probe), gap = 22;
-    var asideMode = rows.length >= 3 ? 'column' : rows.length ? 'strip' : 'none';
-    var asideW = asideMode === 'column' ? 240 : 0;
+    var top = itemHeader(probe, ctx), bottom = T.bodyBottom, x0 = T.margin, right = T.right;
+    var paras = bodyParas(ctx), rows = practicalRows(ctx), pr = ctx.prices, photos = (it.photos || []).filter(Boolean);
+    var R = sizeRange(probe), gap = 20;
     var plainLen = Mx().plain(paras).length;
-    // Les fiches peu chargées gagnent à privilégier le visuel et un corps de texte aéré
-    // plutôt qu'un petit paragraphe isolé au milieu d'une grande zone blanche.
-    var sparse = paras.length && plainLen < 360;
-    if (sparse && probe.density !== 'compact') R.max = Math.max(R.max, 22);
-    var photoOpts = photos.length ? (sparse ? [360, 410, 460] : [200, 250, 300, 360, 420]) : (plainLen < 560 ? [-330, -280, 0] : [0]);
-    function geometry(pw, cols) {
-      var x0 = 40, right = 1160 - (asideW ? asideW + gap : 0);
-      var panelH = asideW ? probe.infoPanelSize(rows, asideW) : 0;
-      // Les 1–2 informations pratiques s'alignent à DROITE du cartouche tarifaire,
-      // au lieu d'ajouter une rangée pleine largeur en dessous : le corps de la fiche
-      // récupère ainsi de la hauteur et la zone blanche sous le contenu disparaît.
-      var compactPriceW = Math.min(465, right - x0);
-      var g = probe.priceGridSize(pr, compactPriceW);
-      var alongsidePrice = asideMode === 'strip' && g.h > 0 && right - (x0 + g.actualW + 12) >= 235;
-      var stripH = asideMode === 'strip' && !alongsidePrice ? 46 + 12 : 0;
-      var priceH = g.h ? g.h + 8 : 0;
-      var bodyBottom = bottom - stripH - priceH;
-      var tx = x0 + (pw ? Math.abs(pw) + gap : 0), tw = right - tx;
-      if (cols === 2 && tw < 620) return null;
-      var bh = bodyBottom - top;
-      if (bh < 80) return null;
-      var priceY = bodyBottom + 8;
-      return { pw: pw, cols: cols, top: top, bodyBottom: bodyBottom, right: right, priceW: compactPriceW, priceY: priceY,
-        stripY: alongsidePrice ? priceY : bottom - 46,
-        stripX: alongsidePrice ? x0 + g.actualW + 12 : x0,
-        stripW: alongsidePrice ? right - x0 - g.actualW - 12 : 1120,
-        stripBesidePrices: alongsidePrice,
-        panel: asideW ? { x: right + gap, y: top, w: asideW } : null, boxes: columns(tx, top, tw, bh, cols, 30) };
+    var sparse = paras.length > 0 && plainLen < 520;
+    if (sparse && probe.density !== 'compact') R.max = Math.max(R.max, probe.density === 'airy' ? 26 : 24);
+    var g = probe.priceGridSize(pr, 640);
+    var hasPrice = !!g.h;
+    var photoWs = photos.length ? [240, 300, 360, 420, 480] : (plainLen < 700 && !hasPrice ? [-280, -340, 0] : [0]);
+    var cands = [];
+    function addBand(pw, infoMode) {
+      var panelW = infoMode === 'panel' ? 250 : 0;
+      var bandRight = right - (panelW ? panelW + gap : 0);
+      var ig = null, bandH = 0;
+      if (infoMode === 'band' && rows.length) {
+        var iw = hasPrice ? bandRight - x0 - g.w - 14 : bandRight - x0;
+        if (iw < 170) return;
+        ig = probe.infoGridSize(rows, iw, hasPrice ? 4 : 5);
+        if (!ig.fits && ig.cols > 1) return;
+        bandH = Math.max(g.h, ig.h);
+      } else bandH = g.h;
+      var bodyBottom = bottom - (bandH ? bandH + 12 : 0);
+      var tx = x0 + (pw ? Math.abs(pw) + gap : 0), tRight = panelW ? right - panelW - gap : right;
+      if (bodyBottom - top < 110) return;
+      var panelH = panelW ? probe.infoPanelSize(rows, panelW) : 0;
+      if (panelW && panelH > bottom - top) return;
+      [1, 2].forEach(function (cols) {
+        if (cols === 2 && tRight - tx < 600) return;
+        var iwUsed = ig ? ig.cols * ig.cw + (ig.cols - 1) * 10 : 0, iwAvail = ig ? (hasPrice ? bandRight - x0 - g.w - 14 : bandRight - x0) : 0;
+        var waste = hasPrice && !ig ? (bandRight - x0 - g.w) * g.h : ig ? (iwAvail - iwUsed) * bandH + (hasPrice ? Math.abs(ig.h - g.h) * 200 : 0) : 0;
+        cands.push({ kind: 'band', pw: pw, cols: cols, infoMode: infoMode, top: top, bodyBottom: bodyBottom, waste: waste,
+          photo: pw ? { x: x0, y: top, w: Math.abs(pw), h: bodyBottom - top } : null,
+          boxes: columns(tx, top, tRight - tx, bodyBottom - top, cols, 28),
+          price: hasPrice ? { x: x0, y: bottom - g.h } : null,
+          info: ig ? { mode: 'grid', x: hasPrice ? x0 + g.w + 14 : x0, y: bottom - bandH, w: (hasPrice ? bandRight - x0 - g.w - 14 : bandRight - x0), h: bandH, cols: hasPrice ? 4 : 5 }
+            : panelW ? { mode: 'panel', x: right - panelW, y: top, w: panelW, h: bottom - top } : null });
+      });
+    }
+    function addLeft(lw, infoMode) {
+      if (!photos.length) return; // colonne gauche = photos (+ cartouche dessous) : jamais une colonne vide
+      if (hasPrice) lw = Math.max(lw, g.w);
+      var photoBottom = bottom - (hasPrice ? g.h + 12 : 0);
+      if (photos.length && photoBottom - top < 130) return;
+      var rx = x0 + lw + gap, panelW = infoMode === 'panel' ? 250 : 0, tRight = right - (panelW ? panelW + gap : 0);
+      var ig = infoMode === 'band' && rows.length ? probe.infoGridSize(rows, tRight - rx, 3) : null;
+      if (ig && !ig.fits && ig.cols > 1) return;
+      var textBottom = bottom - (ig ? ig.h + 12 : 0);
+      if (textBottom - top < 110) return;
+      [1, 2].forEach(function (cols) {
+        if (cols === 2 && tRight - rx < 600) return;
+        cands.push({ kind: 'left', pw: photos.length ? lw : 0, cols: cols, infoMode: infoMode, top: top, bodyBottom: textBottom, waste: hasPrice ? (lw - g.w) * g.h : 0,
+          photo: photos.length ? { x: x0, y: top, w: lw, h: photoBottom - top } : null,
+          boxes: columns(rx, top, tRight - rx, textBottom - top, cols, 28),
+          price: hasPrice ? { x: x0, y: bottom - g.h } : null,
+          info: ig ? { mode: 'grid', x: rx, y: textBottom + 12, w: tRight - rx, h: ig.h, cols: 3 } : panelW ? { mode: 'panel', x: right - panelW, y: top, w: panelW, h: bottom - top } : null });
+      });
+    }
+    var infoModes = rows.length ? (rows.length >= 3 ? ['band', 'panel'] : ['band']) : ['none'];
+    photoWs.forEach(function (pw) { infoModes.forEach(function (im) { addBand(pw, im); }); });
+    if (photos.length) [hasPrice ? g.w : 300, 380, 460].forEach(function (lw) { infoModes.forEach(function (im) { addLeft(lw, im); }); });
+    function score(c) {
+      var s = paras.length ? bestSize(paras, c.boxes, R.max, R.min) : R.max;
+      if (s === null) return null;
+      var area = c.boxes.reduce(function (a, b) { return a + b.w * b.h; }, 0);
+      var used = paras.length ? usedHeight(paras, c.boxes, s) * c.boxes[0].w : 0;
+      var fill = area ? Math.min(1, used / area) : 0;
+      var cpl = c.boxes[0].w / (s * 0.5);
+      var sc = s * 10 + fill * 14;
+      if (c.cols === 1 && cpl > 88) sc -= (cpl - 88) * 0.5;
+      if (c.cols === 2 && cpl < 38) sc -= (38 - cpl) * 1.5;
+      if (c.cols === 2 && fill < 0.5) sc -= 12;
+      if (c.photo) {
+        var ph = c.photo.h, pw = c.photo.w, ratio = ph / pw;
+        if (c.pw > 0) sc += Math.min(8, pw * ph / 22000) - (ratio < 0.45 ? 8 : 0) - (ratio > 1.9 ? (ratio - 1.9) * 10 : 0) - (ph < 150 ? 8 : 0);
+        else sc += 2;
+      }
+      if (c.info && c.info.mode === 'panel' && rows.length < 4) sc -= 4;
+      sc -= (c.waste || 0) / 8000;
+      if (!paras.length) sc = (c.photo ? c.photo.w * c.photo.h / 4000 : 0) - c.cols * 5;
+      return { s: s, fill: fill, score: sc };
     }
     var best = null;
-    photoOpts.forEach(function (pw) {
-      [1, 2].forEach(function (cols) {
-        var gm = geometry(pw, cols);
-        if (!gm) return;
-        if (!paras.length) { var sc0 = (pw ? Math.abs(pw) / 100 : 0) - cols; if (!best || sc0 > best.score) best = { gm: gm, s: R.max, score: sc0 }; return; }
-        var s = bestSize(paras, gm.boxes, R.max, R.min);
-        if (s === null) return;
-        var bw = gm.boxes[0].w, cpl = bw / (s * 0.5);
-        var fill = usedHeight(paras, gm.boxes, s) / gm.boxes.reduce(function (a, x) { return a + x.h; }, 0);
-        var score = s * 10;
-        if (cols === 1 && cpl > 95) score -= (cpl - 95) * 0.4;
-        if (cols === 2 && fill < 0.45) score -= 12;
-        if (cols === 2 && cpl < 38) score -= 8;
-        score += fill * 6 + (pw ? Math.abs(pw) / 120 : 0);
-        if (!best || score > best.score) best = { gm: gm, s: s, score: score };
-      });
-    });
+    cands.forEach(function (c) { var r = score(c); if (r && (!best || r.score > best.r.score)) best = { c: c, r: r }; });
+    if (CSE.debugLayout) CSE.debugLayout.push({ top: top, cands: cands.map(function (c) { var r = score(c); return [c.kind, c.pw, c.cols, c.infoMode, Math.round(c.bodyBottom - c.top), c.boxes.map(function (x) { return Math.round(x.w) + 'x' + Math.round(x.h); }).join('+'), r ? r.s + '/' + Math.round(r.score) : '—'].join(' '); }) });
     var mode = splitMode(ctx);
     var b = new (L().Builder)(ctx);
     itemHeader(b, ctx);
-    var rest = [], s = best ? best.s : R.min, gm = best ? best.gm : null;
-    if (!gm || mode === 'force') {
-      // Contenu trop long (ou scission demandée) : la page 1 retient la composition qui y place le plus de texte,
-      // à une taille confortable ; la suite passe sur la diapositive suivante.
+    var gm, s, rest = [];
+    if (best && mode !== 'force') { gm = best.c; s = best.r.s; }
+    else {
+      // Contenu trop long (ou suite demandée) : page 1 = composition qui y place le plus de texte à 17 px.
+      // De préférence, coupe logique : tout le texte avant le premier intertitre (description)
+      // sur la 1re diapositive, à une taille confortable ; le programme / les temps forts passent à la suite.
       s = Math.max(R.min, Math.min(R.max, 17));
+      var hIdx = -1;
+      for (var hi = 1; hi < paras.length; hi++) if (paras[hi].heading) { hIdx = hi; break; }
+      var firstPart = hIdx > 0 ? paras.slice(0, hIdx) : null;
+      while (firstPart && firstPart.length && Mx().isEmpty(firstPart[firstPart.length - 1])) firstPart.pop();
       var bestSplit = null;
-      (photos.length ? [220, 260, 300] : [0]).forEach(function (pw) {
-        [1, 2].forEach(function (cols) {
-          var g0 = geometry(pw, cols);
-          if (!g0) return;
-          var bx = g0.boxes.map(function (x) { return Object.assign({}, x); });
-          bx[bx.length - 1].h -= 22;
-          var placed = flow(paras, bx, s).chunks.reduce(function (n, ch) { return n + Mx().plain(ch).length; }, 0);
-          var sc = placed + pw / 50;
-          if (!bestSplit || sc > bestSplit.sc) bestSplit = { gm: g0, sc: sc };
-        });
+      cands.forEach(function (c) {
+        var bx = c.boxes.map(function (x) { return Object.assign({}, x); });
+        bx[bx.length - 1].h -= 22;
+        var sc, s1 = null;
+        if (firstPart && firstPart.length) s1 = bestSize(firstPart, bx, Math.min(R.max, 20), Math.max(R.min, 16));
+        if (s1 !== null) {
+          var area = bx.reduce(function (a, x) { return a + x.w * x.h; }, 0), fill = usedHeight(firstPart, bx, s1) * bx[0].w / area;
+          if (fill < 0.45) s1 = null;
+          else sc = 1e6 + s1 * 10 + fill * 14 + (c.photo && c.pw > 0 ? Math.min(8, c.photo.w * c.photo.h / 22000) : 0) - (c.waste || 0) / 8000 - (c.cols === 2 && bx[0].w / (s1 * 0.5) < 38 ? 10 : 0);
+        }
+        if (s1 === null) sc = flow(paras, bx, s).chunks.reduce(function (n, ch) { return n + Mx().plain(ch).length; }, 0) + (c.photo && c.pw > 0 ? 40 : 0);
+        if (!bestSplit || sc > bestSplit.sc) bestSplit = { c: c, sc: sc, s1: s1 };
       });
-      gm = bestSplit ? bestSplit.gm : geometry(0, 1);
-    }
-    if (gm.pw > 0) photoStack(b, photos, 40, gm.top, gm.pw, gm.bodyBottom - gm.top, color);
-    else if (gm.pw < 0) decoPanel(b, ctx, 40, gm.top, -gm.pw, gm.bodyBottom - gm.top);
-    // Fond éditorial léger sur les fiches concises : la zone à droite de la photo
-    // reste un bloc structuré et non une large bande blanche vide.
-    if (sparse && gm.boxes && gm.boxes.length) {
-      var firstBox = gm.boxes[0], finalBox = gm.boxes[gm.boxes.length - 1];
-      var cardX = firstBox.x - 10, cardW = finalBox.x + finalBox.w - firstBox.x + 20;
-      b.rect(cardX, gm.top - 6, cardW, gm.bodyBottom - gm.top + 10,
-        { fill: '#F7F9FD', stroke: '#E3E9F5', r: 10 });
-    }
-    if (paras.length) {
-      if (mode === 'off' && (!best)) {
-        var f0 = flow(paras, gm.boxes, R.min);
-        f0.chunks[f0.chunks.length - 1] = f0.chunks[f0.chunks.length - 1].concat(f0.rest);
-        f0.chunks.forEach(function (ch, i) { if (ch.length) b.text(ch, gm.boxes[i].x, gm.boxes[i].y, gm.boxes[i].w, gm.boxes[i].h, { size: R.min, min: R.min, noScale: true, field: 'description' }); });
-        b.warn('Contenu trop long pour une seule diapositive : activer « 2 diapositives » (scission automatique) pour tout publier lisiblement.', 'warn', 'suggest-split');
-      } else {
-        var lastBox = gm.boxes[gm.boxes.length - 1];
-        if (!best || mode === 'force') lastBox.h -= 24;
-        rest = drawFlow(b, paras, gm.boxes, s, 'description');
-        if (rest.length) b.text('Suite page suivante →', lastBox.x, lastBox.y + lastBox.h + 4, lastBox.w, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+      gm = bestSplit ? bestSplit.c : { boxes: columns(x0, top, 1120, bottom - top, 2, 28), top: top, bodyBottom: bottom, cols: 2, pw: 0 };
+      // Nombre total de diapositives minimal : estimation des suites (2 colonnes pleine page au corps minimal).
+      var contPages = function (restParas) {
+        var n = 0, r = restParas, cb = columns(40, 262, 1120, 590 - 262 - 22, 2, 28);
+        while (r.length && n < 9) { r = flow(r, cb, R.min).rest; n++; }
+        return n;
+      };
+      var firstBoxes = gm.boxes.map(function (x) { return Object.assign({}, x); });
+      firstBoxes[firstBoxes.length - 1].h -= 22;
+      var plan = null;
+      if (bestSplit && bestSplit.s1 !== null) plan = { pages: 1 + contPages(paras.slice(hIdx)), s: bestSplit.s1, heading: true };
+      // Coupe classique : taille de la 1re diapositive entre 17 et le minimum, au nombre de diapositives le plus faible.
+      for (var sz = Math.min(R.max, 17); sz >= R.min - 0.001; sz -= 0.5) {
+        var pages = 1 + contPages(flow(paras, firstBoxes, sz).rest);
+        if (!plan || pages < plan.pages) plan = { pages: pages, s: sz, heading: false };
       }
-    } else if (!photos.length && !rows.length && pr.kind !== 'grid') {
+      s = plan.s;
+      if (plan.heading) gm.headingSplit = { first: firstPart, rest: paras.slice(hIdx) };
+    }
+    if (gm.photo && gm.pw > 0) photoStack(b, photos, gm.photo.x, gm.photo.y, gm.photo.w, gm.photo.h, color);
+    else if (gm.photo && gm.pw < 0) decoPanel(b, ctx, gm.photo.x, gm.photo.y, gm.photo.w, gm.photo.h);
+    if (paras.length) {
+      var boxes = gm.boxes.map(function (x) { return Object.assign({}, x); });
+      if (best && mode !== 'force') {
+        var fill = best.r.fill;
+        if (fill < 0.62) {
+          // Texte court : encart teinté et texte centré verticalement, plutôt qu'une bande blanche.
+          var bx0 = boxes[0], bxN = boxes[boxes.length - 1];
+          b.rect(bx0.x - 14, gm.top - 4, bxN.x + bxN.w - bx0.x + 28, gm.bodyBottom - gm.top + 8, { fill: '#F7F9FD', stroke: '#E3E9F5', r: 10 });
+          var naturalH = usedHeight(paras, boxes, s) / boxes.length;
+          var shift = Math.max(0, Math.min(60, (boxes[0].h - naturalH) / 2 - 6));
+          boxes = boxes.map(function (x) { return Object.assign({}, x, { y: x.y + shift, h: x.h - shift }); });
+        }
+        rest = drawFlow(b, paras, boxes, s, 'description');
+      } else if (mode === 'off') {
+        var f0 = flow(paras, boxes, R.min);
+        f0.chunks[f0.chunks.length - 1] = f0.chunks[f0.chunks.length - 1].concat(f0.rest);
+        f0.chunks.forEach(function (ch, i) { if (ch.length) b.text(ch, boxes[i].x, boxes[i].y, boxes[i].w, boxes[i].h, { size: R.min, min: R.min, noScale: true, field: 'description' }); });
+        b.warn('Contenu trop long pour une seule diapositive : choisir « Texte long : automatique » pour publier tout le texte lisiblement.', 'warn', 'suggest-split');
+      } else {
+        var lastBox = boxes[boxes.length - 1];
+        lastBox.h -= 22;
+        // Coupe logique : description sur la 1re diapositive, programme / temps forts sur la suite.
+        var sp = gm.headingSplit || splitAtHeading(paras, boxes, s);
+        if (sp) { drawFlow(b, sp.first, boxes, s, 'description'); rest = sp.rest; }
+        else rest = drawFlow(b, paras, boxes, s, 'description');
+        if (rest.length) b.text('Suite page suivante →', lastBox.x, lastBox.y + lastBox.h + 3, lastBox.w, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+      }
+    } else if (!photos.length && !rows.length && !hasPrice) {
       b.text('Renseigner une description, un programme ou des informations pratiques.', gm.boxes[0].x, gm.top, gm.boxes[0].w, 60, { size: 18, color: C.muted, field: 'description', important: false });
     }
-    if (pr.kind === 'grid') b.priceGrid(pr, 40, gm.priceY, gm.priceW);
-    if (gm.panel) b.infoPanel(rows, gm.panel.x, gm.panel.y, gm.panel.w);
-    else if (asideMode === 'strip') b.infoStrip(rows, gm.stripX, gm.stripY, gm.stripW, { stretch: gm.stripBesidePrices });
+    if (hasPrice && gm.price) b.priceGrid(pr, gm.price.x, gm.price.y, 640);
+    if (gm.info && gm.info.mode === 'grid') b.infoGrid(rows, gm.info.x, gm.info.y, gm.info.w, gm.info.cols, gm.info.h);
+    else if (gm.info && gm.info.mode === 'panel') b.infoPanel(rows, gm.info.x, gm.info.y, gm.info.w, gm.info.h);
+    else if (rows.length && !gm.info) b.infoGrid(rows, x0, bottom - probe.infoGridSize(rows, 1120, 5).h, 1120, 5);
     itemFooter(b, ctx);
     var slides = [b.result()];
     if (rest.length) {
@@ -399,7 +554,6 @@
     }
     return slides;
   }
-
   /** Immersif : grande photo à gauche, message court et informations synthétiques ; la suite éventuelle passe sur une autre diapositive. */
   function immersive(ctx) {
     var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cat = ctx.cat, color = cat ? cat.color : C.blue, cls = ctx.cls || {}, d = D();
@@ -424,6 +578,8 @@
     var textBottom = 590 - infoH - plH - (infoH || plH ? 6 : 0);
     var paras = joinParas([hasText(it.summary) ? rich(it.summary, { bold: true }) : [], hasText(it.description) ? rich(it.description) : [], hasText(it.highlights) ? programParas(it.highlights).map(function (p) { p.bullet = true; return p; }) : []]);
     var rest = [], R = sizeRange(b), s = R.min;
+    // Message court : corps agrandi plutôt qu'une grande zone vide sous le texte.
+    if (Mx().plain(paras).length < 320 && b.density !== 'compact') R.max = 26;
     if (paras.length) {
       var box = [{ x: x, y: y, w: w, h: textBottom - y }];
       var fit = bestSize(paras, box, R.max, R.min);
@@ -588,82 +744,81 @@
     return slides;
   }
 
-  /** Offre partenaire. */
+  /** Offre partenaire (V10) : encart « Partenaire CSE » en tête, logo à gauche, puis titre, offre,
+   *  code / échéance et conditions. Quand le contenu est court, les tailles augmentent ensemble
+   *  (hiérarchie conservée) et le bloc est centré verticalement : pas de demi-diapositive vide. */
   function partner(ctx) {
     var b = new (L().Builder)(ctx), it = ctx.item, C = L().C, cls = ctx.cls || {}, pa = it.partner || {}, d = D();
     b.banner();
-    var photos = it.photos || [];
-    var lx = 40, lw = 390, top = 196, bottom = 592;
-    b.rect(lx, top, lw, photos[1] ? 250 : bottom - top - 50, { fill: C.white, stroke: C.border, r: 14 });
-    if (photos[0]) b.image(photos[0], lx + 14, top + 14, lw - 28, (photos[1] ? 250 : bottom - top - 50) - 28, { fit: 'contain' });
-    else {
-      // En l'absence de logo, ne pas répéter le titre en très grand :
-      // pictogramme et signature de partenariat discrète, exportables en vectoriel.
-      var photoH = (photos[1] ? 250 : bottom - top - 50) - 28;
-      b.rect(lx + 14, top + 14, lw - 28, photoH, { fill: C.lighter, r: 12 });
-      var iconY = top + 14 + (photoH - 110) / 2;
-      b.glyph(CSE.icons ? CSE.icons.iconFor(ctx.cat || { name: 'Partenaire' }) : 'star', lx + (lw - 76) / 2, iconY, 76, C.purple);
-      b.text('AVANTAGE PARTENAIRE', lx + 30, iconY + 78, lw - 60, 26,
-        { size: 14, min: 12, bold: true, color: C.blue, align: 'center', valign: 'middle', role: 'label', noScale: true, maxLines: 1 });
-    }
-    if (photos[1]) b.photo(photos[1], lx, top + 262, lw, bottom - top - 262 - 50);
-    b.statusLabel('new', 'Partenaire CSE', lx + 12, bottom - 38, { size: 13, h: 26 });
+    var photos = (it.photos || []).filter(Boolean);
+    // En-tête : encart « Partenaire CSE » (pictogramme vectoriel) et éventuelle nouveauté.
+    b.rect(40, 188, 26, 26, { fill: C.purple, r: 6 });
+    b.glyph('bag', 44, 192, 18, C.white);
+    b.text('Partenaire CSE', 74, 188, 300, 26, { size: 14, min: 11, bold: true, color: C.purple, valign: 'middle', maxLines: 1, role: 'label', noScale: true, field: 'catégorie' });
     var rx = 1160;
-    if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, 192, { align: 'right' }); rx = nl.x - 10; }
-    var x = lx + lw + 30, y = top - 4;
-    var tr = b.text(it.title || 'Nom du partenaire', x, y, rx - x, 80, { size: 36, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.1 });
-    y += tr.height + 2;
-    if (hasText(it.subtitle)) { var sr = b.text(it.subtitle, x, y, 1160 - x, 28, { size: 19, min: 14, bold: true, color: C.muted, maxLines: 1, field: 'sous-titre', noScale: true }); y += sr.height + 4; }
-    y += 6;
-    var w2 = 1160 - x;
-    var hasAmount = hasText(pa.amount);
-    // Une fiche partenaire très courte ne doit pas laisser une grande plage vide
-    // sous l'offre : centrer modérément l'ensemble offre / code / échéance.
-    var hasLongBody = bodyParas(ctx).length > 0;
-    if (!hasLongBody && (hasText(pa.offer) || hasAmount)) {
-      var reserved = (hasAmount ? 124 : 85) + 12 + ((hasText(pa.code) || pa.validUntil || it.regEnd) ? 54 : 0);
-      var spare = 590 - y - reserved;
-      if (spare > 70) y += Math.min(78, Math.round(spare * 0.38));
+    if (cls.isNew) { var nl = b.statusLabel('new', 'Nouveauté', rx, 188, { align: 'right' }); rx = nl.x - 10; }
+    var top = 226, bottom = 592, lx = 40, lw = 380;
+    // Visuel : logo (contain) ou pictogramme ; second visuel éventuel en dessous.
+    var logoH = photos[1] ? 200 : bottom - top;
+    b.rect(lx, top, lw, logoH, { fill: C.white, stroke: C.border, r: 14 });
+    if (photos[0]) b.photo(photos[0], lx + 14, top + 14, lw - 28, logoH - 28, { fit: 'contain' });
+    else {
+      b.rect(lx + 14, top + 14, lw - 28, logoH - 28, { fill: C.lilac, r: 12 });
+      var iconY = top + 14 + (logoH - 28 - 120) / 2;
+      b.glyph(CSE.icons ? CSE.icons.iconFor(ctx.cat || { name: 'Partenaire' }) : 'star', lx + (lw - 84) / 2, iconY, 84, C.purple);
+      b.text('Avantage partenaire', lx + 30, iconY + 92, lw - 60, 26, { size: 15, min: 12, bold: true, color: C.purple, upper: true, align: 'center', valign: 'middle', role: 'label', noScale: true, maxLines: 1 });
     }
-    if (hasText(pa.offer) || hasAmount) {
-      var offerParas = rich(pa.offer || '', { bold: true });
-      var ow = w2 - (hasAmount ? 150 : 0) - 36;
-      var oh = Math.max(hasAmount ? 124 : 70, Math.min(150, b.measure(offerParas, ow, 26, { bold: true }) + 30));
-      b.rect(x, y, w2, oh, { fill: C.lilac, stroke: '#DCCFF8', r: 14 });
+    if (photos[1]) b.photo(photos[1], lx, top + logoH + 12, lw, bottom - top - logoH - 12);
+    var x = lx + lw + 32, w = 1160 - x;
+    var hasAmount = hasText(pa.amount), hasOffer = hasText(pa.offer);
+    var offerParas = hasOffer ? rich(pa.offer, { bold: true }) : [];
+    var paras = bodyParas(ctx);
+    var until = pa.validUntil || it.regEnd;
+    var hasPills = hasText(pa.code) || !!until;
+    // Recherche de l'échelle k (1 → 1,45) la plus grande pour laquelle tout tient ; hauteurs mesurées.
+    function plan(k) {
+      var titleS = Math.min(46, 36 * k), subS = Math.min(26, 19 * k), offerS = Math.min(36, 25 * k), bodyS = Math.min(28, 19 * k);
+      var h = 0, parts = {};
+      parts.title = Math.min(2, Mx().countLines(Mx().toParas(it.title || 'Nom du partenaire', { bold: true }), rx - x, titleS)) * titleS * 1.1; h += parts.title + 6;
+      if (hasText(it.subtitle)) { parts.sub = Mx().countLines(Mx().toParas(it.subtitle, { bold: true }), w, subS) * subS * 1.2; h += parts.sub + 10; }
+      if (hasOffer || hasAmount) {
+        var ow = w - (hasAmount ? 150 : 0) - 36;
+        parts.offer = Math.max(hasAmount ? 124 : 70, (hasOffer ? Mx().textHeight(offerParas, ow, offerS) : 0) + 30);
+        h += parts.offer + 14;
+      }
+      if (hasPills) { parts.pills = 40; h += 54; }
+      if (paras.length) { parts.body = Mx().textHeight(paras, w, bodyS); h += parts.body; }
+      return { k: k, h: h, parts: parts, titleS: titleS, subS: subS, offerS: offerS, bodyS: bodyS };
+    }
+    var p = plan(1);
+    for (var k = 1.45; k >= 1; k -= 0.05) { var q = plan(k); if (q.h <= bottom - top - 8 && q.parts.offer <= 190) { p = q; break; } }
+    var y = top + Math.max(0, (bottom - top - p.h) * 0.42);
+    var tr = b.text(it.title || 'Nom du partenaire', x, y, rx - x, p.parts.title + 4, { size: p.titleS, min: L().MIN.title, bold: true, color: C.navy, maxLines: 2, field: 'titre', noScale: true, lh: 1.1 });
+    y += tr.height + 6;
+    if (p.parts.sub) { var sr = b.text(it.subtitle, x, y, w, p.parts.sub + 2, { size: p.subS, min: 14, bold: true, color: C.muted, field: 'sous-titre', noScale: true }); y += sr.height + 10; }
+    if (p.parts.offer) {
+      var oh = p.parts.offer, ow2 = w - (hasAmount ? 150 : 0) - 36;
+      b.rect(x, y, w, oh, { fill: C.lilac, stroke: '#DCCFF8', r: 14 });
       if (hasAmount) {
         b.ellipse(x + 16, y + oh / 2 - 56, 112, 112, { fill: C.purple });
         b.text(pa.amount, x + 22, y + oh / 2 - 56, 100, 112, { size: 32, min: 14, bold: true, color: C.white, align: 'center', valign: 'middle', maxLines: 2, role: 'deco', noScale: true, field: 'remise' });
       }
-      if (offerParas.length) {
-        var offerSize = Mx().plain(offerParas).length <= 110 ? 30 : 25;
-        b.text(offerParas, x + (hasAmount ? 150 : 18), y + 12, ow, oh - 24,
-          { size: offerSize, min: 15, bold: true, color: C.purple, valign: 'middle', field: 'offre', noScale: true });
+      if (offerParas.length) b.text(offerParas, x + (hasAmount ? 150 : 18), y + 12, ow2, oh - 24, { size: p.offerS, min: 15, bold: true, color: C.purple, valign: 'middle', field: 'offre', noScale: true });
+      y += oh + 14;
+    }
+    if (hasPills) {
+      var rx2 = x;
+      if (hasText(pa.code)) { var cw2 = b.pill('CODE : ' + pa.code, rx2, y, { size: 18, h: 40, fill: C.navy }); rx2 += cw2 + 12; }
+      if (until) {
+        var dl = d.diffDays(until, ctx.ref), soon = dl !== null && dl >= 0 && dl <= 7;
+        b.pill('Jusqu’au ' + d.fmtLong(until), rx2, y, { size: 17, h: 40, fill: soon ? C.lastBg : C.light, color: soon ? C.lastText : C.navy, stroke: soon ? C.lastBorder : C.border });
       }
-      y += oh + 12;
+      y += 54;
     }
-    var rowH = 0, rx2 = x;
-    if (hasText(pa.code)) { var cw2 = b.pill('CODE : ' + pa.code, rx2, y, { size: 18, h: 40, fill: C.navy }); rx2 += cw2 + 12; rowH = 40; }
-    var until = pa.validUntil || it.regEnd;
-    if (until) {
-      var soon = cls.daysLeft !== null && cls.daysLeft <= 7 && cls.daysLeft >= 0;
-      b.pill('Jusqu’au ' + d.fmtLong(until), rx2, y, { size: 17, h: 40, fill: soon ? C.lastBg : C.light, color: soon ? C.lastText : C.navy, stroke: soon ? C.lastBorder : C.border });
-      rowH = 40;
-    }
-    if (rowH) y += rowH + 14;
-    var paras = bodyParas(ctx);
-    if (paras.length) {
-      var remaining = Math.max(55, 590 - y);
-      // Si le descriptif est court, utiliser une taille confortable plutôt que laisser la moitié de la page vide.
-      var font = 19;
-      for (var fs = 28; fs >= 19; fs -= 1) {
-        if (b.measure(paras, w2, fs) <= remaining - 4) { font = fs; break; }
-      }
-      b.text(paras, x, y, w2, remaining, { size: font, min: L().MIN.body, field: 'conditions de l’offre', noScale: true, valign: 'middle' });
-    }
+    if (paras.length) b.text(paras, x, y, w, Math.max(40, bottom - y), { size: p.bodyS, min: L().MIN.body, field: 'conditions de l’offre', noScale: true });
     itemFooter(b, ctx);
     return [b.result()];
   }
-
   /** Calendrier mensuel de permanences (jours ouvrés) : Ouvert (vert, horaire standard), Horaire particulier
    * (orange, horaire saisi jour par jour), Fermé (rouge). Légende générée à partir des jours réellement utilisés.
    * Les cases sont cliquables dans l'aperçu. */
@@ -683,6 +838,13 @@
     ly += 66;
     var photo = (it.photos || [])[0];
     if (photo) { b.photo(photo, lx, ly, lw, 150); ly += 162; }
+    else {
+      // Sans photo : panneau pictogramme sobre, pour équilibrer la colonne gauche.
+      b.rect(lx, ly, lw, 132, { fill: L().tint(C.blue, 0.1), r: 12 });
+      b.glyph('calendar', lx + (lw - 70) / 2, ly + 18, 70, L().tint(C.blue, 0.75));
+      b.text(cal.service || 'Permanences', lx + 10, ly + 94, lw - 20, 26, { size: 14, min: 12, bold: true, color: C.blue, upper: true, align: 'center', valign: 'middle', maxLines: 1, role: 'deco', noScale: true });
+      ly += 144;
+    }
     var cParas = [];
     var shown = shownContacts(it);
     if (shown.length) {
@@ -730,9 +892,9 @@
         if (!inMonth) continue;
         if (st) used[st.state].push({ date: day, hours: st.hours });
         var hrs = st && st.state === 'special' ? st.hours : '';
-        if (hrs && rowH >= 40 && Mx().countLines(Mx().toParas(hrs), cellW - 8, 10.5) <= 2) {
-          b.text(String(+day.slice(8)), cx, ry + 3, cellW, 20, { size: 16, min: 10, bold: true, color: C.ink, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, act: { type: 'calendar-day', date: day } });
-          b.text(hrs, cx + 4, ry + 22, cellW - 8, rowH - 24, { size: 10.5, min: 9, bold: true, color: '#5A3A12', align: 'center', valign: 'top', maxLines: 2, role: 'label', noScale: true, field: 'horaire du jour', act: { type: 'calendar-day', date: day } });
+        if (hrs && rowH >= 40 && Mx().countLines(Mx().toParas(hrs), cellW - 8, 12) <= 2) {
+          b.text(String(+day.slice(8)), cx, ry + 2, cellW, 17, { size: 15, min: 10, bold: true, color: C.ink, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, act: { type: 'calendar-day', date: day } });
+          b.text(hrs, cx + 3, ry + 18, cellW - 6, rowH - 19, { size: 12, min: 11, bold: true, color: '#5A3A12', align: 'center', valign: 'top', maxLines: 2, role: 'label', noScale: true, field: 'horaire du jour', act: { type: 'calendar-day', date: day } });
         } else {
           b.text(String(+day.slice(8)) + (hrs ? '*' : ''), cx, ry, cellW, rowH, { size: 18, min: 10, bold: true, color: def && isDark(def.color) ? C.white : C.ink, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true, act: { type: 'calendar-day', date: day } });
         }
@@ -826,9 +988,14 @@
       var boxes = [{ x: 40, y: y, w: cw, h: hcol }, { x: 40 + cw + 36, y: y, w: cw, h: hcol }];
       b.rect(40 + cw + 17, y + 6, 2, hcol - 12, { fill: C.border });
       var f = flow(rest, boxes, size);
+      if (f.rest.length) {
+        // Place réservée à la mention « Suite » en bas de la 2e colonne (jamais sur le bouton du pied).
+        boxes[1].h -= 22;
+        f = flow(rest, boxes, size);
+      }
       f.chunks.forEach(function (ch, i) { if (ch.length) b.text(ch, boxes[i].x, boxes[i].y, boxes[i].w, boxes[i].h, { size: size, min: size, noScale: true, field: 'règlement' }); });
       rest = f.rest;
-      if (rest.length) b.text('Suite page suivante →', 760, 590, 400, 16, { size: 12.5, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
+      if (rest.length) b.text('Suite page suivante →', boxes[1].x, boxes[1].y + boxes[1].h + 4, boxes[1].w, 18, { size: 13, color: C.purple, bold: true, align: 'right', role: 'label', noScale: true });
       b.footer({ link: CO().linkOf(it, ctx.settings), ctaLabel: it.link && it.link.label, note: ctx.settings.footerNote || 'Modalités à vérifier avant chaque diffusion' });
       slides.push(b.result({ part: part + 1 }));
       if (!f.chunks.some(function (c) { return c.length; })) break;
@@ -1057,84 +1224,100 @@
     }
   }
 
-  /** Programme à venir : liste chronologique ou tableau, pagination automatique. */
+  /** Programme à venir (V10) : liste chronologique ou tableau. Pagination équilibrée : le nombre de
+   *  diapositives est le minimum lisible (titres ≥ 14 pt), puis les lignes sont réparties à parts égales
+   *  et la hauteur des lignes s'ajuste à l'espace (pas de dernière page presque vide). */
   function upcoming(ctx, table) {
     var C = L().C, d = D(), o = ctx.page.opts || {};
     var rows = CO().upcomingRows(ctx.page, ctx.project, ctx.issue);
     var cat = o.categoryId ? (ctx.project.categories || []).find(function (c) { return c.id === o.categoryId; }) : null;
-    var slides = [], i = 0, guard = 0;
     var title = o.title || 'Programme des prochaines activités';
     var sub = o.subtitle || (cat ? cat.name : '') + (o.from || o.to ? (cat ? ' · ' : '') + d.fmtRange(o.from, o.to).replace(/^Le /, 'à partir du ') : '');
     var catColor = function (name) { var c = (ctx.project.categories || []).find(function (x) { return x.name === name; }); return c ? c.color : C.blue; };
-    do {
-      var b = new (L().Builder)(nth(ctx, slides.length));
+    var note = o.note || ctx.settings.mentions.upcoming;
+    var y0 = 258, bottom = 592, avail = bottom - y0;
+    var showCat = !table && !cat && new Set(rows.map(function (r) { return r.type; })).size > 1;
+    var cols = [{ k: 'title', l: 'Activité', w: 500 }, { k: 'location', l: 'Lieu', w: 220 }, { k: 'type', l: cat ? 'Statut' : 'Type', w: 170 }, { k: 'date', l: 'Date', w: 230 }];
+    var cellsOf = function (r) { return { title: r.title, location: r.location || '—', type: (cat ? r.status : [r.type, r.status].filter(hasText).join(' · ')) || '—', date: d.fmtRange(r.date, r.dateEnd).replace(/^Le /, '') || 'À préciser' }; };
+    var FS = table ? 15 : 17;
+    // Hauteur naturelle de chaque ligne (titre sur 2 lignes au plus).
+    var natural = rows.map(function (r) {
+      if (table) {
+        var cells = cellsOf(r), lines = 1;
+        cols.forEach(function (c) { lines = Math.max(lines, Math.min(2, Mx().countLines(Mx().toParas(cells[c.k], { bold: c.k === 'title' }), c.w - 24, FS))); });
+        return lines * FS * 1.2 + 9;
+      }
+      var detail = [r.location, r.status].filter(hasText).join(' · ');
+      var dw = detail ? Math.min(330, Mx().width(detail, 15, false) * 1.06 + 10) : 0;
+      var tw = Math.min(220, showCat && r.type ? Mx().width(String(r.type).toLocaleUpperCase('fr'), 12.5, true) * 1.06 + 20 : 0);
+      var titleW = 1150 - 246 - (tw ? tw + 12 : 0) - dw - 16;
+      return Math.min(2, Mx().countLines(Mx().toParas(r.title, { bold: true }), titleW, FS)) * FS * 1.2 + 8;
+    });
+    var gap = table ? 0 : 3, head = table ? 40 : 0;
+    // Nombre minimal de diapositives, puis répartition équilibrée.
+    var pages = [], cur = [], used = head;
+    natural.forEach(function (h, i) { if (cur.length && used + h + gap > avail) { pages.push(cur); cur = []; used = head; } cur.push(i); used += h + gap; });
+    if (cur.length) pages.push(cur);
+    if (pages.length > 1) {
+      var per = Math.ceil(rows.length / pages.length), bal = [];
+      for (var i0 = 0; i0 < rows.length; i0 += per) bal.push(rows.slice(i0, i0 + per).map(function (_, k) { return i0 + k; }));
+      var okBal = bal.every(function (pg) { return pg.reduce(function (a, i) { return a + natural[i] + gap; }, head) <= avail; });
+      if (okBal && bal.length === pages.length) pages = bal;
+    }
+    if (!rows.length) pages = [[]];
+    var slides = [];
+    pages.forEach(function (idx, pi) {
+      var b = new (L().Builder)(nth(ctx, pi));
       b.banner();
       b.pill('À venir', 40, 190, { size: 16, h: 34, fill: C.purple });
-      b.text(title + (slides.length ? ' (suite)' : ''), 190, 186, 970, 42, { size: 30, min: 20, bold: true, color: C.navy, maxLines: 1, field: 'titre', noScale: true });
-      if (sub) b.text(sub, 190, 226, 970, 24, { size: 18, min: 13, bold: true, color: C.purple, maxLines: 1, field: 'sous-titre', noScale: true });
-      var note = o.note || ctx.settings.mentions.upcoming;
-      var y = 262, bottom = 592 - (note ? 20 : 0);
-      if (!rows.length) {
+      b.text(title + (pi ? ' (suite)' : ''), 190, 186, 970, 42, { size: 30, min: 22, bold: true, color: C.navy, maxLines: 1, field: 'titre', noScale: true });
+      if (sub) b.text(sub, 190, 226, 970, 26, { size: 19, min: 14, bold: true, color: C.purple, maxLines: 1, field: 'sous-titre', noScale: true });
+      var y = y0;
+      if (!idx.length) {
         b.text('Aucune activité future ne correspond. Ajoutez des fiches datées dans la bibliothèque ou saisissez des lignes manuellement.', 90, 330, 1020, 140, { size: 22, color: C.muted, align: 'center', valign: 'middle', role: 'label' });
         b.warn('Programme vide.', 'warn');
-      } else if (table) {
-        var cols = [{ k: 'title', l: 'Activité', w: 430 }, { k: 'location', l: 'Lieu', w: 250 }, { k: 'type', l: cat ? 'Statut' : 'Type', w: 200 }, { k: 'date', l: 'Date', w: 240 }];
-        b.rect(40, y, 1120, 38, { fill: C.navy, r: 8 });
-        var cx = 40;
-        cols.forEach(function (c) { b.text(c.l, cx + 12, y, c.w - 20, 38, { size: 16, bold: true, color: C.white, valign: 'middle', upper: true, maxLines: 1, role: 'label', noScale: true }); cx += c.w; });
-        y += 42;
-        var cellsOf = function (r) { return { title: r.title, location: r.location || '—', type: (cat ? r.status : [r.type, r.status].filter(hasText).join(' · ')) || '—', date: d.fmtRange(r.date, r.dateEnd).replace(/^Le /, '') || 'À préciser' }; };
-        var size = 17;
-        var heights = rows.slice(i).map(function (r) {
-          var cells = cellsOf(r), rh = 22;
-          cols.forEach(function (c) { rh = Math.max(rh, Math.min(2, Mx().countLines(Mx().toParas(cells[c.k], { bold: c.k === 'title' }), c.w - 24, size)) * size * 1.2); });
-          return rh + 16;
-        });
-        // Lignes plus aérées lorsqu'il y en a peu.
-        var fitCount = 0, acc = 0;
-        while (fitCount < heights.length && acc + heights[fitCount] <= bottom - y) { acc += heights[fitCount]; fitCount++; }
-        var bonus = fitCount === heights.length ? Math.min(26, (bottom - y - acc) / Math.max(1, fitCount)) : 0;
-        var z = 0;
-        while (i < rows.length) {
-          var cells = cellsOf(rows[i]), rh = heights[z] + bonus;
-          if (y + rh > bottom + 0.5) break;
-          b.rect(40, y, 1120, rh, { fill: z % 2 ? C.white : C.light, stroke: C.border });
-          cx = 40;
-          cols.forEach(function (c) { b.text(cells[c.k], cx + 12, y + 8, c.w - 24, rh - 16, { size: size, min: 11, bold: c.k === 'title' || c.k === 'date', color: c.k === 'date' ? C.purple : C.ink, valign: 'middle', maxLines: 2, field: c.l, noScale: true }); cx += c.w; });
-          y += rh; i++; z++;
-        }
       } else {
-        var left = rows.length - i, avail = bottom - y;
-        var rh2 = Math.max(46, Math.min(66, avail / left));
-        var count = Math.floor((avail + 6) / rh2);
-        var showCat = !cat && new Set(rows.map(function (r) { return r.type; })).size > 1;
-        for (var k = 0; k < count && i < rows.length; k++, i++) {
-          var r2 = rows[i], hh = rh2 - 6;
-          b.rect(40, y, 1120, hh, { fill: C.lighter, stroke: C.border, r: 9 });
-          b.rect(40, y, 190, hh, { fill: C.lilac, r: 9 });
-          b.text(d.fmtRangeShort(r2.date, r2.dateEnd) || 'À préciser', 48, y, 174, hh, { size: 17, min: 11, bold: true, color: C.purple, align: 'center', valign: 'middle', maxLines: 1, role: 'label', noScale: true });
-          var x2 = 246;
-          if (showCat && r2.type) {
-            var tw2 = Math.min(220, Mx().width(r2.type.toLocaleUpperCase('fr'), 12, true) * 1.06 + 20);
-            b.pill(r2.type.toLocaleUpperCase('fr'), x2, y + hh / 2 - 12, { size: 12, h: 24, w: tw2, fill: catColor(r2.type) });
-            x2 += tw2 + 12;
-          }
-          var detail = [r2.location, r2.status].filter(hasText).join(' · ');
-          var dw = detail ? Math.min(360, Mx().width(detail, 15, false) * 1.06 + 10) : 0;
-          b.text(r2.title, x2, y, 1150 - x2 - dw - 16, hh, { size: 19, min: 14, bold: true, color: C.navy, valign: 'middle', maxLines: 2, field: 'activité', noScale: true });
-          if (detail) b.text(detail, 1150 - dw, y, dw, hh, { size: 15, min: 11, color: C.muted, align: 'right', valign: 'middle', maxLines: 1, role: 'label', noScale: true });
-          y += rh2;
+        var total = idx.reduce(function (a, i) { return a + natural[i] + gap; }, head);
+        var bonus = Math.min(table ? 14 : 20, Math.max(0, (avail - total) / idx.length));
+        if (table) {
+          b.rect(40, y, 1120, 36, { fill: C.navy, r: 8 });
+          var cx = 40;
+          cols.forEach(function (c) { b.text(c.l, cx + 12, y, c.w - 20, 36, { size: 15, bold: true, color: C.white, valign: 'middle', upper: true, maxLines: 1, role: 'label', noScale: true }); cx += c.w; });
+          y += 40;
+          idx.forEach(function (i, z) {
+            var cells = cellsOf(rows[i]), rh = natural[i] + bonus;
+            b.rect(40, y, 1120, rh, { fill: z % 2 ? C.white : C.light, stroke: C.border });
+            var cx2 = 40;
+            cols.forEach(function (c) { b.text(cells[c.k], cx2 + 12, y + 4, c.w - 24, rh - 8, { size: FS, min: 13, bold: c.k === 'title' || c.k === 'date', color: c.k === 'date' ? C.purple : C.ink, valign: 'middle', maxLines: 2, field: c.l, noScale: true }); cx2 += c.w; });
+            y += rh;
+          });
+        } else {
+          idx.forEach(function (i) {
+            var r2 = rows[i], hh = natural[i] + bonus;
+            b.rect(40, y, 1120, hh, { fill: C.lighter, stroke: C.border, r: 9 });
+            b.rect(40, y, 190, hh, { fill: C.lilac, r: 9 });
+            b.text(d.fmtRangeShort(r2.date, r2.dateEnd) || 'À préciser', 48, y, 174, hh, { size: 16, min: 13, bold: true, color: C.purple, align: 'center', valign: 'middle', maxLines: 2, role: 'label', noScale: true, field: 'date' });
+            var x2 = 246;
+            if (showCat && r2.type) {
+              var tw2 = Math.min(220, Mx().width(String(r2.type).toLocaleUpperCase('fr'), 12.5, true) * 1.06 + 20);
+              b.pill(String(r2.type).toLocaleUpperCase('fr'), x2, y + hh / 2 - 12, { size: 12.5, h: 24, w: tw2, fill: catColor(r2.type) });
+              x2 += tw2 + 12;
+            }
+            var detail = [r2.location, r2.status].filter(hasText).join(' · ');
+            var dw = detail ? Math.min(330, Mx().width(detail, 15, false) * 1.06 + 10) : 0;
+            b.text(r2.title, x2, y + 3, 1150 - x2 - dw - 16, hh - 6, { size: FS, min: 14, bold: true, color: C.navy, valign: 'middle', maxLines: 2, field: 'activité', noScale: true });
+            if (detail) b.text(detail, 1150 - dw, y, dw, hh, { size: 15, min: 12.5, color: C.muted, align: 'right', valign: 'middle', maxLines: 2, role: 'label', noScale: true, field: 'lieu' });
+            y += hh + gap;
+          });
         }
       }
-      if (note) b.text(note, 40, 594, 1120, 20, { size: 13, min: 10, color: C.muted, maxLines: 1, role: 'label', noScale: true, field: 'mention' });
+      if (note) b.text(note, 40, 596, 900, 20, { size: 12.5, min: 11, color: C.muted, maxLines: 1, role: 'label', noScale: true, field: 'mention' });
       b.footer({ link: CO().validUrl(ctx.settings.portalUrl) ? ctx.settings.portalUrl : M().PORTAL, ctaLabel: 'Portail CSE', note: ctx.settings.footerNote });
-      slides.push(b.result({ part: slides.length + 1 }));
-    } while (i < rows.length && guard++ < 60);
-    if (i < rows.length) slides[slides.length - 1].warnings.push({ level: 'block', msg: 'Programme incomplet : limite de sécurité atteinte. Réduire les lignes ou fractionner le programme.' });
-    if (slides.length > 1) slides[0].warnings.push({ level: 'info', msg: 'Programme réparti automatiquement sur ' + slides.length + ' diapositives.' });
+      slides.push(b.result({ part: pi + 1 }));
+    });
+    if (slides.length > 1) slides[0].warnings.push({ level: 'info', msg: 'Programme réparti automatiquement sur ' + slides.length + ' diapositives (' + rows.length + ' lignes).' });
     return slides;
   }
-
   /* ================= MOTEUR ================= */
 
   function recommend(item, project) {
@@ -1172,25 +1355,26 @@
   function renderPage(page, project, issue, opts) {
     opts = opts || {};
     var sourceItem = page.kind === 'item' ? CO().findItem(project, page.itemId) : null;
-    var edits = page.opts && page.opts.useOverrides && page.opts.override;
-    var item = sourceItem && edits ? Object.assign({}, sourceItem, ['title', 'subtitle', 'summary', 'description', 'highlights', 'program', 'notes'].reduce(function (o, k) {
-      if (Object.prototype.hasOwnProperty.call(edits, k)) o[k] = String(edits[k] || '');
-      return o;
-    }, {})) : sourceItem;
+    // Personnalisation propre à ce MEL (tous les champs) : la fiche source n'est jamais modifiée.
+    var item = sourceItem ? (CO().effectiveItem ? CO().effectiveItem(page, sourceItem) : sourceItem) : null;
+    if (item && opts.skipImages && opts.skipImages.length) {
+      // Export explicitement demandé « sans les photos non intégrables » : la composition se recalcule sans elles.
+      item = Object.assign({}, item, { photos: (item.photos || []).filter(function (s) { return opts.skipImages.indexOf(s) < 0; }) });
+    }
     var settings = project.settings;
     var ref = issue.refDate;
     var tid = templateIdFor(page, item, project);
     var density = page.density && page.density !== 'auto' ? page.density : item && item.density !== 'auto' ? item.density : settings.defaultDensity || 'auto';
     var base = { project: project, issue: issue, page: page, item: item, ref: ref, settings: settings, templateId: tid,
       cat: item ? CSE.model.categoryOf(project, item) : null,
-      cls: item ? CO().classify(item, ref, settings) : null,
+      cls: item ? CO().classify(item, ref, settings, issue) : null,
       prices: item ? CSE.pricing.fromPricing(item.pricing, settings) : { kind: 'none', rows: [], issues: [] },
-      pageNumber: opts.pageNumber || 0 };
+      pageNumber: opts.pageNumber || 0, skipImages: opts.skipImages || null };
     if (page.kind === 'item' && !item) {
       var b = new (L().Builder)(base);
       b.banner();
       b.text('Fiche introuvable (supprimée de la bibliothèque).', 80, 300, 1040, 80, { size: 26, color: L().C.red, align: 'center', valign: 'middle' });
-      b.warn('Cette page référence une fiche supprimée : retirer la page ou restaurer la fiche.', 'block');
+      b.warn('Cette page référence une fiche supprimée : retirer la page ou restaurer la fiche depuis la corbeille.', 'block');
       b.footer({});
       return [b.result({ templateId: 'missing' })];
     }
@@ -1203,30 +1387,41 @@
         slides = compact;
         slides[0].warnings.unshift({ level: 'info', msg: 'Mise en page compacte appliquée automatiquement pour que le texte tienne.' });
       }
+    } else if (density === 'auto' && item && slides.length > 1 && ['classic', 'immersive', 'info'].indexOf(tid) >= 0 && splitMode(base) === 'auto') {
+      // Suite nécessaire à 12 pt : indiquer si la densité compacte (corps 11 pt, choix explicite) tient sur une seule diapositive.
+      var c1 = run('compact');
+      if (c1.length < slides.length && !c1.some(function (s) { return s.overflow; }))
+        slides[0].warnings.push({ level: 'info', code: 'compact-fits', msg: 'Une seule diapositive est possible en densité « Compacte » (corps 11 pt minimum, photos réduites).' });
     }
-    // Pagination interne : numéros successifs.
+    // Pagination interne : numéros successifs ; contrôles géométriques de chaque diapositive.
     slides.forEach(function (s, i) {
       s.templateId = tid; s.pageId = page.id; s.part = slides.length > 1 ? i + 1 : 0; s.parts = slides.length;
       if (opts.pageNumber) s.pageNumber = opts.pageNumber + i;
+      L().auditSlide(s).forEach(function (w) { if (!s.warnings.some(function (x) { return x.msg === w.msg; })) s.warnings.push(w); });
+      if (s.minBody && s.minBody < (density === 'compact' ? L().MIN.compactBody : L().MIN.body) - 0.01)
+        s.warnings.push({ level: 'warn', code: 'min-font', msg: 'Corps de texte sous le seuil de lisibilité (' + Math.round(s.minBody * 0.8 * 10) / 10 + ' pt).' });
       if (item && i === 0) {
-        // Les avertissements de pagination du texte sont complétés par les contrôles de la fiche.
         (base.prices.issues || []).forEach(function (x) { s.warnings.push({ level: x[0], msg: 'Tarifs : ' + x[1] }); });
         if (base.cls.expired) s.warnings.push({ level: 'warn', msg: 'Fiche expirée à la date du MEL.' });
       }
     });
-    if (item && tid === 'classic' && !page.split && slides[0].overflow) {
-      slides[0].warnings.push({ level: 'warn', code: 'suggest-split', msg: 'Conseil : activer « Scinder en deux pages » pour publier tout le texte lisiblement.' });
+    if (item && tid === 'classic' && splitMode(base) === 'off' && slides[0].overflow) {
+      slides[0].warnings.push({ level: 'warn', code: 'suggest-split', msg: 'Conseil : choisir « Texte long : automatique » pour publier tout le texte lisiblement.' });
     }
     return slides;
   }
-  /** Rend tout le MEL (pages incluses), avec numérotation facultative. */
+  /** Rend tout le MEL (pages incluses), avec numérotation facultative.
+   *  Un MEL publié (figé) est rendu à partir de son instantané : une modification ultérieure
+   *  des fiches de la bibliothèque ne change pas rétroactivement ce qui a été diffusé. */
   function renderIssue(project, issue, opts) {
     opts = opts || {};
-    var pages = CO().enforceOrder(issue.pages, project, issue);
+    var view = CO().issueView ? CO().issueView(project, issue) : { project: project, issue: issue };
+    var proj = view.project, is = view.issue;
+    var pages = CO().enforceOrder(is.pages, proj, is);
     var out = [], n = 1;
     pages.forEach(function (p) {
       if (!p.included && !opts.all) { out.push({ page: p, slides: [], excluded: true }); return; }
-      var slides = renderPage(p, project, issue, { pageNumber: issue.numbering && p.included ? n : 0 });
+      var slides = renderPage(p, proj, is, { pageNumber: is.numbering && p.included ? n : 0, skipImages: opts.skipImages });
       if (p.included) n += slides.length;
       out.push({ page: p, slides: slides, excluded: !p.included });
     });
@@ -1254,5 +1449,5 @@
   }
 
   return { TEMPLATES: TEMPLATES, ITEM_TEMPLATES: ITEM_TEMPLATES, recommend: recommend, templateIdFor: templateIdFor, renderPage: renderPage, renderIssue: renderIssue,
-    renderItem: renderItem, readability: readability, flow: flow, dateLine: dateLine, contactText: contactText };
+    renderItem: renderItem, readability: readability, flow: flow, dateLine: dateLine, contactText: contactText, practicalRows: practicalRows, bodyParas: bodyParas, sizeRange: sizeRange };
 });

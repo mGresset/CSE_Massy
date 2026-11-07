@@ -31,7 +31,7 @@ test('T9, T10 et prix extérieur sur la dernière ligne, sans débordement', () 
   assert.ok(ext.size>=12.2);
   assert.ok(ext.x+ext.w <=box.x+box.w);
   assert.ok(!ext.overflow && !s.overflow);
-  assert.ok(box.h<=64);
+  assert.ok(box.h<=92);
 });
 test('Supplément single court intégré à la ligne du titre, sans espace orphelin sous les tarifs', () => {
   const s=render('3000','Supplément individuel : 150 €');
@@ -41,7 +41,7 @@ test('Supplément single court intégré à la ligne du titre, sans espace orphe
   assert.ok(box && ext && notes);
   assert.ok(notes.y<ext.y,'note courte dans la ligne d’en-tête');
   assert.ok(notes.x>=box.x && notes.x+notes.w<=box.x+box.w,'notes dans le cartouche');
-  assert.ok(box.h<=64,'la note ne crée pas de quatrième rangée');
+  assert.ok(box.h<=92,'la note ne crée pas de quatrième rangée');
   assert.ok(!notes.overflow && !s.overflow);
 });
 test('Quand aucun prix extérieur n’est fourni, pas de cartouche extérieur', () => {

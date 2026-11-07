@@ -143,6 +143,10 @@
       rounding: { step: 'unit', mode: 'nearest' },
       newDays: 7,
       lastDays: 7,
+      newMaxWeeks: 2,
+      repoUrl: 'https://github.com/mGresset/CSE_Massy',
+      siteUrl: 'https://mgresset.github.io/CSE_Massy/',
+      composerUrl: 'https://mgresset.github.io/CSE_Massy/mel.html',
       defaultDensity: 'auto',
       numbering: false,
       qrCodes: false,
@@ -165,10 +169,11 @@
     out.qrCodes = bool(o.qrCodes);
     out.newDays = clampInt(o.newDays, 0, 90, d.newDays);
     out.lastDays = clampInt(o.lastDays, 1, 31, d.lastDays);
+    out.newMaxWeeks = clampInt(o.newMaxWeeks, 1, 8, d.newMaxWeeks);
     out.defaultDensity = oneOf(o.defaultDensity, DENSITIES, 'auto');
     out.referents = normalizeContacts(o.referents);
     out.mentions = Object.assign({}, d.mentions, isObj(o.mentions) ? o.mentions : {});
-    ['orgName', 'melTitle', 'portalUrl', 'canvaUrl', 'planningUrl', 'planningLabel', 'footerNote'].forEach(function (k) { out[k] = str(out[k], 400); });
+    ['orgName', 'melTitle', 'portalUrl', 'canvaUrl', 'planningUrl', 'planningLabel', 'footerNote', 'repoUrl', 'siteUrl', 'composerUrl'].forEach(function (k) { out[k] = str(out[k], 400); });
     return out;
   }
   function clampInt(v, a, b, def) { var n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(b, Math.max(a, n)) : def; }
@@ -209,6 +214,22 @@
     timeStart: 10, timeEnd: 10 };
   var DATE_FIELDS = ['dateStart', 'dateEnd', 'regStart', 'regEnd'];
 
+  /** Cadrage des photos (V10) : { [référence]: { fit: 'cover'|'contain', fx, fy (0–100), alt, source } }. */
+  function normalizePhotoMeta(raw, photos) {
+    var out = {};
+    if (!isObj(raw)) return out;
+    (photos || []).forEach(function (ref) {
+      var m = raw[ref];
+      if (!isObj(m)) return;
+      var e = {};
+      if (m.fit === 'contain' || m.fit === 'cover') e.fit = m.fit;
+      ['fx', 'fy'].forEach(function (k) { var n = Number(m[k]); if (Number.isFinite(n)) e[k] = Math.max(0, Math.min(100, Math.round(n))); });
+      if (m.alt) e.alt = str(m.alt, 200);
+      if (m.source && /^https?:\/\//i.test(String(m.source))) e.source = str(m.source, 600);
+      if (Object.keys(e).length) out[ref] = e;
+    });
+    return out;
+  }
   function normalizeItem(raw) {
     var o = isObj(raw) ? raw : {};
     var b = blankItem(o.type);
@@ -225,6 +246,7 @@
     it.forceLast = bool(o.forceLast); it.excludeLast = bool(o.excludeLast);
     it.contacts = normalizeContacts(o.contacts);
     it.photos = (Array.isArray(o.photos) ? o.photos : []).map(function (p) { return str(p).trim(); }).filter(Boolean).slice(0, 6);
+    it.photoMeta = normalizePhotoMeta(o.photoMeta, it.photos);
     var pr = isObj(o.pricing) ? o.pricing : {};
     it.pricing = Object.assign({}, b.pricing, pr);
     it.pricing.enabled = bool(pr.enabled);
@@ -292,9 +314,17 @@
     p.split = o.split === true || o.split === 'force' ? 'force' : o.split === 'off' ? 'off' : 'auto';
     p.opts = Object.assign({}, b.opts, isObj(o.opts) ? o.opts : {});
     if (p.kind === 'cover') p.opts.extraNotes = (Array.isArray(p.opts.extraNotes) ? p.opts.extraNotes : []).slice(0, 4).map(function (s) { return str(s, 280).trim(); }).filter(Boolean);
-    if (Array.isArray(p.opts.ids)) p.opts.ids = p.opts.ids.map(String).slice(0, 6);
+    if (Array.isArray(p.opts.ids)) p.opts.ids = p.opts.ids.map(String).slice(0, 24);
     if (Array.isArray(p.opts.newsIds)) p.opts.newsIds = p.opts.newsIds.map(String).slice(0, 4);
-    if (Array.isArray(p.opts.rows)) p.opts.rows = p.opts.rows.slice(0, 60).map(function (r) { r = isObj(r) ? r : {}; return { date: str(r.date, 10), title: str(r.title, 160), location: str(r.location, 120), type: str(r.type || r.status, 80) }; });
+    if (Array.isArray(p.opts.rows)) p.opts.rows = p.opts.rows.slice(0, 120).map(function (r) {
+      r = isObj(r) ? r : {};
+      var row = { date: str(r.date, 10), title: str(r.title, 160), location: str(r.location, 120), type: str(r.type || r.status, 80) };
+      if (r.dateEnd) row.dateEnd = str(r.dateEnd, 10);
+      if (r.status && r.type) row.status = str(r.status, 80);
+      if (r.itemId) row.itemId = str(r.itemId, 80);
+      return row;
+    });
+    if (p.opts.override !== undefined && !isObj(p.opts.override)) delete p.opts.override;
     return p;
   }
   function blankIssue(refDate) {
@@ -302,7 +332,7 @@
     var ref = refDate || (D ? D.todayParis() : new Date().toISOString().slice(0, 10));
     var wk = D ? D.isoWeek(ref) : { week: 1, year: 2026 };
     var now = new Date().toISOString();
-    return { id: uid('mel'), refDate: ref, week: wk.week, year: wk.year, title: '', numbering: false, status: 'draft', pages: [], suppressed: [], createdAt: now, updatedAt: now, version: 1 };
+    return { id: uid('mel'), refDate: ref, week: wk.week, year: wk.year, title: '', numbering: false, status: 'draft', pages: [], suppressed: [], newSeen: {}, createdAt: now, updatedAt: now, version: 1 };
   }
   function normalizeIssue(raw) {
     var o = isObj(raw) ? raw : {};
@@ -316,6 +346,18 @@
     is.numbering = bool(o.numbering);
     is.pages = (Array.isArray(o.pages) ? o.pages : []).slice(0, 300).map(normalizePage);
     is.suppressed = (Array.isArray(o.suppressed) ? o.suppressed : []).slice(0, 300).map(function (x) { return str(x, 150); });
+    // V10 : statut éditorial du numéro, historique des nouveautés, instantané du MEL publié.
+    is.status = oneOf(o.status, ['draft', 'review', 'validated', 'published', 'archived'], 'draft');
+    is.newSeen = isObj(o.newSeen) ? Object.keys(o.newSeen).reduce(function (acc, k) { if (/^\d{4}-\d{2}-\d{2}$/.test(str(o.newSeen[k]))) acc[str(k, 80)] = o.newSeen[k]; return acc; }, {}) : {};
+    if (isObj(o.snapshot)) {
+      var sn = o.snapshot;
+      is.snapshot = { frozenAt: str(sn.frozenAt), refDate: str(sn.refDate) || is.refDate, pages: (Array.isArray(sn.pages) ? sn.pages : []).map(normalizePage),
+        items: (Array.isArray(sn.items) ? sn.items : []).map(normalizeItem), categories: normalizeCategories(sn.categories), settings: normalizeSettings(sn.settings), newSeen: isObj(sn.newSeen) ? sn.newSeen : {} };
+    } else delete is.snapshot;
+    if (is.status === 'published' && !is.snapshot) is.status = 'validated'; // un MEL « publié » sans instantané n'est pas figé
+    if (Array.isArray(o.previousSnapshots)) is.previousSnapshots = o.previousSnapshots.slice(-3); else delete is.previousSnapshots;
+    is.sourceIssueId = str(o.sourceIssueId, 80);
+    if (!isObj(o.diffReport)) delete is.diffReport;
     is.version = clampInt(o.version, 1, 1e9, 1);
     return is;
   }

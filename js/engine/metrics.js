@@ -26,6 +26,10 @@
   };
   var SAFETY = 1.04;
   var LINE_HEIGHT = 1.2;
+  /* V10 : un paragraphe vide (séparation entre blocs) occupe une demi-ligne, dans l'aperçu
+   * comme dans PowerPoint (interligne exact par paragraphe). Espacement plus professionnel et
+   * davantage de texte lisible sur une seule diapositive. */
+  var PARA_GAP = 0.5;
   var cache = {};
 
   function charWidth(ch, bold) {
@@ -156,9 +160,20 @@
     if (cur.length || !lines.length) push();
     return lines;
   }
+  /* Nombre de lignes d'un paragraphe, mis en cache (même paragraphe, même largeur, même taille) :
+   * le moteur compare des dizaines de compositions sans recalculer les coupures. */
+  var LC = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+  function lineCount(p, maxW, size) {
+    if (!LC || !p || typeof p !== 'object') return wrapPara(p, maxW, size).length;
+    var m = LC.get(p);
+    if (!m) { m = {}; LC.set(p, m); }
+    var k = Math.round(maxW * 4) + '|' + size;
+    if (m[k] === undefined) m[k] = wrapPara(p, maxW, size).length;
+    return m[k];
+  }
   function countLines(paras, maxW, size) {
     var n = 0;
-    paras.forEach(function (p) { n += isEmpty(p) ? 1 : wrapPara(p, maxW, size).length; });
+    paras.forEach(function (p) { n += isEmpty(p) ? PARA_GAP : lineCount(p, maxW, size); });
     return n;
   }
   function textHeight(paras, maxW, size, lh) { return countLines(paras, maxW, size) * size * (lh || LINE_HEIGHT); }
@@ -278,6 +293,6 @@
     return [first, rest];
   }
 
-  return { splitPara: splitPara, width: width, charWidth: charWidth, parseRich: parseRich, toParas: toParas, plain: plain, wrapPara: wrapPara, countLines: countLines,
-    textHeight: textHeight, maxLineWidth: maxLineWidth, fit: fit, isEmpty: isEmpty, SAFETY: SAFETY, LINE_HEIGHT: LINE_HEIGHT };
+  return { lineCount: lineCount, splitPara: splitPara, width: width, charWidth: charWidth, parseRich: parseRich, toParas: toParas, plain: plain, wrapPara: wrapPara, countLines: countLines,
+    textHeight: textHeight, maxLineWidth: maxLineWidth, fit: fit, isEmpty: isEmpty, SAFETY: SAFETY, LINE_HEIGHT: LINE_HEIGHT, PARA_GAP: PARA_GAP };
 });

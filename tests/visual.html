@@ -38,6 +38,7 @@
 <script src="js/core/demo-art.js"></script>
 <script src="js/core/demo.js"></script>
 <script src="tests/fixtures/v91-cases.js"></script>
+<script src="tests/fixtures/v10-cases.js"></script>
 <script>
 (function () {
   var C = window.CSE, params = new URLSearchParams(location.search);
@@ -50,6 +51,7 @@
     return C.images.importMap(map).then(function () {
       var p, issue;
       if (params.get('set') === 'cases') { var cs = window.CSE_CASES.build(C, ref, photo); p = cs.project; issue = cs.issue; }
+      else if (params.get('set') === 'v10') { var c10 = window.CSE_V10_CASES.build(C, params.get('ref') || '2026-11-09', photo); p = c10.project; issue = c10.issue; }
       else { p = C.demo.build(ref, photo); issue = p.issues[0]; }
       if (params.get('split')) issue.pages.forEach(function (pg) { pg.split = true; });
       if (params.get('numbers')) issue.numbering = true;
@@ -62,10 +64,13 @@
         document.body.replaceChildren();
         var host = document.createElement('div'); host.style.cssText = 'position:relative;width:1200px;height:675px;overflow:hidden';
         document.body.appendChild(host);
-        C.renderHTML.render(all[only - 1], host, { checkOverflow: false });
-        host.querySelector('.cse-slide').classList.add('cse-print');
-        window.__ready = true;
-        return;
+        // Capture déterministe : toutes les images de la diapositive sont décodées AVANT le rendu.
+        var srcs = all[only - 1].items.filter(function (i) { return i.t === 'image'; }).map(function (i) { return C.renderHTML.resolve(i.src); }).filter(Boolean);
+        return Promise.all(srcs.map(function (s) { var im = new Image(); im.src = s; return (im.decode ? im.decode() : Promise.resolve()).catch(function () {}); })).then(function () {
+          C.renderHTML.render(all[only - 1], host, { checkOverflow: false });
+          host.querySelector('.cse-slide').classList.add('cse-print');
+          return Promise.all(Array.prototype.map.call(host.querySelectorAll('img'), function (im) { return im.decode ? im.decode().catch(function () {}) : null; }));
+        }).then(function () { window.__ready = true; });
       }
       var grid = document.getElementById('grid'); grid.replaceChildren();
       var n = 0;

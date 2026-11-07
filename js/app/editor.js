@@ -1,4 +1,6 @@
-/* CSE Studio V9 · Éditeur de fiche : formulaire guidé par étapes, aperçu 16:9 fidèle à l'export. */
+/* CSE Studio V10 · Éditeur de fiche : formulaire guidé par étapes, aperçu 16:9 fidèle à l'export.
+ * Le formulaire est un composant réutilisable (App.itemForm) : il sert à modifier la fiche source
+ * (« toutes les semaines ») ou une seule diapositive d'un MEL (« cette semaine uniquement »). */
 (function (root) {
   'use strict';
   var C = root.CSE, ui = C.ui, h = ui.h, App = C.app = C.app || {};
@@ -15,8 +17,105 @@
     rules: ['essentiel', 'contenu', 'pratique']
   };
   var STEP_LABELS = { essentiel: 'Essentiel', dates: 'Dates & inscriptions', contenu: 'Contenu', visuels: 'Visuels & lien', tarifs: 'Tarifs & points', pratique: 'Contacts & infos', offre: 'Offre', calendrier: 'Calendrier' };
-  var state = { step: 'essentiel', template: 'auto', split: false };
+  /* Correspondance entre un élément cliqué sur l'aperçu (champ « field » du moteur) et l'étape / le champ du formulaire. */
+  var FIELD_MAP = {
+    'titre': ['essentiel', 'title'], 'catégorie': ['essentiel', 'categoryId'], 'sous-titre': ['essentiel', 'subtitle'], 'statut': ['essentiel', 'editorial'],
+    'date': ['dates', 'dateStart'], 'lieu': ['dates', 'location'], 'dernière chance': ['dates', 'regEnd'], 'date limite': ['dates', 'regEnd'],
+    'description': ['contenu', 'description'], 'suite de la description': ['contenu', 'description'], 'résumé': ['contenu', 'summary'], 'texte de l’information': ['contenu', 'description'],
+    'encadré d’alerte': ['contenu', 'notes'], 'règlement': ['contenu', 'description'], 'encadré du règlement': ['contenu', 'notes'], 'temps forts': ['contenu', 'highlights'], 'programme': ['contenu', 'program'],
+    'conditions de l’offre': ['contenu', 'description'], 'offre': ['offre', 'partner'], 'remise': ['offre', 'partner'],
+    'photo': ['visuels', 'photos'], 'bouton': ['visuels', 'link'],
+    'tarifs': ['tarifs', 'pricing'], 'notes tarifs': ['tarifs', 'pricing'], 'Points': ['tarifs', 'points'],
+    'contacts': ['pratique', 'contacts'], 'Participants': ['pratique', 'minPart'], 'Public': ['pratique', 'audience'], 'Bilan carbone': ['pratique', 'carbon'], 'Adresse': ['dates', 'address'],
+    'Inscriptions jusqu’au': ['dates', 'regEnd'], 'Inscriptions': ['dates', 'regStatus'],
+    'service': ['calendrier', 'calendar'], 'légende': ['calendrier', 'calendar'], 'horaires': ['calendrier', 'calendar'], 'horaire du jour': ['calendrier', 'calendar'], 'mention': ['calendrier', 'calendar']
+  };
+  var state = { step: 'essentiel', split: false };
 
+  /* ================= Composant formulaire ================= */
+  /** Monte le formulaire d'une fiche dans container.
+   *  opts : { project, scope: 'item'|'page', touch(), render(), isOverridden(key), resetField(key), onStep(step), step }
+   *  Renvoie { focusField(field), redraw(), destroy() }. */
+  function mountForm(container, it, opts) {
+    var p = opts.project;
+    var steps = STEPS[it.type] || STEPS.activity;
+    var stepLabel = function (name) { return name === 'tarifs' && !p.settings.pricingModule ? 'Points' : STEP_LABELS[name]; };
+    var cur = opts.step && steps.indexOf(opts.step) >= 0 ? opts.step : steps[0];
+    var stepBar = h('div', { class: 'steps', role: 'tablist', 'aria-label': 'Étapes de la fiche' });
+    var stepBody = h('div', { role: 'tabpanel', class: 'step-body' });
+    var stepNav = h('div', { class: 'step-nav' });
+    container.appendChild(stepBar); container.appendChild(stepBody); container.appendChild(stepNav);
+    var ctx = {
+      scope: opts.scope || 'item', project: p,
+      touch: function () { opts.touch(); updateStepErrors(); refreshMarks(); },
+      render: opts.render || function () { },
+      redraw: function () { drawStep(); },
+      redrawKeepScroll: redrawKeepingScroll,
+      isOverridden: opts.isOverridden || function () { return false; },
+      resetField: function (key) { if (opts.resetField) { opts.resetField(key); drawStep(); } },
+      done: opts.done
+    };
+    steps.forEach(function (s, i) {
+      stepBar.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(s === cur), dataset: { step: s }, onclick: function () { go(s); } }, h('span', { class: 'n' }, String(i + 1)), stepLabel(s)));
+    });
+    function go(s) { cur = s; if (opts.onStep) opts.onStep(s); drawStep(); }
+    /** Met à jour en direct les repères « cette semaine » pendant la saisie (portée « page »). */
+    function refreshMarks() {
+      if (ctx.scope !== 'page') return;
+      stepBody.querySelectorAll('[data-key]').forEach(function (el) {
+        var want = ctx.isOverridden(el.dataset.key), has = el.classList.contains('overridden');
+        if (want && !has) addMark(el, el.dataset.key, ctx);
+        if (!want && has) { el.classList.remove('overridden'); el.querySelectorAll(':scope > label > .ov-chip, :scope > label > .ov-reset, :scope > h3 > .ov-chip, :scope > h3 > .ov-reset, :scope > legend > .ov-chip, :scope > legend > .ov-reset').forEach(function (x) { x.remove(); }); }
+      });
+    }
+    function updateStepErrors() {
+      var errs = { essentiel: !String(it.title).trim(), dates: !!(it.dateStart && it.dateEnd && it.dateEnd < it.dateStart) || !!(it.regStart && it.regEnd && it.regEnd < it.regStart),
+        visuels: (it.link.type === 'custom' && !!it.link.url && !C.compose.validUrl(it.link.url)) || (it.photos || []).some(function (ph) { return C.images.status(ph) !== 'ready'; }) };
+      stepBar.querySelectorAll('button').forEach(function (b) { b.classList.toggle('has-error', !!errs[b.dataset.step]); });
+    }
+    function redrawKeepingScroll() {
+      var scrollY = window.scrollY || window.pageYOffset || 0;
+      var scroller = container.closest('.props-scroll');
+      var inner = scroller ? scroller.scrollTop : 0;
+      drawStep();
+      window.scrollTo(0, scrollY);
+      if (scroller) scroller.scrollTop = inner;
+      requestAnimationFrame(function () { window.scrollTo(0, scrollY); if (scroller) scroller.scrollTop = inner; });
+    }
+    function drawStep() {
+      stepBar.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.step === cur)); });
+      ui.clear(stepBody); ui.clear(stepNav);
+      STEP_RENDER[cur](stepBody, it, p, ctx);
+      var i = steps.indexOf(cur);
+      stepNav.appendChild(i > 0 ? h('button', { class: 'btn', type: 'button', onclick: function () { go(steps[i - 1]); } }, '← ' + stepLabel(steps[i - 1])) : h('span'));
+      if (i < steps.length - 1) stepNav.appendChild(h('button', { class: 'btn primary', type: 'button', onclick: function () { go(steps[i + 1]); } }, stepLabel(steps[i + 1]) + ' →'));
+      else if (opts.done) stepNav.appendChild(opts.done());
+      updateStepErrors();
+    }
+    drawStep();
+    return {
+      redraw: drawStep,
+      step: function () { return cur; },
+      /** Met en évidence le champ correspondant à un élément cliqué sur l'aperçu. */
+      focusField: function (field) {
+        var m = FIELD_MAP[field];
+        if (!m) return false;
+        if (steps.indexOf(m[0]) < 0) return false;
+        if (cur !== m[0]) go(m[0]);
+        var el = stepBody.querySelector('[data-key="' + m[1] + '"]');
+        if (!el) return true;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        el.classList.add('flash');
+        setTimeout(function () { el.classList.remove('flash'); }, 1400);
+        var input = el.querySelector('input:not([type=hidden]),textarea,select,button');
+        if (input) input.focus({ preventScroll: true });
+        return true;
+      }
+    };
+  }
+  App.itemForm = { STEPS: STEPS, STEP_LABELS: STEP_LABELS, FIELD_MAP: FIELD_MAP, mount: mountForm };
+
+  /* ================= Vue « Fiche » (bibliothèque) ================= */
   App.views.editor = {
     title: 'Fiche',
     render: function (el, args) {
@@ -41,18 +140,19 @@
         if (state.itemId !== it.id) state.step = 'essentiel';
       }
       state.itemId = it.id;
-      var steps = STEPS[it.type] || STEPS.activity;
-      var stepLabel = function (name) { return name === 'tarifs' && !p.settings.pricingModule ? 'Points' : STEP_LABELS[name]; };
-      if (steps.indexOf(state.step) < 0) state.step = steps[0];
-
+      var uses = p.issues.filter(function (is) { return is.pages.some(function (pg) { return pg.itemId === it.id; }); });
       var titleEl = h('h1', {}, it.title || 'Nouvelle fiche');
       el.appendChild(h('div', { class: 'page-head' },
         h('div', {}, h('p', { class: 'muted small', style: { margin: 0 } }, h('a', { href: '#/bibliotheque' }, '← Bibliothèque'), ' · ', ui.typeLabel(it.type)), titleEl),
         h('div', { class: 'btn-group' },
+          App.undoButtons ? App.undoButtons() : null,
           returnIssue ? h('button', { class: 'btn', type: 'button', onclick: returnToMel }, '← Retour à cette diapositive') : null,
           h('button', { class: 'btn', type: 'button', onclick: function () { var c = App.duplicateItem(it); App.go('#/fiche/' + c.id); } }, 'Dupliquer'),
           h('button', { class: 'btn', type: 'button', onclick: function () { it.archived = !it.archived; touch(); ui.toast(it.archived ? 'Fiche archivée.' : 'Fiche réactivée.'); App.refresh(); } }, it.archived ? 'Désarchiver' : 'Archiver'),
           h('button', { class: 'btn primary', type: 'button', onclick: function () { App.addToIssue(it); } }, '+ Ajouter au MEL en cours'))));
+      el.appendChild(h('div', { class: 'scope-banner scope-item' }, h('b', {}, 'Modification de la fiche (toutes les semaines)'),
+        ' — ', uses.length ? 'utilisée dans ' + uses.length + ' MEL ; les MEL publiés (figés) ne changent pas.' : 'pas encore utilisée dans un MEL.',
+        returnPage ? h('span', {}, ' Pour une correction propre à une semaine, utilisez « Cette semaine uniquement » dans « Composer le MEL ».') : null));
       if (it.archived) el.appendChild(h('div', { class: 'alert warn' }, 'Fiche archivée : elle n’apparaît plus dans les compositions automatiques.'));
       if (it.legacy) el.appendChild(h('div', { class: 'alert info small' }, 'Fiche reprise d’une version précédente (' + it.legacy.source + '). Les valeurs d’origine sont conservées dans la sauvegarde JSON.'));
 
@@ -65,27 +165,25 @@
       tplSel.addEventListener('change', function () { it.template = tplSel.value; touch(); renderPreview(); });
       var densSel = ui.selectEl(C.model.DENSITIES, it.density);
       densSel.addEventListener('change', function () { it.density = densSel.value; touch(); renderPreview(); });
-      var splitChk = h('input', { type: 'checkbox', checked: state.split });
-      splitChk.addEventListener('change', function () { state.split = splitChk.checked; renderPreview(); });
       var read = h('span', { class: 'readability' });
       var stage = h('div', { class: 'slides-strip' });
       var issuesBox = h('ul', { class: 'issues', 'aria-live': 'polite' });
       var lastSlides = [];
-      preview.appendChild(h('div', { class: 'card' },
-        h('div', { class: 'preview-tools' }, ui.field('Modèle', tplSel), ui.field('Densité', densSel),
-          h('label', { class: 'check', title: 'Option temporaire de prévisualisation. La répartition du MEL se règle dans les options de chaque diapositive.' }, splitChk, 'Afficher 2 diapositives (aperçu uniquement)'), h('span', { class: 'spacer' }), read),
+      preview.appendChild(h('div', { class: 'card sticky-preview' },
+        h('div', { class: 'preview-tools' }, ui.field('Modèle', tplSel), ui.field('Densité', densSel, { help: 'Automatique : corps ≥ 12 pt · Aéré · Compact : corps ≥ 11 pt et photos réduites.' }), h('span', { class: 'spacer' }), read),
         h('div', { style: { marginTop: '10px' } }, stage),
+        h('p', { class: 'small muted', style: { margin: '6px 0 0' } }, 'Astuce : cliquez sur un texte de l’aperçu pour aller au champ correspondant.'),
         h('div', { class: 'row', style: { marginTop: '10px' } },
           h('button', { class: 'btn', type: 'button', onclick: function () { App.fullscreen(lastSlides); } }, '⤢ Aperçu plein écran'),
-          h('button', { class: 'btn', type: 'button', onclick: function (e) { App.exportPptx(lastSlides.map(function (s) { return { slide: s, title: it.title, notes: App.notesFor({}, it, s) }; }), 'CSE_' + ui.slug(it.title) + '.pptx', e.currentTarget); } }, '↓ Exporter la fiche (.pptx)'),
+          h('button', { class: 'btn', type: 'button', onclick: function (e) { App.exportPptx(lastSlides.map(function (s) { return { slide: s, title: it.title, notes: App.notesFor({}, it, s), item: it }; }), 'CSE_' + ui.slug(it.title) + '.pptx', e.currentTarget); } }, '↓ Exporter la fiche (.pptx)'),
           h('span', { class: 'spacer' }), h('span', { class: 'small muted' }, 'Statut au ' + D.fmtShort(App.refDate(), true) + ' : '), h('span', { id: 'rubricBox' }))));
       preview.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Contrôles et lisibilité'), issuesBox));
       var renderPreview = ui.debounce(function () {
-        lastSlides = C.templates.renderItem(it, p, { refDate: App.refDate(), split: state.split });
+        lastSlides = C.templates.renderItem(it, p, { refDate: App.refDate() });
         ui.clear(stage);
         lastSlides.forEach(function (s, i) {
           if (lastSlides.length > 1) stage.appendChild(h('div', { class: 'part-label' }, 'Diapositive ' + (i + 1) + ' / ' + lastSlides.length));
-          var f = ui.slideFrame(s, { label: 'Aperçu de la diapositive', onAction: onAction, onDrawn: function (r) { if (r.domOverflow.length) addIssue('warn', 'Débordement détecté à l’affichage : ' + r.domOverflow.join(', ') + '. Raccourcir le texte.'); } });
+          var f = ui.slideFrame(s, { label: 'Aperçu de la diapositive', onAction: onAction, onField: function (field) { formApi.focusField(field); }, onDrawn: function (r) { if (r.domOverflow.length) addIssue('warn', 'Débordement détecté à l’affichage : ' + r.domOverflow.join(', ') + '. Raccourcir le texte.'); } });
           stage.appendChild(f.frame);
         });
         var r = C.templates.readability(lastSlides);
@@ -102,69 +200,48 @@
       }
       function renderIssues() {
         ui.clear(issuesBox);
-        var list = C.compose.checkItem(it, p, App.refDate());
-        list.forEach(function (x) { addIssue(x[0], x[1]); });
+        C.compose.checkItem(it, p, App.refDate()).forEach(function (x) { addIssue(x[0], x[1]); });
         var seen = {};
         lastSlides.forEach(function (s) { s.warnings.forEach(function (w) {
           if (seen[w.msg] || /^Tarifs : /.test(w.msg)) return; seen[w.msg] = 1;
           var act = null;
-          if (w.code === 'suggest-split' || w.code === 'overflow') act = h('button', { class: 'btn small act', type: 'button', onclick: function () { state.split = true; splitChk.checked = true; renderPreview(); } }, '2 diapositives');
+          if (w.code === 'compact-fits') act = h('button', { class: 'btn small act', type: 'button', onclick: function () { it.density = 'compact'; densSel.value = 'compact'; touch(); renderPreview(); } }, 'Passer en compact');
+          if (w.code === 'image') act = h('button', { class: 'btn small act', type: 'button', onclick: function () { formApi.focusField('photo'); } }, 'Corriger la photo');
           addIssue(w.level, w.msg, act);
         }); });
         if (!issuesBox.children.length) addIssue('ok', 'Aucun problème détecté. Relisez la diapositive avant diffusion.');
-        updateStepErrors();
       }
-      function onAction(a) {
-        if (a.type === 'calendar-day') { cycleDay(a.date); }
-      }
-      function cycleDay(date) {
-        C.model.cycleCalendarDay(it.calendar, date, state.calBrush && state.calBrush.hours);
-        touch(); renderPreview(); if (state.step === 'calendrier') redrawStepKeepingScroll();
-      }
+      function onAction(a) { if (a.type === 'calendar-day') { C.model.cycleCalendarDay(it.calendar, a.date, state.calBrush && state.calBrush.hours); touch(); renderPreview(); if (formApi.step() === 'calendrier') formApi.redraw(); } }
       function touch() {
         it.updatedAt = new Date().toISOString();
         if (it.editorialStatus === 'approved') { it.editorialStatus = 'review'; ui.toast('Fiche modifiée : statut repassé à « À relire ».'); }
         titleEl.textContent = it.title || 'Nouvelle fiche';
         App.save('items');
       }
-
-      /* ---------- Formulaire par étapes ---------- */
-      var stepBar = h('div', { class: 'steps', role: 'tablist', 'aria-label': 'Étapes de la fiche' });
-      var stepBody = h('div', { role: 'tabpanel' });
-      var stepNav = h('div', { class: 'step-nav' });
-      form.appendChild(stepBar); form.appendChild(stepBody); form.appendChild(stepNav);
-      steps.forEach(function (s, i) {
-        var b = h('button', { type: 'button', role: 'tab', 'aria-selected': String(s === state.step), dataset: { step: s }, onclick: function () { state.step = s; drawStep(); } }, h('span', { class: 'n' }, String(i + 1)), stepLabel(s));
-        stepBar.appendChild(b);
+      var formApi = mountForm(form, it, {
+        project: p, scope: 'item', step: state.step, touch: touch, render: renderPreview,
+        onStep: function (s) { state.step = s; },
+        done: function () { return returnIssue ? h('button', { class: 'btn primary', type: 'button', onclick: returnToMel }, 'Terminer et revenir au MEL') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'); }
       });
-      function updateStepErrors() {
-        var errs = { essentiel: !String(it.title).trim(), dates: !!(it.dateStart && it.dateEnd && it.dateEnd < it.dateStart) || !!(it.regStart && it.regEnd && it.regEnd < it.regStart), visuels: it.link.type === 'custom' && !!it.link.url && !C.compose.validUrl(it.link.url) };
-        stepBar.querySelectorAll('button').forEach(function (b) { b.classList.toggle('has-error', !!errs[b.dataset.step]); });
-      }
-      function redrawStepKeepingScroll() {
-        var scrollY = window.scrollY || window.pageYOffset || 0;
-        drawStep();
-        // Remplacer un tableau modifie sa hauteur et peut recaler le scroll du navigateur.
-        // Double restauration : après le rendu DOM, puis au frame suivant.
-        window.scrollTo(0, scrollY);
-        requestAnimationFrame(function () { window.scrollTo(0, scrollY); });
-      }
-      function drawStep() {
-        stepBar.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.step === state.step)); });
-        ui.clear(stepBody); ui.clear(stepNav);
-        var fn = STEP_RENDER[state.step];
-        fn(stepBody, it, p, { touch: touch, render: renderPreview, redraw: drawStep, redrawKeepScroll: redrawStepKeepingScroll });
-        var i = steps.indexOf(state.step);
-        stepNav.appendChild(i > 0 ? h('button', { class: 'btn', type: 'button', onclick: function () { state.step = steps[i - 1]; drawStep(); } }, '← ' + stepLabel(steps[i - 1])) : h('span'));
-        stepNav.appendChild(i < steps.length - 1 ? h('button', { class: 'btn primary', type: 'button', onclick: function () { state.step = steps[i + 1]; drawStep(); } }, stepLabel(steps[i + 1]) + ' →') : returnIssue ? h('button', { class: 'btn primary', type: 'button', onclick: returnToMel }, 'Terminer et revenir au MEL') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'));
-      }
-      drawStep();
       renderPreview();
-      if (!it.title) setTimeout(function () { var t = stepBody.querySelector('input'); if (t) t.focus(); }, 50);
+      if (!it.title) setTimeout(function () { var t = form.querySelector('[data-key="title"] input'); if (t) t.focus(); }, 50);
     }
   };
 
   /* ---------- Contrôles liés à la fiche ---------- */
+  /** Repère « personnalisé cette semaine » + bouton de retour à la valeur de la fiche. */
+  function overrideMark(wrap, key, ctx) {
+    wrap.dataset.key = key;
+    if (ctx.scope !== 'page' || !ctx.isOverridden(key)) return wrap;
+    return addMark(wrap, key, ctx);
+  }
+  function addMark(wrap, key, ctx) {
+    wrap.classList.add('overridden');
+    var lab = wrap.querySelector(':scope > label') || wrap.querySelector(':scope > h3') || wrap.querySelector(':scope legend') || wrap.querySelector('label') || wrap;
+    lab.appendChild(h('span', { class: 'ov-chip', title: 'Valeur propre à ce MEL' }, 'cette semaine'));
+    lab.appendChild(h('button', { type: 'button', class: 'ov-reset', title: 'Revenir à la valeur de la fiche', 'aria-label': 'Annuler la personnalisation de ce champ', onclick: function (e) { e.preventDefault(); ctx.resetField(key); } }, '↺'));
+    return wrap;
+  }
   function bindInput(it, key, ctx, opts) {
     opts = opts || {};
     var tag = opts.rows ? 'textarea' : 'input';
@@ -179,7 +256,7 @@
       var check = function () { var bad = !String(el.value).trim(); w.classList.toggle('invalid', bad); var e = w.querySelector('.err'); if (bad && !e) w.appendChild(h('span', { class: 'err' }, 'Champ obligatoire.')); if (!bad && e) e.remove(); };
       el.addEventListener('blur', check);
     }
-    return w;
+    return overrideMark(w, opts.markKey || key, ctx);
   }
   function bindSelect(it, key, options, ctx, opts) {
     opts = opts || {};
@@ -187,67 +264,76 @@
     var set = opts.set || function (v) { it[key] = v; };
     var s = ui.selectEl(options, get());
     s.addEventListener('change', function () { set(s.value); ctx.touch(); ctx.render(); if (opts.redraw) ctx.redraw(); });
-    return ui.field(opts.label, s, { help: opts.help });
+    return overrideMark(ui.field(opts.label, s, { help: opts.help }), opts.markKey || key, ctx);
   }
-  function bindCheck(it, label, get, set, ctx, help, redraw) {
+  function bindCheck(it, label, get, set, ctx, help, redraw, key) {
     var c = h('input', { type: 'checkbox', checked: !!get() });
     c.addEventListener('change', function () { set(c.checked); ctx.touch(); ctx.render(); if (redraw) ctx.redraw(); });
-    return h('div', {}, h('label', { class: 'check' }, c, label), help ? h('small', { class: 'help', style: { display: 'block', margin: '-8px 0 12px 26px' } }, help) : null);
+    var w = h('div', {}, h('label', { class: 'check' }, c, label), help ? h('small', { class: 'help', style: { display: 'block', margin: '-8px 0 12px 26px' } }, help) : null);
+    return key ? overrideMark(w, key, ctx) : w;
   }
   var richHelp = 'Astuces : **texte** = gras · une ligne commençant par « - » = puce · ligne vide = espace.';
+  var STATUS_LABEL = { ready: 'Prête pour le PowerPoint', remote: 'Lien Web non importé', missing: 'Introuvable' };
 
   var STEP_RENDER = {
     essentiel: function (box, it, p, ctx) {
-      box.appendChild(bindSelect(it, 'type', C.model.TYPES, ctx, { label: 'Type de fiche', help: (C.model.TYPES.find(function (t) { return t.id === it.type; }) || {}).hint, set: function (v) { it.type = v; it.template = 'auto'; }, redraw: true }));
-      box.querySelector('select').addEventListener('change', function () { App.refresh(); });
-      box.appendChild(bindInput(it, 'title', ctx, { label: it.type === 'partner' ? 'Enseigne / nom du partenaire' : 'Titre', required: true, max: 160, placeholder: it.type === 'activity' ? 'Ex. Circuit Sri Lanka authenticité' : '' }));
-      box.appendChild(bindInput(it, 'subtitle', ctx, { label: 'Sous-titre / précision (facultatif)', max: 200, placeholder: 'Ex. Vacances de printemps' }));
+      if (ctx.scope !== 'page') {
+        box.appendChild(bindSelect(it, 'type', C.model.TYPES, ctx, { label: 'Type de fiche', help: (C.model.TYPES.find(function (t) { return t.id === it.type; }) || {}).hint, set: function (v) { it.type = v; it.template = 'auto'; }, redraw: true }));
+        box.querySelector('select').addEventListener('change', function () { App.refresh(); });
+      }
+      box.appendChild(bindInput(it, 'title', ctx, { label: it.type === 'partner' ? 'Enseigne / nom du partenaire' : 'Titre', required: true, max: 160, placeholder: it.type === 'activity' ? 'Ex. Circuit découverte des Pouilles' : '' }));
+      box.appendChild(bindInput(it, 'subtitle', ctx, { label: it.type === 'rules' ? 'Sous-titre (affiché sous le titre)' : 'Sous-titre / précision (facultatif)', max: 200, placeholder: 'Ex. Vacances de printemps', help: 'Si le sous-titre répète la période saisie dans les dates, elle n’est affichée qu’une fois.' }));
       var cats = p.categories.map(function (c) { return { id: c.id, label: c.name }; });
       box.appendChild(h('div', { class: 'cols' },
         bindSelect(it, 'categoryId', cats, ctx, { label: 'Catégorie' }),
-        it.type === 'activity' || it.type === 'info' || it.type === 'partner' ? bindSelect(it, 'editorial', C.model.EDITORIAL, ctx, { label: 'Rubrique éditoriale', help: 'Automatique : nouveauté si créée depuis moins de ' + p.settings.newDays + ' j, dernière chance si clôture sous ' + p.settings.lastDays + ' j.' }) : null));
-      if (it.type === 'activity' || it.type === 'page') box.appendChild(bindSelect(it, 'melSection', [
+        it.type === 'activity' || it.type === 'info' || it.type === 'partner' ? bindSelect(it, 'editorial', C.model.EDITORIAL, ctx, { label: 'Rubrique éditoriale', help: 'Automatique : nouveauté si créée depuis moins de ' + p.settings.newDays + ' j (annoncée au plus ' + p.settings.newMaxWeeks + ' semaine(s)), dernière chance si clôture sous ' + p.settings.lastDays + ' j.' }) : null));
+      if (ctx.scope !== 'page' && (it.type === 'activity' || it.type === 'page')) box.appendChild(bindSelect(it, 'melSection', [
         { id: 'auto', label: 'Automatique selon la fiche et les inscriptions' },
         { id: 'announcements', label: 'Annonces / concerts / événements' },
         { id: 'important', label: 'Informations importantes' },
         { id: 'planning', label: 'Plannings / activités à venir' }
       ], ctx, { label: 'Placement dans le MEL', help: 'Indépendant de la catégorie : permet de placer un concert dans « Annonces ». Une dernière chance automatique reste disponible si le mode automatique est choisi.' }));
-      box.appendChild(h('p', { class: 'small' }, h('a', { href: '#/parametres' }, 'Gérer les catégories (créer, renommer, réordonner)…')));
-      box.appendChild(bindSelect(it, 'editorialStatus', [{ id: 'draft', label: 'Brouillon' }, { id: 'review', label: 'À relire' }, { id: 'approved', label: 'Validée pour diffusion' }], ctx, { label: 'Validation interne', help: 'Indication de travail en local. Une validation sécurisée (rôles Rédacteur / Relecteur) nécessite l’espace partagé Supabase.' }));
+      if (ctx.scope !== 'page') {
+        box.appendChild(h('p', { class: 'small' }, h('a', { href: '#/parametres' }, 'Gérer les catégories (créer, renommer, réordonner)…')));
+        box.appendChild(bindSelect(it, 'editorialStatus', [{ id: 'draft', label: 'Brouillon' }, { id: 'review', label: 'À relire' }, { id: 'approved', label: 'Validée pour diffusion' }], ctx, { label: 'Validation interne', help: 'Indication de travail en local, signalée avant l’export. Une validation sécurisée (rôles Rédacteur / Relecteur) nécessite l’espace partagé Supabase.' }));
+      }
     },
     dates: function (box, it, p, ctx) {
       var startField = bindInput(it, 'dateStart', ctx, { label: 'Date de début', type: 'date' });
       var endField = bindInput(it, 'dateEnd', ctx, { label: 'Date de fin', type: 'date' });
       var startInput = startField.querySelector('input'), endInput = endField.querySelector('input');
+      var endMsg = h('small', { class: 'field-msg', 'aria-live': 'polite' });
+      endField.appendChild(endMsg);
       function syncDates() {
         endInput.min = it.dateStart || '';
         if (it.dateStart && (!it.dateEnd || it.dateEnd < it.dateStart)) {
           it.dateEnd = it.dateStart;
           endInput.value = it.dateEnd;
+          endMsg.textContent = 'Date de fin alignée sur la date de début.';
           ctx.touch(); ctx.render();
         }
       }
       startInput.addEventListener('input', syncDates);
       endInput.addEventListener('input', function () {
         if (it.dateStart && it.dateEnd && it.dateEnd < it.dateStart) {
-          it.dateEnd = it.dateStart; endInput.value = it.dateStart; ctx.touch(); ctx.render();
-        }
+          it.dateEnd = it.dateStart; endInput.value = it.dateStart; endMsg.textContent = 'La date de fin ne peut pas précéder la date de début.'; endMsg.className = 'field-msg warn'; ctx.touch(); ctx.render();
+        } else { endMsg.textContent = ''; endMsg.className = 'field-msg'; }
       });
       endInput.min = it.dateStart || ''; // ne modifie pas silencieusement une fiche existante à l'ouverture
       box.appendChild(h('div', { class: 'cols' }, startField, endField));
       box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'timeStart', ctx, { label: 'Heure de début', type: 'time' }), bindInput(it, 'timeEnd', ctx, { label: 'Heure de fin', type: 'time' })));
-      box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'location', ctx, { label: 'Lieu / destination', placeholder: 'Ex. Salle Pékin Turin, Massy' }), bindInput(it, 'address', ctx, { label: 'Adresse (facultatif)' })));
+      box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'location', ctx, { label: 'Lieu / destination', placeholder: 'Ex. Salle des fêtes, Massy' }), bindInput(it, 'address', ctx, { label: 'Adresse (facultatif)' })));
       box.appendChild(h('fieldset', {}, h('legend', {}, 'Inscriptions'),
-        h('div', { class: 'cols' }, bindInput(it, 'regStart', ctx, { label: 'Ouverture des inscriptions', type: 'date' }), bindInput(it, 'regEnd', ctx, { label: 'Clôture des inscriptions', type: 'date', help: 'Sert au calcul « Dernière semaine » et au compteur J−x.' })),
+        h('div', { class: 'cols' }, bindInput(it, 'regStart', ctx, { label: 'Ouverture des inscriptions', type: 'date' }), bindInput(it, 'regEnd', ctx, { label: 'Clôture des inscriptions', type: 'date', help: 'Sert au calcul « Dernière chance » et au compteur J−x.' })),
         bindSelect(it, 'regStatus', C.model.REG_STATUS, ctx, { label: 'Statut des inscriptions' }),
         bindInput(it, 'regInfo', ctx, { label: 'Modalités d’inscription (facultatif)', rows: 2, placeholder: 'Ex. Inscription sur le portail CSE ou au local du CSE.' }),
-        bindCheck(it, 'Forcer en « Dernière chance »', function () { return it.forceLast; }, function (v) { it.forceLast = v; if (v) it.excludeLast = false; }, ctx, 'Exception manuelle : la fiche apparaît en dernière chance même hors fenêtre de ' + p.settings.lastDays + ' jours (jamais si les inscriptions sont closes).', true),
-        bindCheck(it, 'Ne jamais afficher en « Dernière chance »', function () { return it.excludeLast; }, function (v) { it.excludeLast = v; if (v) it.forceLast = false; }, ctx, null, true)));
+        bindCheck(it, 'Forcer en « Dernière chance »', function () { return it.forceLast; }, function (v) { it.forceLast = v; if (v) it.excludeLast = false; }, ctx, 'Exception manuelle : la fiche apparaît en dernière chance même hors fenêtre de ' + p.settings.lastDays + ' jours (jamais si les inscriptions sont closes).', true, 'forceLast'),
+        bindCheck(it, 'Ne jamais afficher en « Dernière chance »', function () { return it.excludeLast; }, function (v) { it.excludeLast = v; if (v) it.forceLast = false; }, ctx, null, true, 'excludeLast')));
     },
     contenu: function (box, it, p, ctx) {
       var isRules = it.type === 'rules';
       if (!isRules) box.appendChild(bindInput(it, 'summary', ctx, { label: it.type === 'info' ? 'Message principal (chapeau)' : 'Résumé (2 ou 3 phrases, mis en valeur)', rows: 3, max: 1200 }));
-      box.appendChild(bindInput(it, 'description', ctx, { label: isRules ? 'Texte du règlement' : it.type === 'partner' ? 'Conditions et détails de l’offre' : 'Description détaillée', rows: isRules ? 16 : 6, max: 6000, help: isRules ? 'Titres : ligne commençant par « # ». ' + richHelp + ' Le texte se répartit automatiquement sur plusieurs diapositives si nécessaire.' : richHelp }));
+      box.appendChild(bindInput(it, 'description', ctx, { label: isRules ? 'Texte du règlement' : it.type === 'partner' ? 'Conditions et détails de l’offre' : 'Description détaillée', rows: isRules ? 16 : 6, max: 8000, help: isRules ? 'Titres : ligne commençant par « # ». ' + richHelp + ' Le texte se répartit automatiquement sur plusieurs diapositives si nécessaire.' : richHelp }));
       if (it.type === 'activity' || it.type === 'page') {
         box.appendChild(bindInput(it, 'highlights', ctx, { label: 'Temps forts (une ligne par élément)', rows: 4 }));
         box.appendChild(bindInput(it, 'program', ctx, { label: 'Programme (une étape par ligne, ex. « 14h00 - Accueil »)', rows: 4 }));
@@ -260,67 +346,118 @@
     },
     visuels: function (box, it, p, ctx) {
       var list = h('div', { class: 'photos' });
+      it.photoMeta = it.photoMeta || {};
+      function meta(ref) { return it.photoMeta[ref] || (it.photoMeta[ref] = {}); }
+      function changedPhotos() { ctx.touch(); ctx.render(); draw(); }
       function draw() {
         ui.clear(list);
         it.photos.forEach(function (ref, i) {
-          var src = C.renderHTML.resolve(ref);
-          list.appendChild(h('div', { class: 'photo' }, src ? h('img', { src: src, alt: 'Photo ' + (i + 1) }) : h('div', { class: 'small muted', style: { padding: '8px' } }, 'Image indisponible'),
-            /^https?:/i.test(ref) ? h('span', { class: 'badge', title: 'Lien externe : remplacer par un fichier pour garantir sa présence dans le PPTX.' }, '⚠ À réimporter pour PPTX') : null,
-            i === 0 ? h('span', { class: 'badge' }, it.type === 'partner' ? 'Logo' : 'Principale') : null,
+          var st = C.images.status(ref), m = it.photoMeta[ref] || {};
+          var src = st === 'ready' ? C.renderHTML.resolve(ref) : '';
+          var img = src ? h('img', { src: src, alt: m.alt || 'Photo ' + (i + 1), title: 'Cliquer sur l’image pour choisir le point à garder visible au recadrage' }) : h('div', { class: 'photo-missing' }, st === 'remote' ? 'Lien Web non importé' : 'Image introuvable');
+          if (src) {
+            img.style.objectPosition = (m.fx === undefined ? 50 : m.fx) + '% ' + (m.fy === undefined ? 50 : m.fy) + '%';
+            img.style.objectFit = m.fit === 'contain' ? 'contain' : 'cover';
+            img.addEventListener('click', function (e) {
+              var r = img.getBoundingClientRect();
+              var mm = meta(ref); mm.fx = Math.round((e.clientX - r.left) / r.width * 100); mm.fy = Math.round((e.clientY - r.top) / r.height * 100);
+              changedPhotos();
+            });
+          }
+          var fitSel = ui.selectEl([{ id: 'cover', label: 'Recadrer' }, { id: 'contain', label: 'Image entière' }], m.fit || 'cover', { 'aria-label': 'Cadrage de la photo ' + (i + 1), title: 'Recadrer : remplit le cadre (cliquez sur l’image pour choisir la zone gardée). Image entière : sans recadrage.' });
+          fitSel.addEventListener('change', function () { meta(ref).fit = fitSel.value; changedPhotos(); });
+          var alt = h('input', { value: m.alt || '', placeholder: 'Texte alternatif (facultatif)', 'aria-label': 'Texte alternatif de la photo ' + (i + 1), maxlength: 200 });
+          alt.addEventListener('change', function () { meta(ref).alt = alt.value.trim(); ctx.touch(); });
+          var fix = null;
+          if (st !== 'ready') fix = h('div', { class: 'photo-fix' },
+            h('span', { class: 'small' }, st === 'remote' ? 'Non intégrable au PowerPoint tant qu’elle n’est pas importée.' : 'La réimporter ou la retirer.'),
+            st === 'remote' ? h('button', { type: 'button', class: 'btn small', onclick: function () { retryUrl(ref, i); } }, 'Réessayer l’import') : null,
+            h('button', { type: 'button', class: 'btn small primary', onclick: function () { replaceWithFile(i); } }, 'Remplacer par un fichier'),
+            st === 'remote' ? h('a', { class: 'btn small', href: ref, target: '_blank', rel: 'noopener noreferrer' }, 'Ouvrir l’URL') : null);
+          list.appendChild(h('div', { class: 'photo' + (st === 'ready' ? '' : ' bad') },
+            img,
+            h('span', { class: 'badge st-' + st, title: STATUS_LABEL[st] }, st === 'ready' ? '✓ Prête' : st === 'remote' ? '⚠ Non importée' : '⚠ Introuvable'),
+            i === 0 ? h('span', { class: 'badge first' }, it.type === 'partner' ? 'Logo' : 'Principale') : null,
             h('div', { class: 'tools' },
-              i > 0 ? h('button', { type: 'button', 'aria-label': 'Placer en premier', onclick: function () { it.photos.splice(i, 1); it.photos.unshift(ref); ctx.touch(); ctx.render(); draw(); } }, '★') : null,
-              h('button', { type: 'button', 'aria-label': 'Retirer la photo ' + (i + 1), onclick: function () { it.photos.splice(i, 1); ctx.touch(); ctx.render(); draw(); } }, '✕'))));
+              i > 0 ? h('button', { type: 'button', 'aria-label': 'Placer en premier', title: 'Placer en premier', onclick: function () { it.photos.splice(i, 1); it.photos.unshift(ref); changedPhotos(); } }, '★') : null,
+              h('button', { type: 'button', 'aria-label': 'Retirer la photo ' + (i + 1), title: 'Retirer', onclick: function () { it.photos.splice(i, 1); delete it.photoMeta[ref]; changedPhotos(); } }, '✕')),
+            st === 'ready' ? h('div', { class: 'photo-opts' }, fitSel, alt) : fix));
         });
+        if (!it.photos.length) list.appendChild(h('p', { class: 'small muted' }, 'Aucune photo : la composition s’adapte (pictogramme de catégorie ou texte élargi).'));
       }
-      function addFiles(files) {
-        files = files.filter(function (f) { return /^image\//.test(f.type); });
+      function addFiles(files, at) {
+        files = files.filter(function (f) { return f && (!f.type || /^image\//.test(f.type)); });
         if (!files.length) return;
-        var room = 6 - it.photos.length;
+        var room = 6 - it.photos.length + (at !== undefined ? 1 : 0);
         if (room <= 0) return ui.toast('6 images maximum par fiche.', 'error');
         Promise.all(files.slice(0, room).map(function (f) { return C.images.importFile(f, it.type === 'partner' && !it.photos.length ? { maxW: 1200, maxH: 1200 } : {}); }))
-          .then(function (refs) { it.photos = it.photos.concat(refs); ctx.touch(); ctx.render(); draw(); ui.toast(refs.length + ' image(s) importée(s) et optimisée(s).', 'ok'); })
-          .catch(function (e) { ui.toast(e.message, 'error'); });
+          .then(function (refs) {
+            if (at !== undefined) { var old = it.photos[at]; it.photos.splice(at, 1, refs[0]); if (old) { it.photoMeta[refs[0]] = it.photoMeta[old] || {}; delete it.photoMeta[old]; } }
+            else it.photos = it.photos.concat(refs);
+            changedPhotos(); ui.toast(refs.length + ' image(s) enregistrée(s) dans CSE Studio : prête(s) pour le PowerPoint.', 'ok');
+          })
+          .catch(function (e) { ui.toast(e.message, 'error', 8000); });
+      }
+      function replaceWithFile(i) { ui.pickFile('image/png,image/jpeg,image/webp', false).then(function (f) { addFiles(f, i); }); }
+      function retryUrl(ref, i) {
+        C.images.importUrl(ref).then(function (newRef) {
+          var mm = it.photoMeta[ref] || {}; mm.source = ref; it.photoMeta[newRef] = mm; delete it.photoMeta[ref];
+          it.photos.splice(i, 1, newRef); changedPhotos(); ui.toast('Image récupérée et enregistrée localement : prête pour le PowerPoint.', 'ok');
+        }).catch(function (e) { urlError(e, ref); });
+      }
+      function urlError(e, u) {
+        ui.dialog({ title: 'Image non importée', body: h('div', {},
+          h('p', {}, e.message),
+          h('p', { class: 'small muted' }, 'CSE Studio fonctionne entièrement dans le navigateur (GitHub Pages) : il ne peut pas contourner la protection d’un site. Solutions fiables :'),
+          h('ol', { class: 'small' }, h('li', {}, 'Ouvrir l’adresse, enregistrer l’image sur l’ordinateur puis « Importer un fichier » ;'), h('li', {}, 'ou faire clic droit → « Copier l’image » puis la coller dans la zone prévue (Ctrl+V).'))),
+          buttons: [{ label: 'Fermer', value: false }, { label: 'Ouvrir l’adresse', value: 'open' }, { label: 'Importer un fichier', kind: 'primary', value: 'file' }] }).then(function (v) {
+          if (v === 'open') window.open(u, '_blank', 'noopener');
+          if (v === 'file') ui.pickFile('image/png,image/jpeg,image/webp', true).then(addFiles);
+        });
       }
       var dz = h('div', { class: 'dropzone', tabindex: '0', role: 'button', 'aria-label': 'Ajouter des photos' }, it.type === 'partner' ? 'Glisser le logo puis un visuel, ou cliquer pour choisir (JPG, PNG, WEBP)' : 'Glisser des photos ici ou cliquer pour choisir (JPG, PNG, WEBP · 6 maximum)');
       dz.addEventListener('click', function () { ui.pickFile('image/png,image/jpeg,image/webp', true).then(addFiles); });
       dz.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dz.click(); } });
-      dz.title = 'Vous pouvez aussi copier une image sur une page Web, cliquer ici puis la coller (Ctrl+V).';
-      dz.addEventListener('paste', function (e) {
-        var files = Array.prototype.slice.call(e.clipboardData && e.clipboardData.items || []).filter(function (item) { return item.kind === 'file' && /^image\//.test(item.type); }).map(function (item) { return item.getAsFile(); }).filter(Boolean);
-        if (files.length) { e.preventDefault(); addFiles(files); }
-      });
       dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('over'); });
       dz.addEventListener('dragleave', function () { dz.classList.remove('over'); });
       dz.addEventListener('drop', function (e) { e.preventDefault(); dz.classList.remove('over'); addFiles(Array.prototype.slice.call(e.dataTransfer.files || [])); });
-      var url = h('input', { type: 'url', placeholder: 'https://… (image publique)' });
+      function onPaste(e) {
+        var items = Array.prototype.slice.call(e.clipboardData && e.clipboardData.items || []);
+        var files = items.filter(function (x) { return x.kind === 'file' && /^image\//.test(x.type); }).map(function (x) { return x.getAsFile(); }).filter(Boolean);
+        e.preventDefault();
+        if (files.length) addFiles(files);
+        else ui.toast('Le presse-papiers ne contient pas d’image. Copiez l’image elle-même (clic droit → Copier l’image), pas son adresse.', 'error', 7000);
+      }
+      dz.addEventListener('paste', onPaste);
+      var pasteZone = h('div', { class: 'pastezone', tabindex: '0', role: 'textbox', 'aria-label': 'Zone de collage d’une image' }, '📋 Coller une image copiée : cliquer ici puis Ctrl+V');
+      pasteZone.addEventListener('paste', onPaste);
+      var url = h('input', { type: 'url', placeholder: 'https://… (adresse directe d’une image)' });
       var addUrl = h('button', { class: 'btn', type: 'button', onclick: function () {
         var u = url.value.trim();
-        if (!C.compose.validUrl(u) || !u) return ui.toast('Adresse invalide.', 'error');
-        C.images.importUrl(u).then(function (ref) { it.photos.push(ref); ctx.touch(); ctx.render(); draw(); ui.toast('Image récupérée et enregistrée localement.', 'ok'); url.value = ''; })
-          .catch(function () { ui.toast('Image non ajoutée : le site refuse sa récupération (CORS). Importez un fichier JPG/PNG ou collez une copie de la photo (Ctrl+V), afin qu’elle figure aussi dans le PowerPoint.', 'error'); });
-      } }, 'Ajouter');
-      box.appendChild(h('h3', {}, it.type === 'partner' ? 'Logo et visuels' : 'Photos'));
-      box.appendChild(list); box.appendChild(dz);
-      var pasteZone = h('div', { class: 'pastezone', tabindex: '0', role: 'textbox', 'aria-label': 'Zone de collage d’une image Web' }, '📋 Coller une image copiée : cliquer ici puis Ctrl+V');
-      pasteZone.addEventListener('paste', function (e) {
-        var items = Array.prototype.slice.call(e.clipboardData && e.clipboardData.items || []);
-        var files = items.filter(function (i) { return i.kind === 'file' && /^image\//.test(i.type); }).map(function (i) { return i.getAsFile(); }).filter(Boolean);
-        if (files.length) { e.preventDefault(); addFiles(files); }
-        else { e.preventDefault(); ui.toast('Le presse-papiers ne contient pas d’image. Copiez l’image elle-même, pas son adresse.', 'error'); }
-      });
+        if (!u || !C.compose.validUrl(u)) return ui.toast('Adresse invalide : elle doit commencer par https://', 'error');
+        addUrl.disabled = true; addUrl.textContent = 'Vérification…';
+        C.images.importUrl(u).then(function (ref) {
+          if (it.photos.length >= 6) throw Error('6 images maximum par fiche.');
+          it.photos.push(ref); meta(ref).source = u; changedPhotos(); url.value = '';
+          ui.toast('Image récupérée et enregistrée localement : prête pour le PowerPoint.', 'ok');
+        }).catch(function (e) { urlError(e, u); }).then(function () { addUrl.disabled = false; addUrl.textContent = 'Importer'; });
+      } }, 'Importer');
+      var head = h('h3', {}, it.type === 'partner' ? 'Logo et visuels' : 'Photos');
+      var wrap = overrideMark(h('div', {}, head, list), 'photos', ctx);
+      box.appendChild(wrap);
+      box.appendChild(dz);
       box.appendChild(pasteZone);
-      box.appendChild(h('p', { class: 'small muted' }, 'Les URL d’images peuvent être bloquées par les règles CORS. Dans ce cas, copiez puis collez l’image, ou importez le fichier ; cela permet de l’intégrer au PowerPoint.'));
-      box.appendChild(h('div', { class: 'row', style: { marginTop: '10px' } }, h('div', { style: { flex: 1, minWidth: '200px' } }, ui.field('Ou importer depuis une adresse web', url)), addUrl));
+      box.appendChild(h('div', { class: 'row', style: { marginTop: '10px' } }, h('div', { style: { flex: 1, minWidth: '200px' } }, ui.field('Ou importer depuis une adresse Web', url, { help: 'L’image est téléchargée et enregistrée dans CSE Studio si le site l’autorise (CORS). Sinon, un message explique comment l’importer.' })), addUrl));
       draw();
       box.appendChild(h('h3', { style: { marginTop: '8px' } }, 'Lien de destination'));
-      box.appendChild(bindSelect(it, 'link', [{ id: 'portal', label: 'Portail CSE (par défaut)' }, { id: 'custom', label: 'Lien personnalisé' }, { id: 'none', label: 'Aucun lien' }], ctx, { label: 'Bouton de la diapositive', get: function () { return it.link.type; }, set: function (v) { it.link.type = v; }, redraw: true, help: 'Portail : ' + p.settings.portalUrl + ' (page d’accueil après connexion ; les liens directs vers une activité Kalidea ne sont pas garantis).' }));
+      box.appendChild(bindSelect(it, 'link', [{ id: 'portal', label: 'Portail CSE' }, { id: 'custom', label: 'Lien personnalisé' }, { id: 'none', label: 'Aucun lien' }], ctx, { label: 'Bouton de la diapositive', get: function () { return it.link.type; }, set: function (v) { it.link.type = v; }, redraw: true, help: 'Portail : ' + p.settings.portalUrl + ' (page d’accueil après connexion ; les liens directs vers une activité Kalidea ne sont pas garantis). Sans lien valide, aucun bouton n’est affiché.' }));
       if (it.link.type === 'custom') box.appendChild(bindInput(it, 'link', ctx, { label: 'Adresse du lien personnalisé', type: 'url', get: function () { return it.link.url; }, set: function (v) { it.link.url = v.trim(); }, placeholder: 'https://…' }));
       if (it.link.type !== 'none') box.appendChild(bindInput(it, 'link', ctx, { label: 'Texte du bouton', max: 40, get: function () { return it.link.label; }, set: function (v) { it.link.label = v; } }));
     },
     tarifs: function (box, it, p, ctx) {
       if (!p.settings.pricingModule) { box.appendChild(h('div', { class: 'alert info' }, 'Le module « Tarifs CSE » est masqué dans les Paramètres : aucun tarif n’apparaît sur les diapositives.')); }
       var pr = it.pricing;
-      box.appendChild(bindCheck(it, 'Afficher des tarifs sur cette fiche', function () { return pr.enabled; }, function (v) { pr.enabled = v; }, ctx, 'Désactivé : aucun bloc tarif, le texte récupère la place.', true));
+      box.appendChild(bindCheck(it, 'Afficher des tarifs sur cette fiche', function () { return pr.enabled; }, function (v) { pr.enabled = v; }, ctx, 'Désactivé : aucun cartouche, la composition récupère toute la place.', true, 'pricing'));
       if (pr.enabled) {
         box.appendChild(bindSelect(it, 'pricing', C.pricing.MODES, ctx, { label: 'Mode de calcul', get: function () { return pr.mode; }, set: function (v) { pr.mode = v; }, redraw: true }));
         var cols = h('div', { class: 'cols' });
@@ -345,18 +482,18 @@
               tb.appendChild(h('tr', {}, h('td', {}, 'T' + (i + 1)), h('td', {}, pr.mode === 'tranches' ? (p.settings.rates[i] + ' %') : ''), pr.mode === 'tranches' ? h('td', { class: 'calc' }, row ? C.pricing.money(row.price) + (row.overridden ? ' (forcé)' : '') : '—') : h('td', {}, inp), pr.mode === 'tranches' ? h('td', {}, inp) : h('td')));
             })(i);
             t.appendChild(tb); table.appendChild(t);
-            if (pr.mode === 'tranches') table.appendChild(h('p', { class: 'small muted' }, 'Barème et arrondi modifiables dans Paramètres → Tarifs CSE.'));
+            if (pr.mode === 'tranches') table.appendChild(h('p', { class: 'small muted' }, 'Barème et arrondi modifiables dans Paramètres → Tarifs CSE (valeurs de départ à faire confirmer par le CSE).'));
           } else if (res.rows[0]) table.appendChild(h('p', {}, h('b', {}, 'Résultat : '), res.rows[0].label + ' ' + C.pricing.money(res.rows[0].price)));
           res.issues.forEach(function (x) { table.appendChild(h('div', { class: 'alert ' + (x[0] === 'block' ? 'error' : 'warn') + ' small' }, x[1])); });
         };
         drawTable();
         box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'pricing', ctx, { label: 'Libellé (facultatif)', placeholder: 'Ex. Chambre double', get: function () { return pr.label; }, set: function (v) { pr.label = v; } }),
-          bindInput(it, 'pricing', ctx, { label: 'Notes tarifs (facultatif)', placeholder: 'Ex. Supplément single : 350 €', get: function () { return pr.notes; }, set: function (v) { pr.notes = v; } })));
+          bindInput(it, 'pricing', ctx, { label: 'Supplément / note (facultatif)', placeholder: 'Ex. Supplément single : 150 €', get: function () { return pr.notes; }, set: function (v) { pr.notes = v; }, help: 'Court : en haut à droite du cartouche. Long : encart intégré au cartouche, jamais tronqué.' })));
       }
-      box.appendChild(h('fieldset', {}, h('legend', {}, 'Points (facultatif)'),
+      box.appendChild(overrideMark(h('fieldset', {}, h('legend', {}, 'Points (facultatif)'),
         h('div', { class: 'cols' }, bindInput(it, 'points', ctx, { label: 'Nombre de points', type: 'number', min: 0, step: 0.5, get: function () { return it.points.value; }, set: function (v) { it.points.value = v; } }),
           bindSelect(it, 'points', C.model.COUNTERS, ctx, { label: 'Compteur', get: function () { return it.points.counter; }, set: function (v) { it.points.counter = v; } })),
-        h('small', { class: 'help' }, 'Le bloc « Points » n’apparaît que si un nombre est saisi.')));
+        h('small', { class: 'help' }, 'Le bloc « Points » n’apparaît que si un nombre est saisi.')), 'points', ctx));
     },
     pratique: function (box, it, p, ctx) {
       if (it.type === 'activity') {
@@ -364,8 +501,8 @@
         box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'minAge', ctx, { label: 'Âge minimum', placeholder: 'Ex. 16 ou « À partir de 16 ans »' }), bindInput(it, 'audience', ctx, { label: 'Public éligible', placeholder: 'Ex. Salariés et ayants droit' })));
         box.appendChild(bindInput(it, 'carbon', ctx, { label: 'Bilan carbone (facultatif)', placeholder: 'Ex. 619 kg CO₂e (vol A/R)' }));
       }
-      box.appendChild(h('h3', {}, 'Contacts / référents'));
-      box.appendChild(h('p', { class: 'small muted' }, 'Sur la diapositive, seul le nom apparaît ; s’il a un e-mail valide, le nom devient un lien « mailto: » qui ouvre la messagerie de l’ordinateur. L’adresse reste lisible dans le lien : ne saisir que des adresses destinées à être diffusées.'));
+      var head = overrideMark(h('div', {}, h('h3', {}, 'Contacts / référents'), h('p', { class: 'small muted' }, 'Sur la diapositive, seul le nom apparaît ; s’il a un e-mail valide, le nom devient un lien « mailto: » dans l’aperçu et le PowerPoint. L’adresse reste lisible dans le lien : ne saisir que des adresses destinées à être diffusées.')), 'contacts', ctx);
+      box.appendChild(head);
       var list = h('div');
       var EMAIL = /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[A-Za-z]{2,}$/;
       function draw() {
@@ -411,8 +548,8 @@
     calendrier: function (box, it, p, ctx) {
       var cal = it.calendar, M = C.model;
       cal.dayHours = cal.dayHours || {};
-      box.appendChild(h('div', { class: 'cols' }, bindInput(it, 'calendar', ctx, { label: 'Mois affiché', type: 'month', get: function () { return cal.month; }, set: function (v) { cal.month = v; }, after: function () { ctx.redraw(); } }),
-        bindInput(it, 'calendar', ctx, { label: 'Nom du service (pastille)', get: function () { return cal.service; }, set: function (v) { cal.service = v; }, placeholder: 'Permanences, Prêt de matériel…' })));
+      box.appendChild(overrideMark(h('div', { class: 'cols' }, bindInput(it, 'calendar', ctx, { label: 'Mois affiché', type: 'month', get: function () { return cal.month; }, set: function (v) { cal.month = v; }, after: function () { ctx.redraw(); } }),
+        bindInput(it, 'calendar', ctx, { label: 'Nom du service (pastille)', get: function () { return cal.service; }, set: function (v) { cal.service = v; }, placeholder: 'Permanences, Prêt de matériel…' })), 'calendar', ctx));
       box.appendChild(bindInput(it, 'calendar', ctx, { label: 'Horaire standard des jours « Ouvert » (vert)', get: function () { return cal.openHours; }, set: function (v) { cal.openHours = v; }, placeholder: 'Ex. 13h–16h' }));
       // Pinceau : on choisit un état puis on clique sur les jours ; les autres dates ne sont jamais effacées.
       var brush = state.calBrush = state.calBrush || { state: 'open', hours: '' };
@@ -428,7 +565,7 @@
       var hoursWrap = h('div', { class: brush.state === 'special' ? '' : 'hidden' }, ui.field('Horaire appliqué aux jours cliqués', hoursIn, { help: 'Chaque jour garde son propre horaire, modifiable ci-dessous.' }));
       brushBox.appendChild(hoursWrap);
       box.appendChild(brushBox);
-      box.appendChild(h('p', { class: 'small muted', style: { margin: '4px 0' } }, '2. Cliquer sur les jours (ici ou directement sur l’aperçu, où un clic fait défiler Ouvert → Horaire particulier → Fermé → vide).'));
+      box.appendChild(h('p', { class: 'small muted', style: { margin: '4px 0' } }, '2. Cliquer sur les jours (ici ou directement sur l’aperçu, où un clic fait défiler Ouvert → Horaire particulier → Fermé → vide). La page ne remonte pas.'));
       var grid = h('div', { class: 'cal-editor', role: 'grid', 'aria-label': 'Jours du mois' });
       ['LUN', 'MAR', 'MER', 'JEU', 'VEN'].forEach(function (d) { grid.appendChild(h('div', { class: 'h' }, d)); });
       var month = cal.month || App.refDate().slice(0, 7);
@@ -441,7 +578,8 @@
           var label = st ? M.CAL_STATES[st.state].label + (st.hours ? ' ' + st.hours : '') : 'sans information';
           var b = h('button', { type: 'button', class: inMonth ? '' : 'out', style: st ? { background: M.CAL_STATES[st.state].color } : {}, 'aria-label': D.fmtDay(day) + ' : ' + label, title: label },
             inMonth ? String(+day.slice(8)) : '', st && st.state === 'special' && st.hours ? h('small', { class: 'cal-h' }, st.hours) : null);
-          if (inMonth) b.addEventListener('click', function () {
+          if (inMonth) b.addEventListener('click', function (e) {
+            e.preventDefault();
             if (brush.state === 'none') { delete cal.days[day]; delete cal.dayHours[day]; }
             else {
               cal.days[day] = brush.state;
@@ -454,13 +592,20 @@
         })(d);
       }
       box.appendChild(grid);
-      // Modification en masse des jours ouvrés : mêmes couleurs / horaires que le pinceau unitaire.
+      // Modification en masse : plage « du … au … », jours de la semaine choisis.
       var dateRange = h('fieldset', { class: 'cal-range' }, h('legend', {}, '3. Appliquer à une plage de dates'));
-      var range = state.calRange = state.calRange && state.calRange.month === month ? state.calRange : { month: month, from: month + '-01', to: month + '-01' };
-      var fromDate = h('input', { type: 'date', value: range.from, min: month + '-01', max: month + '-' + D.pad(new Date(Date.UTC(+month.slice(0, 4), +month.slice(5), 0)).getUTCDate()), 'aria-label': 'Début de plage' });
-      var toDate = h('input', { type: 'date', value: range.to, min: fromDate.min, max: fromDate.max, 'aria-label': 'Fin de plage' });
+      var range = state.calRange = state.calRange && state.calRange.month === month ? state.calRange : { month: month, from: month + '-01', to: month + '-01', days: [1, 2, 3, 4, 5] };
+      var lastDay = month + '-' + D.pad(new Date(Date.UTC(+month.slice(0, 4), +month.slice(5), 0)).getUTCDate());
+      var fromDate = h('input', { type: 'date', value: range.from, min: month + '-01', max: lastDay, 'aria-label': 'Début de plage' });
+      var toDate = h('input', { type: 'date', value: range.to, min: fromDate.min, max: lastDay, 'aria-label': 'Fin de plage' });
       fromDate.addEventListener('change', function () { range.from = fromDate.value; toDate.min = fromDate.value || fromDate.min; if (!toDate.value || toDate.value < fromDate.value) toDate.value = fromDate.value; range.to = toDate.value; });
       toDate.addEventListener('change', function () { range.to = toDate.value; });
+      var dayChecks = h('div', { class: 'row small' });
+      [[1, 'lun.'], [2, 'mar.'], [3, 'mer.'], [4, 'jeu.'], [5, 'ven.']].forEach(function (o) {
+        var c = h('input', { type: 'checkbox', checked: range.days.indexOf(o[0]) >= 0 });
+        c.addEventListener('change', function () { range.days = range.days.filter(function (x) { return x !== o[0]; }); if (c.checked) range.days.push(o[0]); });
+        dayChecks.appendChild(h('label', { class: 'check', style: { margin: '0 8px 0 0' } }, c, o[1]));
+      });
       var applyRange = h('button', { type: 'button', class: 'btn small primary', onclick: function () {
         var from = fromDate.value, to = toDate.value;
         if (!from || !to || from > to || from.slice(0, 7) !== month || to.slice(0, 7) !== month) return ui.toast('Choisir deux dates du mois, dans l’ordre.', 'error');
@@ -468,17 +613,18 @@
         var count = 0;
         for (var cursor = from; cursor <= to; cursor = D.addDays(cursor, 1)) {
           var wd = D.weekday(cursor);
-          if (wd === 0 || wd === 6) continue;
+          if (wd === 0 || wd === 6 || range.days.indexOf(wd) < 0) continue;
           count++;
           if (brush.state === 'none') { delete cal.days[cursor]; delete cal.dayHours[cursor]; }
           else { cal.days[cursor] = brush.state; if (brush.state === 'special') cal.dayHours[cursor] = brush.hours.trim(); else delete cal.dayHours[cursor]; }
         }
         ctx.touch(); ctx.render(); (ctx.redrawKeepScroll || ctx.redraw)();
-        ui.toast(count + ' jour(s) ouvré(s) mis à jour.', 'ok');
-      } }, 'Appliquer aux jours ouvrés');
+        ui.toast(count + ' jour(s) mis à jour.', 'ok');
+      } }, 'Appliquer');
       dateRange.appendChild(h('div', { class: 'cols' }, ui.field('Du', fromDate), ui.field('Au', toDate)));
+      dateRange.appendChild(ui.field('Jours concernés', dayChecks));
       dateRange.appendChild(applyRange);
-      dateRange.appendChild(h('p', { class: 'help' }, 'Les samedis et dimanches sont ignorés. Les jours déjà renseignés dans la plage sont remplacés.'));
+      dateRange.appendChild(h('p', { class: 'help' }, 'Les samedis et dimanches sont toujours ignorés. Les jours déjà renseignés dans la plage sont remplacés.'));
       box.appendChild(dateRange);
       var specials = Object.keys(cal.days).filter(function (k) { return k.slice(0, 7) === month && cal.days[k] === 'special'; }).sort();
       if (specials.length) {

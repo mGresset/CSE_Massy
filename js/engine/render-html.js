@@ -50,7 +50,10 @@
           e.decoding = 'async';
           e.src = src;
           e.style.objectFit = it.fit === 'contain' ? 'contain' : it.fit === 'stretch' ? 'fill' : 'cover';
+          if (it.fx !== undefined || it.fy !== undefined) e.style.objectPosition = (it.fx === undefined ? 50 : it.fx) + '% ' + (it.fy === undefined ? 50 : it.fy) + '%';
+          if (it.alt) e.alt = it.alt;
           e.onerror = function () { this.classList.add('cse-img-broken'); this.removeAttribute('src'); };
+          if (it.role === 'photo') e.dataset.field = 'photo';
         } else {
           e = el('div', 'cse-img-missing');
           e.textContent = 'Image indisponible';
@@ -66,8 +69,9 @@
         it.paras.forEach(function (p) {
           var pd = el('div', 'cse-p');
           if (p.align) pd.style.textAlign = p.align;
-          var empty = !p.runs.some(function (r) { return String(r.text).length; });
-          if (empty) { pd.textContent = ' '; inner.appendChild(pd); return; }
+          var empty = !p.runs.some(function (r) { return String(r.text).trim().length; });
+          // Séparation entre blocs : une demi-ligne, comme dans le PowerPoint (metrics.PARA_GAP).
+          if (empty) { pd.className = 'cse-p cse-gap'; pd.style.height = ((it.lh || 1.2) * (CSE.metrics ? CSE.metrics.PARA_GAP : 1)) + 'em'; inner.appendChild(pd); return; }
           if (p.bullet) pd.appendChild(document.createTextNode('• '));
           p.runs.forEach(function (r) {
             var link = r.link || it.link;

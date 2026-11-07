@@ -36,8 +36,10 @@
     return /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : '';
   }
 
-  /** Classe une fiche à la date de référence ref (AAAA-MM-JJ). */
-  function classify(item, ref, settings) {
+  /** Classe une fiche à la date de référence ref (AAAA-MM-JJ).
+   *  issue (facultatif) : MEL concerné ; son historique newSeen empêche qu'une nouveauté déjà annoncée
+   *  pendant settings.newMaxWeeks semaines redevienne « nouveauté » lors d'une duplication. */
+  function classify(item, ref, settings, issue) {
     var d = D(), s = settings || {};
     var lastDays = s.lastDays === undefined ? 7 : Math.max(0, Number(s.lastDays) || 0), newDays = s.newDays === undefined ? 7 : s.newDays;
     var r = { rubric: 'ongoing', isNew: false, isLast: false, open: false, closed: false, expired: false, soon: false, daysLeft: null, regLabel: '' };
@@ -45,6 +47,11 @@
     var created = createdDay(item);
     var age = created ? d.diffDays(ref, created) : null;
     r.isNew = item.editorial === 'new' || (item.editorial === 'auto' && newDays > 0 && age !== null && age >= 0 && age < newDays);
+    var seen = issue && issue.newSeen && issue.newSeen[item.id];
+    if (r.isNew && seen && /^\d{4}-\d{2}-\d{2}$/.test(seen)) {
+      var maxDays = 7 * Math.max(1, Number(s.newMaxWeeks) || 2);
+      if (d.diffDays(ref, seen) >= maxDays) { r.isNew = false; r.newSince = seen; }
+    }
     var end = item.dateEnd || item.dateStart;
     if (item.type === 'rules') { r.rubric = 'rules'; return r; }
     if (item.type === 'calendar') { r.rubric = 'calendar'; return r; }
@@ -95,11 +102,11 @@
   function byDeadline(a, b) {
     return String(a.regEnd || '9999').localeCompare(String(b.regEnd || '9999')) || byDate(a, b);
   }
-  function itemsWith(project, ref, rubric, categoryId) {
+  function itemsWith(project, ref, rubric, categoryId, issue) {
     return project.items.filter(function (it) {
       if (it.archived) return false;
       if (categoryId && it.categoryId !== categoryId) return false;
-      return classify(it, ref, project.settings).rubric === rubric;
+      return classify(it, ref, project.settings, issue).rubric === rubric;
     });
   }
   function findItem(project, id) { return project.items.find(function (it) { return it.id === id; }) || null; }
@@ -110,18 +117,18 @@
     var rubric = page.kind === 'last' ? 'last' : 'new';
     var list;
     if (o.auto === false && Array.isArray(o.ids)) list = o.ids.map(function (id) { return findItem(project, id); }).filter(function (it) { return it && !it.archived; });
-    else list = itemsWith(project, ref, rubric, o.categoryId).sort(rubric === 'last' ? byDeadline : byDate);
+    else list = itemsWith(project, ref, rubric, o.categoryId, issue).sort(rubric === 'last' ? byDeadline : byDate);
     if (rubric === 'new') list = list.filter(function (it) { return it.type === 'activity' || it.type === 'partner' || it.type === 'info'; });
     return list;
   }
   /** Contenus automatiques de la couverture. */
   function coverData(page, project, issue) {
     var o = page.opts || {}, ref = issue.refDate;
-    var last = itemsWith(project, ref, 'last').sort(byDeadline);
+    var last = itemsWith(project, ref, 'last', '', issue).sort(byDeadline);
     var news = (o.newsAuto === false && Array.isArray(o.newsIds))
       ? o.newsIds.map(function (id) { return findItem(project, id); }).filter(function (it) { return it && !it.archived; })
-      : project.items.filter(function (it) { var c = classify(it, ref, project.settings); return !it.archived && c.isNew && !c.expired && ['full', 'closed', 'cancelled'].indexOf(c.rubric) < 0 && (it.type === 'activity' || it.type === 'partner'); }).sort(byDate);
-    return { last: last, news: news.slice(0, 4), newsTotal: news.length };
+      : project.items.filter(function (it) { var c = classify(it, ref, project.settings, issue); return !it.archived && c.isNew && !c.expired && ['full', 'closed', 'cancelled'].indexOf(c.rubric) < 0 && (it.type === 'activity' || it.type === 'partner'); }).sort(byDate);
+    return { last: last, news: news.slice(0, 4), newsTotal: Math.max(news.length, Number(o.frozenNewsTotal) || 0) };
   }
   /** Lignes d'un programme « À venir » (automatique depuis la bibliothèque ou saisie manuelle). */
   function upcomingRows(page, project, issue) {
@@ -134,10 +141,10 @@
       if (D().diffDays(it.dateStart, ref) < 0) return false;
       if (o.from && it.dateStart < o.from) return false;
       if (o.to && it.dateStart > o.to) return false;
-      var c = classify(it, ref, project.settings);
+      var c = classify(it, ref, project.settings, issue);
       return c.rubric !== 'cancelled' && c.rubric !== 'expired';
     }).sort(byDate).map(function (it) {
-      var c = classify(it, ref, project.settings);
+      var c = classify(it, ref, project.settings, issue);
       return { date: it.dateStart, dateEnd: it.dateEnd, title: it.title, location: it.location, type: M().categoryName(project, it), status: c.regLabel, itemId: it.id };
     });
   }
@@ -171,7 +178,7 @@
     if (it.melSection && it.melSection !== 'auto' && ['important', 'announcements', 'planning'].indexOf(it.melSection) >= 0) return it.melSection;
     if (it.type === 'page') return 'important';
     var ref = issue && issue.refDate || D().todayParis();
-    var cls = classify(it, ref, project.settings);
+    var cls = classify(it, ref, project.settings, issue);
     if (cls.rubric === 'last') return 'last';
     if (cls.rubric === 'new') return 'new';
     if (cls.rubric === 'upcoming') return 'planning';
@@ -226,7 +233,7 @@
     var M_ = M(), ref = issue.refDate, s = project.settings;
     var live = project.items.filter(function (it) { return !it.archived; });
     var cls = {};
-    live.forEach(function (it) { cls[it.id] = classify(it, ref, s); });
+    live.forEach(function (it) { cls[it.id] = classify(it, ref, s, issue); });
     var of = function (rub) { return live.filter(function (it) { return cls[it.id].rubric === rub; }); };
     var pages = [M_.blankPage('cover')];
     var add = function (it) { pages.push(M_.blankPage('item', { itemId: it.id })); };
@@ -255,6 +262,183 @@
     var suppressed = issue.suppressed || [];
     return enforceOrder(pages.filter(function (pg) { return suppressed.indexOf(pageKey(pg)) < 0; }), project, issue);
   }
+
+  /* ================= V10 · Réemploi hebdomadaire ================= */
+
+  /** Champs d'une fiche personnalisables pour un seul MEL (« cette diapositive uniquement »).
+   *  Les objets (tarifs, points, lien, offre, calendrier) et les listes (contacts, photos) sont
+   *  remplacés en bloc : la surcharge contient la valeur complète affichée cette semaine. */
+  var OVERRIDE_FIELDS = ['title', 'subtitle', 'categoryId', 'summary', 'description', 'highlights', 'program', 'notes', 'transport', 'lodging', 'conditions',
+    'regInfo', 'location', 'address', 'dateStart', 'dateEnd', 'timeStart', 'timeEnd', 'regStart', 'regEnd', 'regStatus', 'forceLast', 'excludeLast',
+    'minPart', 'maxPart', 'minAge', 'audience', 'carbon', 'contacts', 'photos', 'photoMeta', 'pricing', 'points', 'link', 'partner', 'calendar', 'editorial'];
+  function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+  function hasOverrides(page) {
+    var o = page && page.opts;
+    return !!(o && o.useOverrides && o.override && Object.keys(o.override).some(function (k) { return OVERRIDE_FIELDS.indexOf(k) >= 0; }));
+  }
+  /** Fiche telle qu'affichée dans CE MEL : fiche source + personnalisations de la page (jamais l'inverse). */
+  function effectiveItem(page, item) {
+    if (!item || !hasOverrides(page)) return item;
+    var ov = page.opts.override, out = Object.assign({}, item);
+    OVERRIDE_FIELDS.forEach(function (k) {
+      if (!Object.prototype.hasOwnProperty.call(ov, k)) return;
+      var v = ov[k];
+      if (['title', 'subtitle', 'summary', 'description', 'highlights', 'program', 'notes', 'transport', 'lodging', 'conditions', 'regInfo', 'location', 'address', 'audience', 'carbon', 'minPart', 'maxPart', 'minAge'].indexOf(k) >= 0) out[k] = String(v === undefined || v === null ? '' : v);
+      else out[k] = clone(v);
+    });
+    out.overridden = Object.keys(ov).filter(function (k) { return OVERRIDE_FIELDS.indexOf(k) >= 0; });
+    return out;
+  }
+  /** Enregistre la différence entre un brouillon de fiche et sa source dans la page (personnalisation locale). */
+  function setOverrides(page, source, draft) {
+    page.opts = page.opts || {};
+    var ov = {};
+    OVERRIDE_FIELDS.forEach(function (k) {
+      var a = JSON.stringify(source[k] === undefined ? null : source[k]), b = JSON.stringify(draft[k] === undefined ? null : draft[k]);
+      if (a !== b) ov[k] = clone(draft[k]);
+    });
+    page.opts.override = ov;
+    page.opts.useOverrides = Object.keys(ov).length > 0;
+    return ov;
+  }
+  /** Retire la personnalisation d'un champ (ou de toute la page si field est omis). */
+  function resetOverride(page, field) {
+    var o = page && page.opts;
+    if (!o || !o.override) return;
+    if (field) delete o.override[field]; else o.override = {};
+    o.useOverrides = Object.keys(o.override).length > 0;
+  }
+
+  var ISSUE_STATUS = [
+    { id: 'draft', label: 'Brouillon' }, { id: 'review', label: 'À relire' }, { id: 'validated', label: 'Validé' },
+    { id: 'published', label: 'Publié (figé)' }, { id: 'archived', label: 'Archivé' }
+  ];
+  function isFrozen(issue) { return !!(issue && issue.snapshot && (issue.status === 'published' || issue.status === 'archived')); }
+  /** Vue de rendu d'un MEL : la bibliothèque vivante pour un brouillon, l'instantané pour un MEL publié. */
+  function issueView(project, issue) {
+    if (!isFrozen(issue)) return { project: project, issue: issue, frozen: false };
+    var snap = issue.snapshot;
+    var proj = Object.assign({}, project, { items: snap.items || [], categories: snap.categories || project.categories, settings: Object.assign({}, project.settings, snap.settings || {}) });
+    return { project: proj, issue: Object.assign({}, issue, { pages: snap.pages || issue.pages, newSeen: snap.newSeen || issue.newSeen }), frozen: true };
+  }
+  /** Identifiants des fiches utilisées par un MEL (pages, mosaïques, couverture, programmes automatiques). */
+  function usedItemIds(project, issue) {
+    var ids = {};
+    (issue.pages || []).forEach(function (pg) {
+      if (pg.kind === 'item' && pg.itemId) ids[pg.itemId] = 1;
+      if (pg.kind === 'news' || pg.kind === 'last') selection(pg, project, issue).forEach(function (it) { ids[it.id] = 1; });
+      if (pg.kind === 'cover') { var cd = coverData(pg, project, issue); cd.news.concat(cd.last).forEach(function (it) { ids[it.id] = 1; }); }
+      if (pg.kind === 'upcoming') upcomingRows(pg, project, issue).forEach(function (r) { if (r.itemId) ids[r.itemId] = 1; });
+    });
+    return Object.keys(ids);
+  }
+  /** Fige un MEL au moment de la publication : copie des fiches, catégories, réglages et sélections
+   *  automatiques matérialisées. Le MEL publié reste consultable et exportable tel que diffusé. */
+  function freezeIssue(project, issue) {
+    var pages = clone(issue.pages || []);
+    pages.forEach(function (pg) {
+      pg.opts = pg.opts || {};
+      if (pg.kind === 'news' || pg.kind === 'last') { pg.opts.ids = selection(pg, project, issue).map(function (it) { return it.id; }); pg.opts.auto = false; }
+      if (pg.kind === 'cover') { var cd = coverData(pg, project, issue); pg.opts.newsIds = cd.news.map(function (it) { return it.id; }); pg.opts.newsAuto = false; pg.opts.frozenNewsTotal = cd.newsTotal; }
+      if (pg.kind === 'upcoming' && pg.opts.auto !== false) {
+        pg.opts.rows = upcomingRows(pg, project, issue).map(function (r) { return { date: r.date, dateEnd: r.dateEnd || '', title: r.title, location: r.location || '', type: r.type || '', status: r.status || '', itemId: r.itemId || '' }; });
+        pg.opts.auto = false;
+      }
+    });
+    var items = usedItemIds(project, issue).map(function (id) { return findItem(project, id); }).filter(Boolean).map(clone);
+    issue.snapshot = { frozenAt: new Date().toISOString(), refDate: issue.refDate, pages: pages, items: items, categories: clone(project.categories), settings: clone(project.settings), newSeen: clone(issue.newSeen || {}) };
+    return issue.snapshot;
+  }
+  /** Change le statut ; « publié » fige le MEL, « rouvrir » conserve l'instantané précédent. */
+  function setIssueStatus(project, issue, status) {
+    if (ISSUE_STATUS.every(function (s) { return s.id !== status; })) return issue;
+    if (status === 'published' && !isFrozen(issue)) freezeIssue(project, issue);
+    if ((status === 'draft' || status === 'review' || status === 'validated') && issue.snapshot) {
+      issue.previousSnapshots = (issue.previousSnapshots || []).concat([issue.snapshot]).slice(-3);
+      delete issue.snapshot;
+    }
+    issue.status = status;
+    issue.updatedAt = new Date().toISOString();
+    return issue;
+  }
+
+  /** Crée le MEL d'une nouvelle semaine à partir d'un MEL précédent, SANS modifier ce dernier.
+   *  Pages, personnalisations, exclusions, modèles et réglages sont repris ; les rubriques sont
+   *  recalculées à la nouvelle date ; les nouveautés déjà annoncées ne sont pas réannoncées
+   *  au-delà de settings.newMaxWeeks semaines. Renvoie { issue, report }. */
+  function duplicateIssue(project, source, newRef) {
+    var M_ = M(), d = D();
+    var view = issueView(project, source);
+    var is = M_.blankIssue(newRef);
+    is.title = source.title || ''; is.numbering = !!source.numbering; is.status = 'draft'; is.sourceIssueId = source.id;
+    // Historique des nouveautés : celles annoncées dans le MEL source restent datées de leur 1re annonce.
+    var seen = clone(source.newSeen || {}) || {};
+    var announced = {};
+    view.issue.pages.forEach(function (pg) {
+      if (pg.kind === 'news') selection(pg, view.project, view.issue).forEach(function (it) { announced[it.id] = 1; });
+      if (pg.kind === 'cover') coverData(pg, view.project, view.issue).news.forEach(function (it) { announced[it.id] = 1; });
+      if (pg.kind === 'item' && sectionForPage(pg, view.project, view.issue) === 'new') announced[pg.itemId] = 1;
+    });
+    Object.keys(announced).forEach(function (id) { if (!seen[id]) seen[id] = source.refDate; });
+    is.newSeen = seen;
+    is.suppressed = (source.suppressed || []).slice();
+    var report = { source: { id: source.id, week: source.week, year: source.year, refDate: source.refDate }, kept: [], moved: [], added: [], removed: [], excluded: [], review: [], notNewAnymore: [] };
+    var labelOf = function (pg) {
+      if (pg.kind === 'item') { var it = findItem(project, pg.itemId); return it ? (effectiveItem(pg, it).title || 'Sans titre') : 'Fiche supprimée'; }
+      return { cover: 'Couverture', news: 'Nouveautés', last: 'Dernières chances', upcoming: (pg.opts && pg.opts.title) || 'Programme' }[pg.kind] || pg.kind;
+    };
+    var carried = [];
+    (source.pages || []).forEach(function (pg) {
+      var c = M_.normalizePage(clone(pg));
+      c.id = M_.uid('page');
+      if (c.kind === 'item') {
+        var it = findItem(project, c.itemId);
+        if (!it) { report.removed.push({ label: labelOf(pg), reason: 'fiche supprimée de la bibliothèque' }); return; }
+        if (it.archived) { report.removed.push({ label: it.title, reason: 'fiche archivée' }); return; }
+        var cls = classify(it, newRef, project.settings, is);
+        if (['expired', 'closed', 'cancelled'].indexOf(cls.rubric) >= 0) { report.removed.push({ label: it.title, reason: (RUBRICS[cls.rubric] || {}).label || cls.rubric }); return; }
+        var before = sectionForPage(pg, view.project, view.issue), after = sectionForPage(c, project, is);
+        if (before !== after) report.moved.push({ label: labelOf(c), from: before, to: after });
+        else report.kept.push({ label: labelOf(c) });
+        if (announced[it.id] && !cls.isNew && cls.newSince) report.notNewAnymore.push({ label: it.title, since: cls.newSince });
+        if (it.type === 'calendar' && it.calendar && it.calendar.month && it.calendar.month < newRef.slice(0, 7)) report.review.push({ label: it.title, reason: 'calendrier du mois de ' + d.monthLabel(it.calendar.month) + ' : à mettre à jour', itemId: it.id, pageId: c.id, action: 'calendar-month' });
+        if (isFrozen(source)) {
+          var snapIt = (source.snapshot.items || []).find(function (x) { return x.id === it.id; });
+          if (snapIt && snapIt.updatedAt !== it.updatedAt) report.review.push({ label: it.title, reason: 'fiche modifiée dans la bibliothèque depuis la publication du MEL précédent', itemId: it.id, pageId: c.id });
+        }
+        if (hasOverrides(c)) report.review.push({ label: labelOf(c), reason: 'personnalisation de la semaine précédente conservée : à relire', pageId: c.id });
+      } else {
+        report.kept.push({ label: labelOf(c) });
+        if (c.kind === 'cover') {
+          var o = c.opts || {};
+          if ((o.important && (o.important.title || o.important.text)) || (o.extraNotes || []).length || o.editorial) report.review.push({ label: 'Couverture', reason: 'messages de la semaine précédente conservés : à relire', pageId: c.id });
+        }
+      }
+      if (!c.included) report.excluded.push({ label: labelOf(c) });
+      carried.push(c);
+    });
+    is.pages = carried;
+    // Ajout des nouvelles fiches de la semaine (sans toucher aux pages reprises).
+    var beforeKeys = {};
+    is.pages.forEach(function (pg) { beforeKeys[pageKey(pg)] = 1; });
+    is.pages = refreshPreservingEdits(project, is);
+    is.pages.forEach(function (pg) { if (!beforeKeys[pageKey(pg)]) report.added.push({ label: labelOf(pg), section: sectionForPage(pg, project, is) }); });
+    if (!is.pages.some(function (pg) { return pg.kind === 'cover' && !(pg.opts || {}).extraCover; })) is.pages.unshift(M_.blankPage('cover'));
+    is.pages = enforceOrder(is.pages, project, is);
+    // Images à réimporter (Web non importées ou introuvables).
+    var I = CSE.images;
+    if (I && typeof I.status === 'function') {
+      is.pages.forEach(function (pg) {
+        if (pg.kind !== 'item') return;
+        var it = findItem(project, pg.itemId); if (!it) return;
+        (effectiveItem(pg, it).photos || []).forEach(function (src) { var st = I.status(src); if (st !== 'ready') report.review.push({ label: it.title, reason: st === 'remote' ? 'photo Web non importée (non intégrable au PowerPoint)' : 'photo introuvable', itemId: it.id, pageId: pg.id }); });
+      });
+    }
+    is.diffReport = report;
+    return { issue: is, report: report };
+  }
+  /** Semaine ISO suivante : lundi de la semaine qui suit la date de référence. */
+  function nextWeekRef(ref) { var d = D(); return d.addDays(d.monday(ref), 7); }
 
   /* ---------- Contrôles ---------- */
   function validUrl(u, allowRelative) {
@@ -322,28 +506,37 @@
     });
     return Object.keys(map).map(function (k) { return map[k]; }).filter(function (g) { return g.length > 1; });
   }
-  /** Audit d'un numéro : [{level, msg, itemId?, pageId?}] */
+  /** Audit d'un numéro : [{level, msg, itemId?, pageId?}] (fiches telles qu'affichées dans ce MEL). */
   function audit(project, issue) {
     var out = [], ref = issue ? issue.refDate : D().todayParis();
-    duplicates(project).forEach(function (g) { out.push({ level: 'warn', msg: 'Doublon probable : « ' + g[0].title + ' » (' + g.length + ' fiches).', itemId: g[0].id }); });
-    if (!issue) return out;
-    var used = {};
-    issue.pages.forEach(function (p) {
+    if (!issue) { duplicates(project).forEach(function (g) { out.push({ level: 'warn', msg: 'Doublon probable : « ' + g[0].title + ' » (' + g.length + ' fiches).', itemId: g[0].id }); }); return out; }
+    var view = issueView(project, issue), proj = view.project, is = view.issue;
+    duplicates(proj).forEach(function (g) { out.push({ level: 'warn', msg: 'Doublon probable : « ' + g[0].title + ' » (' + g.length + ' fiches).', itemId: g[0].id }); });
+    var used = {}, I = CSE.images;
+    is.pages.forEach(function (p) {
       if (p.kind !== 'item') return;
-      var it = findItem(project, p.itemId);
-      if (!it) { out.push({ level: 'warn', msg: 'Une page référence une fiche supprimée.', pageId: p.id }); return; }
+      var src = findItem(proj, p.itemId);
+      if (!src) { out.push({ level: 'warn', msg: 'Une page référence une fiche supprimée.', pageId: p.id }); return; }
       if (!p.included) return;
+      var it = effectiveItem(p, src);
       if (used[it.id]) out.push({ level: 'info', msg: '« ' + it.title + ' » apparaît plusieurs fois dans ce MEL.', pageId: p.id, itemId: it.id });
       used[it.id] = 1;
-      checkItem(it, project, ref).forEach(function (x) { if (x[0] !== 'info') out.push({ level: x[0], msg: '« ' + (it.title || 'Sans titre') + ' » : ' + x[1], pageId: p.id, itemId: it.id }); });
+      checkItem(it, proj, ref).forEach(function (x) { if (x[0] !== 'info') out.push({ level: x[0], msg: '« ' + (it.title || 'Sans titre') + ' » : ' + x[1], pageId: p.id, itemId: it.id }); });
+      if (I && typeof I.status === 'function') (it.photos || []).forEach(function (ph) {
+        var st = I.status(ph);
+        if (st !== 'ready') out.push({ level: 'block', code: 'image', src: ph, msg: '« ' + (it.title || 'Sans titre') + ' » : ' + (st === 'remote' ? 'photo Web non importée, impossible à intégrer au PowerPoint (CORS).' : 'photo introuvable dans le stockage local.'), pageId: p.id, itemId: it.id });
+      });
     });
-    var order = enforceOrder(issue.pages, project, issue);
-    if (order.some(function (p, i) { return p !== issue.pages[i]; })) out.push({ level: 'info', msg: 'Les pages seront replacées dans l’ordre éditorial : couverture, ouvertures, informations, dernières chances, nouveautés, inscriptions, annonces, partenaires, plannings et règlement.' });
-    if (!issue.pages.some(function (p) { return p.included; })) out.push({ level: 'block', msg: 'Aucune page incluse dans ce MEL.' });
+    var order = enforceOrder(is.pages, proj, is);
+    if (order.some(function (p, i) { return p !== is.pages[i]; })) out.push({ level: 'info', msg: 'Les pages seront replacées dans l’ordre éditorial : couverture, ouvertures, informations, dernières chances, nouveautés, inscriptions, annonces, partenaires, plannings et règlement.' });
+    if (!is.pages.some(function (p) { return p.included; })) out.push({ level: 'block', msg: 'Aucune page incluse dans ce MEL.' });
     return out;
   }
 
   return { RUBRICS: RUBRICS, SECTIONS: SECTIONS, sectionForPage: sectionForPage, pageKey: pageKey, refreshPreservingEdits: refreshPreservingEdits, classify: classify, selection: selection, coverData: coverData, upcomingRows: upcomingRows, enforceOrder: enforceOrder, moveWithinSection: moveWithinSection,
     autoCompose: autoCompose, checkItem: checkItem, duplicates: duplicates, audit: audit, validUrl: validUrl, linkOf: linkOf, findItem: findItem,
-    byDate: byDate, byDeadline: byDeadline, itemsWith: itemsWith };
+    byDate: byDate, byDeadline: byDeadline, itemsWith: itemsWith,
+    OVERRIDE_FIELDS: OVERRIDE_FIELDS, effectiveItem: effectiveItem, setOverrides: setOverrides, resetOverride: resetOverride, hasOverrides: hasOverrides,
+    ISSUE_STATUS: ISSUE_STATUS, isFrozen: isFrozen, issueView: issueView, usedItemIds: usedItemIds, freezeIssue: freezeIssue, setIssueStatus: setIssueStatus,
+    duplicateIssue: duplicateIssue, nextWeekRef: nextWeekRef };
 });

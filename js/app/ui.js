@@ -95,8 +95,17 @@
   /** Cadre 16:9 contenant une diapositive (rendu différé si lazy). */
   function slideFrame(slide, opts) {
     opts = opts || {};
-    var frame = h('div', { class: 'cse-frame' + (opts.className ? ' ' + opts.className : '') });
+    var frame = h('div', { class: 'cse-frame' + (opts.className ? ' ' + opts.className : '') + (opts.onField ? ' pickable' : '') });
     var res = { frame: frame, domOverflow: [] };
+    if (opts.onField) {
+      // Clic sur un élément de l'aperçu → champ correspondant du formulaire (les liens restent actifs).
+      frame.title = 'Cliquer sur un élément pour le modifier';
+      frame.addEventListener('click', function (e) {
+        if (e.target.closest('a') || e.target.closest('[data-act]')) return;
+        var t = e.target.closest('[data-field]');
+        if (t) { e.preventDefault(); opts.onField(t.dataset.field); }
+      });
+    }
     function draw() {
       var r = CSE.renderHTML.render(slide, frame, { onAction: opts.onAction, label: opts.label, checkOverflow: opts.checkOverflow });
       res.domOverflow = r.domOverflow;
