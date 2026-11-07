@@ -106,7 +106,11 @@
   /* ---------- Sauvegarde complète ---------- */
   function backupObject() {
     var refs = CSE.images.refsOf(project);
-    return Object.assign({ schema: CSE.model.SCHEMA, app: 'CSE Studio V9', exportedAt: new Date().toISOString() }, JSON.parse(serialize(project)), { images: CSE.images.exportMap(refs) });
+    var images = CSE.images.exportMap(refs);
+    // Signale explicitement des photos manquantes au lieu d’annoncer une sauvegarde complète à tort.
+    var missing = refs.filter(function (ref) { return !Object.prototype.hasOwnProperty.call(images, ref); });
+    return Object.assign({ schema: CSE.model.SCHEMA, app: 'CSE Studio V9.5', exportedAt: new Date().toISOString() }, JSON.parse(serialize(project)),
+      { images: images, backupWarnings: missing.length ? ['Images absentes du stockage local : ' + missing.length + ' référence(s).'] : [] });
   }
   /** Importe une sauvegarde : mode 'merge' (ajout) ou 'replace' (instantané préalable). */
   function importBackup(obj, mode) {

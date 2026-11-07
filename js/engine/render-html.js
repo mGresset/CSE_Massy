@@ -20,7 +20,7 @@
   function render(slide, container, opts) {
     opts = opts || {};
     var root = el('div', 'cse-slide');
-    root.setAttribute('role', 'img');
+    root.setAttribute('role', 'group'); // Les liens mailto et boutons restent accessibles au clavier et aux lecteurs d’écran.
     root.setAttribute('aria-label', opts.label || 'Diapositive');
     var texts = [];
     slide.items.forEach(function (it) {
@@ -76,9 +76,15 @@
             if (r.bold !== undefined) s.style.fontWeight = r.bold || it.bold ? '700' : '400';
             if (r.color) s.style.color = r.color;
             if (link) {
-              s.href = link;
-              if (/^mailto:/i.test(link)) { s.className = 'cse-mail'; s.title = 'Écrire à ' + r.text; }
-              else { s.target = '_blank'; s.rel = 'noopener noreferrer'; }
+              // Les liens proviennent du formulaire ou de sauvegardes JSON : ne jamais
+              // accepter javascript:, data: ou un schéma inconnu dans l’aperçu.
+              var mail = /^mailto:[^\s@<>'"]+@[^\s@<>'"]+\.[A-Za-z]{2,}$/i.test(link);
+              var web = CSE.compose && CSE.compose.validUrl(link);
+              if (mail || web) {
+                s.href = link;
+                if (mail) { s.className = 'cse-mail'; s.title = 'Écrire à ' + r.text; }
+                else { s.target = '_blank'; s.rel = 'noopener noreferrer'; }
+              }
             }
             pd.appendChild(s);
           });

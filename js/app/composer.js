@@ -17,7 +17,11 @@
       }
       var mandatoryCover = issue.pages.find(function (pg) { return pg.kind === 'cover' && !(pg.opts || {}).extraCover; });
       if (mandatoryCover && !mandatoryCover.included) { mandatoryCover.included = true; App.save('issues'); }
-      issue.pages = C.compose.enforceOrder(issue.pages, p, issue);
+      var orderedPages = C.compose.enforceOrder(issue.pages, p, issue);
+      if (orderedPages.some(function (pg, idx) { return pg !== issue.pages[idx]; })) {
+        issue.pages = orderedPages;
+        App.save('issues');
+      }
       var selected = App.composerSelect && issue.pages.some(function (pg) { return pg.id === App.composerSelect; }) ? App.composerSelect : (issue.pages[0] && issue.pages[0].id);
       App.composerSelect = null;
 
@@ -31,9 +35,10 @@
           h('div', { style: { minWidth: '230px' } }, issueSel),
           h('button', { class: 'btn', type: 'button', onclick: newIssueDialog }, '+ Nouveau MEL'),
           h('button', { class: 'btn', type: 'button', onclick: overview }, '▦ Vue d’ensemble'),
+          h('button', { class: 'btn', type: 'button', title: 'Sauvegarder fiches, MEL et photos dans un fichier JSON', onclick: function () { C.store.saveNow(); var data = C.store.backupObject(); ui.download(JSON.stringify(data), 'CSE_Studio_Sauvegarde_' + issue.year + '_S' + issue.week + '.json', 'application/json'); ui.toast(data.backupWarnings && data.backupWarnings.length ? 'Sauvegarde téléchargée, mais certaines photos sont manquantes : consultez le fichier JSON.' : 'Sauvegarde JSON complète téléchargée.', data.backupWarnings && data.backupWarnings.length ? 'error' : 'ok'); } }, '↓ Sauvegarde'),
           h('button', { class: 'btn', type: 'button', onclick: function () { App.fullscreen(App.issueEntries(issue).map(function (e) { return e.slide; })); } }, '⤢ Diaporama'),
           h('button', { class: 'btn', type: 'button', onclick: function () { App.print(App.issueEntries(issue).map(function (e) { return e.slide; })); } }, '🖨 PDF'),
-          p.settings.canvaUrl ? h('a', { class: 'btn', href: p.settings.canvaUrl, target: '_blank', rel: 'noopener noreferrer', title: 'Importer ensuite le .pptx dans Canva' }, '↗ Canva') : null,
+          C.compose.validUrl(p.settings.canvaUrl) && p.settings.canvaUrl ? h('a', { class: 'btn', href: p.settings.canvaUrl, target: '_blank', rel: 'noopener noreferrer', title: 'Importer ensuite le .pptx dans Canva' }, '↗ Canva') : null,
           exportBtn)));
 
       var left = h('div', { class: 'card' }), center = h('div', { class: 'card' }), right = h('div', { class: 'opts-col' });
@@ -46,7 +51,9 @@
       refIn.addEventListener('change', function () {
         if (!D.isValid(refIn.value)) return;
         issue.refDate = refIn.value; var w = D.isoWeek(refIn.value); issue.week = w.week; issue.year = w.year; weekIn.value = w.week;
-        App.save('issues'); refreshAll(); ui.toast('Date de référence modifiée : nouveautés et dernières chances recalculées.');
+        // L’ordre éditorial peut changer lorsque l’activité entre dans sa dernière semaine.
+        issue.pages = C.compose.enforceOrder(issue.pages, p, issue);
+        App.save('issues'); refreshAll(); ui.toast('Date de référence modifiée : statuts, échéances et ordre des rubriques actualisés.');
       });
       weekIn.addEventListener('change', function () { issue.week = Math.max(1, Math.min(53, parseInt(weekIn.value, 10) || issue.week)); App.save('issues'); refreshAll(); });
       numChk.addEventListener('change', function () { issue.numbering = numChk.checked; App.save('issues'); refreshAll(); });
@@ -57,6 +64,8 @@
         h('button', { class: 'btn small', type: 'button', onclick: regenerate }, '↻ Actualiser sans perdre mes modifications')));
       var count = h('p', { class: 'small muted', style: { margin: '0 0 6px' } });
       left.appendChild(count);
+      var reviewSummary = h('p', { class: 'mel-review small', 'aria-live': 'polite' });
+      left.appendChild(reviewSummary);
       var list = h('ol', { class: 'pages', 'aria-label': 'Pages du MEL' });
       left.appendChild(list);
       left.appendChild(h('p', { class: 'small muted' }, 'Rubriques dans un ordre fixe. Glissez-déposez ou utilisez ↑ ↓ pour réordonner les pages d’une même rubrique. Modifiez chaque fiche à tout moment.')); 
@@ -65,6 +74,7 @@
       var dragId = null;
       var isMainCover = function (pg) { return pg.kind === 'cover' && !(pg.opts || {}).extraCover; };
       function drawList() {
+        var savedScroll = list.scrollTop;
         ui.clear(list);
         var rendered = C.templates.renderIssue(p, issue, { all: true });
         var n = 1, totalSlides = 0, lastSection = '';
@@ -99,15 +109,17 @@
           li.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(pg.id); if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); move(idx, -1); } if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); move(idx, 1); } });
           li.addEventListener('dragstart', function (e) { if (section === 'cover') { e.preventDefault(); return; } dragId = pg.id; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', pg.id); });
           li.addEventListener('dragend', function () { li.classList.remove('dragging'); list.querySelectorAll('.drop-before').forEach(function (x) { x.classList.remove('drop-before'); }); });
-          li.addEventListener('dragover', function (e) { e.preventDefault(); list.querySelectorAll('.drop-before').forEach(function (x) { x.classList.remove('drop-before'); }); li.classList.add('drop-before'); });
+          li.addEventListener('dragover', function (e) {
+            var source = issue.pages.find(function (x) { return x.id === dragId; });
+            if (!source || C.compose.sectionForPage(source, p, issue) !== section) return;
+            e.preventDefault(); list.querySelectorAll('.drop-before').forEach(function (x) { x.classList.remove('drop-before'); }); li.classList.add('drop-before');
+          });
           li.addEventListener('drop', function (e) {
             e.preventDefault();
             var from = issue.pages.findIndex(function (x) { return x.id === dragId; }), to = issue.pages.findIndex(function (x) { return x.id === pg.id; });
             if (from < 0 || to < 0 || from === to) return;
             if (C.compose.sectionForPage(issue.pages[from], p, issue) !== C.compose.sectionForPage(pg, p, issue)) { ui.toast('Le déplacement est limité à une même rubrique. Modifiez le placement éditorial de la fiche pour changer sa rubrique.'); return; }
-            var m = issue.pages.splice(from, 1)[0];
-            issue.pages.splice(from < to ? to - 1 : to, 0, m);
-            afterReorder();
+            if (C.compose.moveWithinSection(issue.pages, from, to, p, issue)) afterReorder();
           });
           list.appendChild(li);
         });
@@ -115,6 +127,19 @@
         list.ondragover = function (e) { e.preventDefault(); };
         list.ondrop = function (e) { if (e.target !== list) return; e.preventDefault(); ui.toast('Déplacez les pages sur une autre page de la même rubrique.'); };
         count.textContent = issue.pages.filter(function (x) { return x.included; }).length + ' page(s) incluse(s) sur ' + issue.pages.length + ' · ' + totalSlides + ' diapositive(s) exportée(s)';
+        var ids = {}, drafts = 0, reviews = 0, approved = 0;
+        issue.pages.forEach(function (pg) {
+          if (!pg.included || pg.kind !== 'item' || ids[pg.itemId]) return;
+          ids[pg.itemId] = true;
+          var it = App.item(pg.itemId);
+          if (!it) return;
+          if (it.editorialStatus === 'approved') approved++;
+          else if (it.editorialStatus === 'review') reviews++;
+          else drafts++;
+        });
+        reviewSummary.className = 'mel-review small' + (drafts || reviews ? ' pending' : ' complete');
+        reviewSummary.textContent = 'Validation des fiches : ' + approved + ' validée(s)' + (reviews || drafts ? ' · ' + reviews + ' à relire · ' + drafts + ' brouillon(s)' : ' · aucune fiche en attente');
+        list.scrollTop = savedScroll;
       }
       function afterReorder() {
         var before = issue.pages.map(function (x) { return x.id; }).join();
@@ -160,6 +185,7 @@
           h('h2', {}, App.pageLabel(pg)),
           pg.kind === 'item' && App.item(pg.itemId) ? h('a', { class: 'btn small primary', href: '#/fiche/' + pg.itemId + '?mel=' + encodeURIComponent(issue.id) + '&page=' + encodeURIComponent(pg.id), title: 'Modifier la fiche source puis revenir à cette diapositive' }, '✎ Modifier la fiche') : null,
           pg.included ? null : h('span', { class: 'chip closed' }, 'Exclue de l’export'),
+          h('button', { class: 'btn small', type: 'button', onclick: function () { right.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, '⚙ Modifier les options'),
           h('button', { class: 'btn small', type: 'button', onclick: function () { App.fullscreen(slides); } }, '⤢ Plein écran'),
           h('button', { class: 'btn small', type: 'button', onclick: function (e) { App.exportPptx(slides.map(function (s) { var it = App.item(pg.itemId); return { slide: s, title: App.pageLabel(pg), notes: App.notesFor(pg, it, s) }; }), 'CSE_' + ui.slug(App.pageLabel(pg)) + '.pptx', e.currentTarget); } }, '↓ Cette page (.pptx)'),
           h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Page suivante', disabled: idx >= issue.pages.length - 1, onclick: function () { select(issue.pages[idx + 1].id); } }, '›')));

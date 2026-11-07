@@ -74,7 +74,9 @@
         var o = { bold: r.bold === undefined ? !!it.bold : !!(r.bold || it.bold) };
         if (r.color) o.color = hex(r.color);
         var link = r.link || it.link;
-        if (link) o.hyperlink = { url: link };
+        // Ne jamais exporter de schéma de lien exécutable issu d'une sauvegarde importée.
+        if (link && (/^mailto:[^\s@<>"']+@[^\s@<>"']+\.[A-Za-z]{2,}$/i.test(link) || (CSE.compose && CSE.compose.validUrl(link))))
+          o.hyperlink = { url: link };
         if (p.align) o.align = p.align;
         var t = String(r.text);
         if (ri === 0 && p.bullet) t = '• ' + t;
@@ -135,7 +137,7 @@
       pptx.author = meta.author || 'CSE THALES LAS MASSY';
       pptx.company = 'CSE THALES LAS MASSY';
       pptx.title = meta.title || 'MEL du CSE';
-      pptx.subject = 'Généré avec CSE Studio V9.1';
+      pptx.subject = 'Généré avec CSE Studio V9.5';
       pptx.lang = 'fr-FR';
       pptx.defineSlideMaster({ title: 'CSE_MEL', background: { color: 'FFFFFF' }, objects: [{ image: { x: 0, y: 0, w: inch(1200), h: inch(CSE.layout.BANNER_H), data: bd } }] });
       var warnings = [], images = {};

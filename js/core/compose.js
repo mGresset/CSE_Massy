@@ -39,7 +39,7 @@
   /** Classe une fiche à la date de référence ref (AAAA-MM-JJ). */
   function classify(item, ref, settings) {
     var d = D(), s = settings || {};
-    var lastDays = s.lastDays || 7, newDays = s.newDays === undefined ? 7 : s.newDays;
+    var lastDays = s.lastDays === undefined ? 7 : Math.max(0, Number(s.lastDays) || 0), newDays = s.newDays === undefined ? 7 : s.newDays;
     var r = { rubric: 'ongoing', isNew: false, isLast: false, open: false, closed: false, expired: false, soon: false, daysLeft: null, regLabel: '' };
     if (item.archived) { r.rubric = 'archived'; return r; }
     var created = createdDay(item);
@@ -73,16 +73,17 @@
     r.regLabel = { open: 'Inscriptions ouvertes', soon: 'Inscriptions prochainement', full: 'Complet', closed: 'Inscriptions closes', cancelled: 'Annulé' }[st] || '';
     r.daysLeft = item.regEnd ? d.diffDays(item.regEnd, ref) : null;
     var inWindow = r.daysLeft !== null && r.daysLeft >= 0 && r.daysLeft <= lastDays;
-    r.isLast = r.open && !r.expired && !item.excludeLast && (inWindow || !!item.forceLast);
+    // Une date limite dépassée ne peut jamais redevenir « Dernière chance », même en statut manuel.
+    r.isLast = r.open && !r.expired && !item.excludeLast && (r.daysLeft === null || r.daysLeft >= 0) && (inWindow || !!item.forceLast);
     if (r.expired) r.rubric = 'expired';
     else if (st === 'cancelled') r.rubric = 'cancelled';
     else if (r.isLast) r.rubric = 'last';
     else if (item.editorial === 'upcoming') r.rubric = 'upcoming';
     else if (item.editorial === 'permanent') r.rubric = 'permanent';
     else if (item.editorial === 'ongoing') r.rubric = st === 'closed' ? 'closed' : 'ongoing';
-    else if (r.isNew && st !== 'closed') r.rubric = 'new';
     else if (st === 'closed') r.rubric = 'closed';
     else if (st === 'full') r.rubric = 'full';
+    else if (r.isNew && st === 'open') r.rubric = 'new';
     else if (st === 'soon') r.rubric = 'upcoming';
     else r.rubric = 'ongoing';
     return r;
@@ -108,7 +109,7 @@
     var ref = issue.refDate, o = page.opts || {};
     var rubric = page.kind === 'last' ? 'last' : 'new';
     var list;
-    if (o.auto === false && Array.isArray(o.ids) && o.ids.length) list = o.ids.map(function (id) { return findItem(project, id); }).filter(Boolean);
+    if (o.auto === false && Array.isArray(o.ids)) list = o.ids.map(function (id) { return findItem(project, id); }).filter(function (it) { return it && !it.archived; });
     else list = itemsWith(project, ref, rubric, o.categoryId).sort(rubric === 'last' ? byDeadline : byDate);
     if (rubric === 'new') list = list.filter(function (it) { return it.type === 'activity' || it.type === 'partner' || it.type === 'info'; });
     return list;
@@ -117,9 +118,9 @@
   function coverData(page, project, issue) {
     var o = page.opts || {}, ref = issue.refDate;
     var last = itemsWith(project, ref, 'last').sort(byDeadline);
-    var news = (o.newsAuto === false && Array.isArray(o.newsIds) && o.newsIds.length)
-      ? o.newsIds.map(function (id) { return findItem(project, id); }).filter(Boolean)
-      : project.items.filter(function (it) { var c = classify(it, ref, project.settings); return !it.archived && c.isNew && !c.expired && (it.type === 'activity' || it.type === 'partner'); }).sort(byDate);
+    var news = (o.newsAuto === false && Array.isArray(o.newsIds))
+      ? o.newsIds.map(function (id) { return findItem(project, id); }).filter(function (it) { return it && !it.archived; })
+      : project.items.filter(function (it) { var c = classify(it, ref, project.settings); return !it.archived && c.isNew && !c.expired && ['full', 'closed', 'cancelled'].indexOf(c.rubric) < 0 && (it.type === 'activity' || it.type === 'partner'); }).sort(byDate);
     return { last: last, news: news.slice(0, 4), newsTotal: news.length };
   }
   /** Lignes d'un programme « À venir » (automatique depuis la bibliothèque ou saisie manuelle). */
@@ -189,6 +190,17 @@
     }
     return SECTIONS.reduce(function (out, s) { return out.concat(buckets[s.id]); }, []);
   }
+  /** Déplace une page avant/après une autre page de sa rubrique, sans jamais franchir une section.
+   * Quand on glisse vers le bas, la page se place après la cible (sinon le voisin immédiat ne bougeait pas).
+   * Renvoie false si le déplacement est interdit, sinon true. */
+  function moveWithinSection(pages, from, to, project, issue) {
+    if (!Array.isArray(pages) || from === to || from < 0 || to < 0 || from >= pages.length || to >= pages.length) return false;
+    var sourceSection = sectionForPage(pages[from], project, issue);
+    if (sourceSection === 'cover' || sourceSection !== sectionForPage(pages[to], project, issue)) return false;
+    var pg = pages.splice(from, 1)[0];
+    pages.splice(to, 0, pg);
+    return true;
+  }
   function pageKey(pg) {
     return pg.kind === 'item' ? 'item:' + pg.itemId : pg.kind + (pg.kind === 'upcoming' ? ':' + ((pg.opts || {}).categoryId || '') + ':' + ((pg.opts || {}).style || 'list') : '');
   }
@@ -255,7 +267,8 @@
     var l = item.link || {};
     if (l.type === 'none') return '';
     if (l.type === 'custom') return validUrl(l.url) && l.url ? String(l.url).trim() : '';
-    return String(settings && settings.portalUrl || M().PORTAL);
+    var portal = String(settings && settings.portalUrl || M().PORTAL).trim();
+    return validUrl(portal) && portal ? portal : M().PORTAL;
   }
   /** Contrôles d'une fiche : [['block'|'warn'|'info', message]]. */
   function checkItem(item, project, ref) {
@@ -286,6 +299,10 @@
       if (e && !/^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[A-Za-z]{2,}$/.test(e)) out.push(['info', 'E-mail de « ' + (c.name || e) + ' » invalide : le nom sera affiché sans lien.']);
     });
     if (item.forceLast && !item.regEnd) out.push(['warn', '« Dernière chance » forcée sans date limite d’inscription : aucune date ne sera affichée.']);
+    if (t === 'activity' && item.regStatus === 'open' && ref && item.regEnd && d.diffDays(item.regEnd, ref) < 0)
+      out.push(['warn', 'Inscriptions indiquées comme ouvertes alors que leur date de clôture est passée : vérifiez le statut.']);
+    if (t === 'activity' && item.regStatus === 'full' && item.forceLast)
+      out.push(['info', 'Activité complète : la mention « Dernière chance » ne sera pas affichée.']);
     if (ref && project) {
       var c = classify(item, ref, project.settings);
       if (c.expired) out.push(['warn', 'Fiche expirée à la date du MEL (' + d.fmtLong(ref) + ').']);
@@ -326,7 +343,7 @@
     return out;
   }
 
-  return { RUBRICS: RUBRICS, SECTIONS: SECTIONS, sectionForPage: sectionForPage, pageKey: pageKey, refreshPreservingEdits: refreshPreservingEdits, classify: classify, selection: selection, coverData: coverData, upcomingRows: upcomingRows, enforceOrder: enforceOrder,
+  return { RUBRICS: RUBRICS, SECTIONS: SECTIONS, sectionForPage: sectionForPage, pageKey: pageKey, refreshPreservingEdits: refreshPreservingEdits, classify: classify, selection: selection, coverData: coverData, upcomingRows: upcomingRows, enforceOrder: enforceOrder, moveWithinSection: moveWithinSection,
     autoCompose: autoCompose, checkItem: checkItem, duplicates: duplicates, audit: audit, validUrl: validUrl, linkOf: linkOf, findItem: findItem,
     byDate: byDate, byDeadline: byDeadline, itemsWith: itemsWith };
 });

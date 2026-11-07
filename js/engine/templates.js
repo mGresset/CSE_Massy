@@ -817,7 +817,7 @@
     var editorial = String(o.editorial || '').trim();
     var extraNotes = (Array.isArray(o.extraNotes) ? o.extraNotes : []).map(function (s) { return String(s || '').trim(); }).filter(Boolean).slice(0, 4);
     if (extraNotes.length) blocks.push('extra');
-    var link = s.planningUrl && CO().validUrl(s.planningUrl) ? s.planningUrl : s.portalUrl;
+    var link = s.planningUrl && CO().validUrl(s.planningUrl) ? s.planningUrl : (CO().validUrl(s.portalUrl) ? s.portalUrl : M().PORTAL);
     var showLink = o.showPlanning !== false && !!link;
     var top = 256, bottom = 636 - (showLink ? 40 : 0) - (editorial ? 30 : 0), gap = 12;
     // Conserver des tailles minimales pour les messages importants. Quand la couverture est
@@ -941,7 +941,7 @@
       b.text(title.toLocaleUpperCase('fr') + (chunks.length > 1 ? ' (' + (ci + 1) + '/' + chunks.length + ')' : ''), 88, bandY + 6, 712, 36, { size: 28, min: 18, bold: true, color: fg, maxLines: 1, field: 'titre', noScale: true });
       var sub = o.subtitle || (urgent ? 'Clôture des inscriptions d’ici le ' + d.fmtLong(d.addDays(ctx.issue.refDate, ctx.settings.lastDays || 7)) : (all.length > 1 ? all.length + ' nouvelles activités à découvrir' : 'Une nouvelle activité à découvrir'));
       b.text(sub, 88, bandY + 38, 712, 22, { size: 15, min: 11, color: fg, maxLines: 1, field: 'sous-titre', noScale: true, role: 'label' });
-      var link = ctx.settings.portalUrl;
+      var link = CO().validUrl(ctx.settings.portalUrl) ? ctx.settings.portalUrl : M().PORTAL;
       if (link) b.pill('Inscriptions sur le portail CSE →', 1160, bandY + 15, { size: 15, h: 34, fill: C.white, color: fg, stroke: bd, align: 'right', link: link });
       var top = bandY + bandH + 14, bottom = 636;
       if (!items.length) {
@@ -1072,7 +1072,7 @@
         }
       }
       if (note) b.text(note, 40, 594, 1120, 20, { size: 13, min: 10, color: C.muted, maxLines: 1, role: 'label', noScale: true, field: 'mention' });
-      b.footer({ link: ctx.settings.portalUrl, ctaLabel: 'Portail CSE', note: ctx.settings.footerNote });
+      b.footer({ link: CO().validUrl(ctx.settings.portalUrl) ? ctx.settings.portalUrl : M().PORTAL, ctaLabel: 'Portail CSE', note: ctx.settings.footerNote });
       slides.push(b.result({ part: slides.length + 1 }));
     } while (i < rows.length && guard++ < 10);
     if (slides.length > 1) slides[0].warnings.push({ level: 'info', msg: 'Programme réparti automatiquement sur ' + slides.length + ' diapositives.' });

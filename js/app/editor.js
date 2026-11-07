@@ -42,7 +42,7 @@
       }
       state.itemId = it.id;
       var steps = STEPS[it.type] || STEPS.activity;
-      if (!p.settings.pricingModule) steps = steps.map(function (s) { return s === 'tarifs' ? 'tarifs' : s; });
+      var stepLabel = function (name) { return name === 'tarifs' && !p.settings.pricingModule ? 'Points' : STEP_LABELS[name]; };
       if (steps.indexOf(state.step) < 0) state.step = steps[0];
 
       var titleEl = h('h1', {}, it.title || 'Nouvelle fiche');
@@ -73,11 +73,11 @@
       var lastSlides = [];
       preview.appendChild(h('div', { class: 'card' },
         h('div', { class: 'preview-tools' }, ui.field('Modèle', tplSel), ui.field('Densité', densSel),
-          h('label', { class: 'check', title: 'Forcer la publication sur deux diapositives (sinon : automatique si le texte ne tient pas à 12 pt)' }, splitChk, 'Toujours 2 diapositives'), h('span', { class: 'spacer' }), read),
+          h('label', { class: 'check', title: 'Option temporaire de prévisualisation. La répartition du MEL se règle dans les options de chaque diapositive.' }, splitChk, 'Afficher 2 diapositives (aperçu uniquement)'), h('span', { class: 'spacer' }), read),
         h('div', { style: { marginTop: '10px' } }, stage),
         h('div', { class: 'row', style: { marginTop: '10px' } },
           h('button', { class: 'btn', type: 'button', onclick: function () { App.fullscreen(lastSlides); } }, '⤢ Aperçu plein écran'),
-          h('button', { class: 'btn', type: 'button', onclick: function (e) { App.exportPptx(lastSlides.map(function (s) { return { slide: s, title: it.title, notes: App.notesFor({}, it, s) }; }), 'CSE_' + ui.slug(it.title) + '.pptx', e.currentTarget); } }, '↓ Exporter cette diapositive (.pptx)'),
+          h('button', { class: 'btn', type: 'button', onclick: function (e) { App.exportPptx(lastSlides.map(function (s) { return { slide: s, title: it.title, notes: App.notesFor({}, it, s) }; }), 'CSE_' + ui.slug(it.title) + '.pptx', e.currentTarget); } }, '↓ Exporter la fiche (.pptx)'),
           h('span', { class: 'spacer' }), h('span', { class: 'small muted' }, 'Statut au ' + D.fmtShort(App.refDate(), true) + ' : '), h('span', { id: 'rubricBox' }))));
       preview.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Contrôles et lisibilité'), issuesBox));
       var renderPreview = ui.debounce(function () {
@@ -134,7 +134,7 @@
       var stepNav = h('div', { class: 'step-nav' });
       form.appendChild(stepBar); form.appendChild(stepBody); form.appendChild(stepNav);
       steps.forEach(function (s, i) {
-        var b = h('button', { type: 'button', role: 'tab', 'aria-selected': String(s === state.step), dataset: { step: s }, onclick: function () { state.step = s; drawStep(); } }, h('span', { class: 'n' }, String(i + 1)), STEP_LABELS[s]);
+        var b = h('button', { type: 'button', role: 'tab', 'aria-selected': String(s === state.step), dataset: { step: s }, onclick: function () { state.step = s; drawStep(); } }, h('span', { class: 'n' }, String(i + 1)), stepLabel(s));
         stepBar.appendChild(b);
       });
       function updateStepErrors() {
@@ -155,8 +155,8 @@
         var fn = STEP_RENDER[state.step];
         fn(stepBody, it, p, { touch: touch, render: renderPreview, redraw: drawStep, redrawKeepScroll: redrawStepKeepingScroll });
         var i = steps.indexOf(state.step);
-        stepNav.appendChild(i > 0 ? h('button', { class: 'btn', type: 'button', onclick: function () { state.step = steps[i - 1]; drawStep(); } }, '← ' + STEP_LABELS[steps[i - 1]]) : h('span'));
-        stepNav.appendChild(i < steps.length - 1 ? h('button', { class: 'btn primary', type: 'button', onclick: function () { state.step = steps[i + 1]; drawStep(); } }, STEP_LABELS[steps[i + 1]] + ' →') : returnIssue ? h('button', { class: 'btn primary', type: 'button', onclick: returnToMel }, 'Terminer et revenir au MEL') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'));
+        stepNav.appendChild(i > 0 ? h('button', { class: 'btn', type: 'button', onclick: function () { state.step = steps[i - 1]; drawStep(); } }, '← ' + stepLabel(steps[i - 1])) : h('span'));
+        stepNav.appendChild(i < steps.length - 1 ? h('button', { class: 'btn primary', type: 'button', onclick: function () { state.step = steps[i + 1]; drawStep(); } }, stepLabel(steps[i + 1]) + ' →') : returnIssue ? h('button', { class: 'btn primary', type: 'button', onclick: returnToMel }, 'Terminer et revenir au MEL') : h('a', { class: 'btn primary', href: '#/bibliotheque' }, 'Terminer'));
       }
       drawStep();
       renderPreview();

@@ -273,3 +273,19 @@ dialog.full .dlg-body{max-height:none;height:calc(100vh - 64px);display:flex;ali
   border-radius: 6px; font-weight: 750; font-size: 13px; letter-spacing: .01em; cursor: default; }
 .pages .section-heading:first-child { margin-top: 0; }
 .pages .pg button:disabled { opacity: .3; cursor: not-allowed; }
+
+/* V9.5 — navigation éditoriale, accessibilité et mise en page adaptative */
+.workflow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.workflow-step{display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border:1px solid var(--line);border-radius:13px;background:#fff;text-decoration:none;color:var(--ink);transition:background .15s,border-color .15s,transform .15s}
+.workflow-step:hover{background:#F5F8FD;border-color:#A9BFE3;transform:translateY(-1px)}
+.workflow-number{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:#E5EEFB;color:var(--navy);font-weight:800;flex:none}
+.workflow-step b{display:block;color:var(--navy);font-size:14px}
+.workflow-step small{display:block;font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}
+.mel-review{padding:8px 10px;background:#EBF7EE;border:1px solid #BFE3C9;color:#215E3B;border-radius:8px;margin:0 0 12px}
+.mel-review.pending{background:#FFF6E8;border-color:#F5D6AA;color:#85551B}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,[role=button]:focus-visible,.pg:focus-visible{outline:3px solid #688ED7;outline-offset:2px}
+button:disabled{opacity:.48;cursor:not-allowed}
+.composer .opts-col{scroll-margin-top:92px}
+@media(max-width:900px){.workflow{grid-template-columns:1fr}.workflow-step{padding:10px 12px}}
+@media(max-width:860px){.pages{max-height:410px}.pg{grid-template-columns:20px 80px minmax(0,1fr) auto}.pg .mini{width:80px}}
+@media(prefers-reduced-motion:reduce){.workflow-step{transition:none}.workflow-step:hover{transform:none}}

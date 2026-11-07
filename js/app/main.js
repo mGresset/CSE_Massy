@@ -52,7 +52,7 @@
     return { cover: 'Couverture', news: (pg.opts && pg.opts.title) || 'Nouveautés', last: (pg.opts && pg.opts.title) || 'Dernières chances', upcoming: (pg.opts && pg.opts.title) || 'Programme à venir' }[pg.kind] || pg.kind;
   };
   App.notesFor = function (pg, it, s) {
-    var lines = ['CSE Studio V9.4.6 · ' + (C.templates.TEMPLATES.find(function (t) { return t.id === s.templateId; }) || { name: s.templateId }).name];
+    var lines = ['CSE Studio V9.5 · ' + (C.templates.TEMPLATES.find(function (t) { return t.id === s.templateId; }) || { name: s.templateId }).name];
     if (it) lines.push('Fiche : ' + App.pageLabel(pg) + (it.regEnd ? ' · inscriptions jusqu’au ' + C.dates.fmtLong(it.regEnd) : ''));
     var link = it ? C.compose.linkOf(it, App.p().settings) : '';
     if (link) lines.push('Lien : ' + link);
@@ -61,16 +61,37 @@
   /** Export PPTX avec contrôle préalable des textes tronqués et des erreurs bloquantes. */
   App.exportPptx = function (entries, fileName, btn) {
     if (!entries.length) { ui.toast('Aucune diapositive à exporter.', 'error'); return Promise.resolve(); }
-    var blocks = [], cut = [];
+    var blocks = [], cut = [], editorial = [], checked = {};
     entries.forEach(function (e, i) {
+      // Les fiches en brouillon/à relire restent exportables pour les essais,
+      // mais une confirmation explicite prévient leur diffusion par inadvertance.
+      var related = [];
+      var pg = e.page, issue = App.activeIssue();
+      if (pg && pg.kind === 'item') {
+        var it = App.item(pg.itemId); if (it) related.push(it);
+      } else if (pg && issue && (pg.kind === 'new' || pg.kind === 'last')) {
+        related = C.compose.selection(pg, App.p(), issue);
+      } else if (pg && issue && pg.kind === 'cover') {
+        var featured = C.compose.coverData(pg, App.p(), issue);
+        related = featured.news.concat(featured.last);
+      }
+      related.forEach(function (it) {
+        if (checked[it.id]) return;
+        checked[it.id] = true;
+        if (it.editorialStatus !== 'approved') editorial.push('« ' + (it.title || 'Sans titre') + ' » : ' + (it.editorialStatus === 'review' ? 'à relire' : 'brouillon'));
+        C.compose.checkItem(it, App.p(), issue ? issue.refDate : App.refDate()).forEach(function (w) {
+          if (w[0] === 'block') blocks.push('« ' + (it.title || 'Sans titre') + ' » : ' + w[1]);
+        });
+      });
       e.slide.warnings.forEach(function (w) {
         if (w.code === 'overflow') cut.push('Diapo ' + (i + 1) + ' « ' + e.title + ' » : ' + w.field);
         else if (w.level === 'block') blocks.push('Diapo ' + (i + 1) + ' « ' + e.title + ' » : ' + w.msg);
       });
     });
     var ask = Promise.resolve(true);
-    if (blocks.length || cut.length) {
-      var msg = (cut.length ? 'Texte tronqué (ne tient pas, même en police minimale) :\n• ' + cut.slice(0, 8).join('\n• ') + (cut.length > 8 ? '\n…' : '') + '\n\n' : '') +
+    if (blocks.length || cut.length || editorial.length) {
+      var msg = (editorial.length ? 'Fiches non validées pour diffusion (' + editorial.length + ') :\n• ' + editorial.slice(0, 8).join('\n• ') + (editorial.length > 8 ? '\n…' : '') + '\n\n' : '') +
+        (cut.length ? 'Texte tronqué (ne tient pas, même en police minimale) :\n• ' + cut.slice(0, 8).join('\n• ') + (cut.length > 8 ? '\n…' : '') + '\n\n' : '') +
         (blocks.length ? 'Points bloquants :\n• ' + blocks.slice(0, 8).join('\n• ') + '\n\n' : '') + 'Exporter quand même ? (Conseil : scinder les fiches concernées ou raccourcir le texte.)';
       ask = ui.confirm('Vérifier avant export', msg, 'Exporter quand même');
     }
@@ -104,12 +125,27 @@
     show();
     return ui.dialog({ title: 'Aperçu plein écran', body: body, full: true, onOpen: function () { setTimeout(function () { ui.fitAll(holder); }, 50); } }).then(function () { document.removeEventListener('keydown', key); });
   };
-  /** Impression / PDF : une page 16:9 par diapositive. */
+  /** Impression / PDF : attend le chargement des images pour ne pas produire de pages vides. */
   App.print = function (slides) {
+    if (!slides.length) { ui.toast('Aucune diapositive à imprimer.', 'error'); return Promise.resolve(); }
     var rootEl = document.getElementById('printRoot') || document.body.appendChild(h('div', { id: 'printRoot', class: 'cse-print' }));
     ui.clear(rootEl);
     slides.forEach(function (s) { var pg = h('div', { class: 'print-page' }); rootEl.appendChild(pg); C.renderHTML.render(s, pg, { checkOverflow: false }); });
-    setTimeout(function () { window.print(); }, 300);
+    var imgs = Array.prototype.slice.call(rootEl.querySelectorAll('img'));
+    var pending = imgs.filter(function (img) { return !img.complete; });
+    if (pending.length) ui.toast('Préparation du PDF : chargement des images…', '', 2500);
+    var finished = Promise.all(pending.map(function (img) {
+      return new Promise(function (resolve) {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    }));
+    return Promise.race([finished, new Promise(function (resolve) { setTimeout(resolve, 4000); })]).then(function () {
+      return new Promise(function (resolve) { requestAnimationFrame(function () { requestAnimationFrame(resolve); }); });
+    }).then(function () {
+      window.addEventListener('afterprint', function () { ui.clear(rootEl); }, { once: true });
+      window.print();
+    });
   };
   App.loadDemo = function () {
     var themes = {};
@@ -144,7 +180,7 @@
     currentView = view;
     try { view.render(el, parts.slice(1)); }
     catch (e) { console.error(e); el.appendChild(h('div', { class: 'alert error' }, 'Erreur d’affichage : ' + e.message)); }
-    document.title = (view.title || 'CSE Studio') + ' · CSE Studio V9.4.6';
+    document.title = (view.title || 'CSE Studio') + ' · CSE Studio V9.5';
     el.focus({ preventScroll: true });
   }
   App.refresh = function () { route(); };
@@ -179,6 +215,15 @@
       console.error(e);
       mainEl().replaceChildren(h('div', { class: 'alert error' }, 'Démarrage impossible : ' + e.message));
     });
+    // Raccourci utile pour les bénévoles : sauvegarde immédiate du navigateur.
+    window.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (C.store.saveNow()) ui.toast('Fiches et MEL enregistrés sur cet appareil. Pour changer de poste, exportez également une sauvegarde JSON.', 'ok', 4500);
+        else ui.toast('Enregistrement impossible : utilisez Sauvegardes & exports.', 'error');
+      }
+    });
+    window.addEventListener('pagehide', function () { C.store.saveNow(); });
     window.addEventListener('beforeunload', function () { C.store.saveNow(); });
     window.addEventListener('error', function (e) { if (e && e.message && !/ResizeObserver/.test(e.message)) ui.toast('Erreur inattendue : ' + e.message, 'error'); });
     window.addEventListener('unhandledrejection', function (e) { ui.toast('Erreur inattendue : ' + ((e.reason && e.reason.message) || e.reason), 'error'); });

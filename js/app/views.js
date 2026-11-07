@@ -26,7 +26,7 @@
       var live = p.items.filter(function (it) { return !it.archived; });
       var cls = {}; live.forEach(function (it) { cls[it.id] = C.compose.classify(it, ref, p.settings); });
       var last = live.filter(function (it) { return cls[it.id].rubric === 'last'; }).sort(C.compose.byDeadline);
-      var news = live.filter(function (it) { return cls[it.id].isNew && !cls[it.id].expired; });
+      var news = live.filter(function (it) { return cls[it.id].isNew && !cls[it.id].expired && ['full', 'closed', 'cancelled'].indexOf(cls[it.id].rubric) < 0; });
       var audit = C.compose.audit(p, issue);
       live.forEach(function (it) { C.compose.checkItem(it, p, ref).forEach(function (x) { if (x[0] === 'block') audit.push({ level: 'block', msg: '« ' + (it.title || 'Sans titre') + ' » : ' + x[1], itemId: it.id }); }); });
       var expiredLive = live.filter(function (it) { return cls[it.id].rubric === 'expired'; });
@@ -70,6 +70,18 @@
         if (cover) heroThumb.appendChild(ui.slideFrame(C.templates.renderPage(cover, p, issue)[0], { checkOverflow: false }).frame);
       }
       el.appendChild(h('div', { class: 'card hero', style: { marginBottom: '14px' } }, heroBody, heroThumb));
+
+      // Parcours court, lisible même pour un bénévole découvrant le logiciel.
+      el.appendChild(h('div', { class: 'workflow', 'aria-label': 'Les trois étapes de préparation du MEL' },
+        h('a', { href: '#/bibliotheque', class: 'workflow-step' },
+          h('span', { class: 'workflow-number' }, '1'),
+          h('span', {}, h('b', {}, 'Préparer les fiches'), h('small', {}, 'Créer ou actualiser les activités et informations'))),
+        h('a', { href: '#/mel', class: 'workflow-step' },
+          h('span', { class: 'workflow-number' }, '2'),
+          h('span', {}, h('b', {}, 'Composer le MEL'), h('small', {}, 'Vérifier l’ordre, personnaliser les pages'))),
+        h('a', { href: '#/exports', class: 'workflow-step' },
+          h('span', { class: 'workflow-number' }, '3'),
+          h('span', {}, h('b', {}, 'Sauvegarder & publier'), h('small', {}, 'Conserver une copie JSON et exporter le PowerPoint')))));
 
       el.appendChild(h('div', { class: 'kpis' },
         kpi(live.length, 'fiches actives'), kpi(news.length, 'nouveautés'), kpi(last.length, 'dernières chances (J−' + p.settings.lastDays + ')'),
@@ -344,7 +356,7 @@
         h('li', {}, 'Dans Canva : Créer un design → Importer un fichier → choisir le .pptx. Canva crée une présentation modifiable.'),
         h('li', {}, 'Pour compléter la présentation partagée : sélectionner les pages importées, Copier, puis les Coller dans la présentation du MEL.')),
       h('div', { class: 'alert info small' }, h('b', {}, 'Pourquoi pas d’ajout automatique ? '), 'Un lien Canva « modifiable » ne donne aucune autorisation à une application tierce. L’API officielle Canva Connect permet d’importer un PPTX, et l’insertion de pages dans un design existant (API « merges ») est encore en préversion ; elle exige une application Canva autorisée, des crédits API de l’équipe et un serveur sécurisé. Le dossier supabase/functions/canva-publish contient une ébauche serveur NON démontrée : voir le README.'),
-      s.canvaUrl ? h('a', { class: 'btn', href: s.canvaUrl, target: '_blank', rel: 'noopener noreferrer' }, '↗ Ouvrir la présentation Canva') : null);
+      C.compose.validUrl(s.canvaUrl) && s.canvaUrl ? h('a', { class: 'btn', href: s.canvaUrl, target: '_blank', rel: 'noopener noreferrer' }, '↗ Ouvrir la présentation Canva') : null);
   }
   function categoriesEditor(p) {
     var box = h('div');

@@ -78,8 +78,12 @@
     return new Promise(function (resolve) {
       var inp = h('input', { type: 'file', accept: accept || '', class: 'sr' });
       if (multiple) inp.multiple = true;
-      inp.addEventListener('change', function () { resolve(Array.prototype.slice.call(inp.files || [])); inp.remove(); });
-      document.body.appendChild(inp); inp.click();
+      var done = false;
+      function finish(files) { if (done) return; done = true; inp.remove(); resolve(files); }
+      inp.addEventListener('change', function () { finish(Array.prototype.slice.call(inp.files || [])); });
+      inp.addEventListener('cancel', function () { finish([]); });
+      document.body.appendChild(inp);
+      inp.click();
     });
   }
 
