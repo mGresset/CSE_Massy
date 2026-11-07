@@ -250,19 +250,20 @@
     });
     return cy - gap - y;
   };
-  /** Grille T1–T10 ultra-compacte : 4 colonnes, 3 rangées pour 10 tranches.
-   *  Le cartouche reste bas-gauche. La même géométrie est partagée entre HTML et PPTX. */
+  /** Cartouche tarifaire 4 / 4 / (2 + extérieur) sur trois lignes resserrées.
+   *  Sa géométrie est identique dans l'aperçu HTML et l'export PPTX. */
   B.priceGridSize = function (pr, w) {
     if (!pr || pr.kind !== 'grid' || !pr.rows.length) return { h: 0, cols: 0, rows: 0 };
     var n = pr.rows.length;
     var cols = w >= 425 ? Math.min(4, n) : w >= 295 ? Math.min(3, n) : Math.min(2, n);
     var rows = Math.ceil(n / cols);
     // Intitulé + 3 lignes de prix (4 / 4 / 2) + éventuel supplément.
-    var h = 18 + rows * 15.5 + (pr.notes ? 14 : 0);
+    var h = 17 + rows * 14.6 + (pr.notes ? 14 : 0);
     return { h: h, cols: cols, rows: rows };
   };
-  /** Tarifs en petit rectangle latéral (env. 39 % de la diapo).
-   *  La dernière rangée incomplète est centrée pour éviter l'effet « tableau troué ». */
+  /** Tarifs dans le rectangle bas-gauche (~39 % de la diapo).
+   *  T9 / T10 et le prix extérieur se répartissent la dernière ligne ;
+   *  sans prix extérieur, les cases restantes sont recentrées. */
   B.priceGrid = function (pr, x, y, w) {
     var P = CSE.pricing, g = this.priceGridSize(pr, w);
     if (!g.h) return 0;
@@ -272,13 +273,14 @@
     var outside = pr.outside !== null && pr.outside !== undefined ? 'Extérieur : ' + P.money(pr.outside) : '';
     this.text(head, x + 12, y + 2, w - 24, 13,
       { size: 11, min: 10, bold: true, color: C.purple, maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
-    var cw = (w - 24) / g.cols, top = y + 17, self = this;
+    var cw = (w - 24) / g.cols, top = y + 16.5, rowH = 14.6, self = this;
     var lastRow = g.rows - 1, lastRowStart = lastRow * g.cols, lastRowCount = Math.min(g.cols, pr.rows.length - lastRowStart);
+    var outsideOnLastRow = !!outside && g.cols === 4 && lastRowCount === 2;
     pr.rows.forEach(function (r, i) {
       var row = Math.floor(i / g.cols), col = i % g.cols;
-      var cy = top + row * 15.5;
+      var cy = top + row * rowH;
       var cx;
-      if (row === lastRow && outside && g.cols >= 4 && lastRowCount <= 2) {
+      if (row === lastRow && outsideOnLastRow) {
         cx = x + 12 + col * cw;
       } else {
         var nLast = Math.min(g.cols, pr.rows.length - row * g.cols);
@@ -286,14 +288,15 @@
         cx = x + 12 + rowOffset + col * cw;
       }
       self.text([{ runs: [{ text: r.label + ' ', bold: true, color: C.purple },
-        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 4, 15.5,
-        { size: 12.2, min: 11, color: C.dark, valign: 'middle', maxLines: 1,
+        { text: P.money(r.price), bold: true }] }], cx, cy, cw - 4, rowH,
+        { size: 12.1, min: 11, color: C.dark, valign: 'middle', maxLines: 1,
           role: 'label', noScale: true, field: 'tarifs' });
     });
     if (outside) {
-      if (g.cols >= 4 && lastRowCount <= 2) {
-        self.text(outside, x + 12 + 2 * cw, top + lastRow * 15.5, 2 * cw - 4, 15.5,
-          { size: 12.4, min: 11.2, bold: true, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+      if (outsideOnLastRow) {
+        // La case extérieure occupe l'espace restant, calée sur les mêmes lignes de base.
+        self.text(outside, x + 12 + 2 * cw, top + lastRow * rowH, 2 * cw, rowH,
+          { size: 12.4, min: 11.2, bold: true, color: C.muted, valign: 'middle', align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
       } else {
         var ow = M().width(outside, 11, false) * 1.08 + 5;
         self.text(outside, x + w - 10 - ow, y + 2, ow, 13,

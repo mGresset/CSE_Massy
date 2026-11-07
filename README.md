@@ -1,4 +1,4 @@
-# CSE Studio V9.4.2 — Tarifs encore plus discrets (3 lignes)
+# CSE Studio V9.4.5 — Cartouche tarifs compact et harmonisé
 
 Le cartouche de la fiche Classique ne mesure plus que **465 px de largeur** sur les 1 200 px de la slide. Les dix tarifs s’affichent sur trois rangées (4/4/2). Voir `MISE_A_JOUR_V9_4_2.md`.
 
@@ -321,3 +321,15 @@ NOTES-VERSION.md          Notes de version (V9.1, V9)
 - **Liens du portail** : le portail Up Expert / Kalidea ne garantit pas de lien direct vers une activité. Le bouton mène à l’accueil du portail.
 - **Police** : le rendu est identique tant qu’Arial est disponible (Windows, macOS, Canva). Sur un poste Linux sans Arial, l’aperçu utilise Liberation Sans, métriquement compatible.
 - **Barème et règlement** : le barème par défaut et le texte de règlement de démonstration sont des **modèles à faire valider** par le CSE.
+
+
+## V9.4.5 — Ajustements
+
+- Prix extérieur plus visible, aligné à droite sur la même rangée que T9 et T10.
+- Espacement vertical des trois lignes réduit de 15,5 à 14,6 unités.
+- Cartouche légèrement moins haut, sans toucher aux calculs tarifaires.
+- Aperçu HTML et export PowerPoint utilisant la même géométrie.
+- Numéro de version et paramètre anti-cache mis à jour dans `index.html` et `mel.html`.
+
+Pour les utilisateurs GitHub Pages, remplacer les fichiers du ZIP correctif à l’identique,
+faire un commit puis recharger la page avec Ctrl + Maj + R.
