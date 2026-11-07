@@ -1,5 +1,10 @@
 # Notes de version
 
+## V9.5 — Fiabilité et ergonomie du compositeur (7 novembre 2026)
+
+Voir [MISE_A_JOUR_V9_5.md](MISE_A_JOUR_V9_5.md) : déplacement des pages, sélection manuelle stable, contrôles avant export, sauvegarde dans le MEL, chargement des images avant PDF, liens sécurisés, guidage des bénévoles et 19 suites de tests réussies.
+
+
 ## V9.2 — Stabilisation du partage Supabase (7 novembre 2026)
 
 **Aucune modification du rendu des diapositives ni du moteur tarifaire.**

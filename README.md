@@ -1,3 +1,11 @@
+# CSE Studio V9.5 — Éditeur d'activités et compositeur du MEL
+
+**Version actuelle : 9.5 (7 novembre 2026).** Application statique pour GitHub Pages : bibliothèque d'activités réutilisables, composition des MEL selon dix rubriques fixes, retouches propres à un MEL, treize modèles, tarifs CSE facultatifs T1 à T10, export PowerPoint modifiable et sauvegardes JSON.
+
+Cette version améliore la fiabilité, la navigation et les contrôles avant export sans modifier les données enregistrées. Voir **[MISE_A_JOUR_V9_5.md](MISE_A_JOUR_V9_5.md)** pour les changements, les tests et l'installation.
+
+---
+
 # CSE Studio V9.4.5 — Cartouche tarifs compact et harmonisé
 
 Le cartouche de la fiche Classique ne mesure plus que **465 px de largeur** sur les 1 200 px de la slide. Les dix tarifs s’affichent sur trois rangées (4/4/2). Voir `MISE_A_JOUR_V9_4_2.md`.
