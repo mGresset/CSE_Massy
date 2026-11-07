@@ -293,11 +293,11 @@
     if (outside) {
       if (g.cols >= 4 && lastRowCount <= 2) {
         self.text(outside, x + 12 + 2 * cw, top + lastRow * 15.5, 2 * cw - 4, 15.5,
-          { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+          { size: 12.4, min: 11.2, bold: true, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
       } else {
         var ow = M().width(outside, 11, false) * 1.08 + 5;
         self.text(outside, x + w - 10 - ow, y + 2, ow, 13,
-          { size: 11, min: 10, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
+          { size: 12.4, min: 11.2, bold: true, color: C.muted, align: 'right', maxLines: 1, role: 'label', noScale: true, field: 'tarifs' });
       }
     }
     if (pr.notes) this.text(pr.notes, x + 12, y + g.h - 14, w - 24, 13,
